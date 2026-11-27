@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection, BlockState,
     entity::EntityType,
     tag::{Block as BlockTag, Taggable},
 };
@@ -26,7 +26,8 @@ impl SpawnStrategy {
     fn can_spawn_on(self, state: &BlockState, above_state: &BlockState) -> bool {
         match self {
             Self::OnTopOfCollider => {
-                above_state.get_block_collision_shapes().next().is_none() && is_face_full_up(state)
+                above_state.get_block_collision_shapes().next().is_none()
+                    && state.is_collision_face_full(BlockDirection::Up)
             }
             Self::LegacyIronGolem => {
                 let block = Block::from_state_id(state.id);
@@ -51,17 +52,6 @@ impl SpawnStrategy {
             }
         }
     }
-}
-
-fn is_face_full_up(state: &BlockState) -> bool {
-    state.is_full_cube()
-        || state.get_block_collision_shapes().any(|shape| {
-            shape.max.y >= 1.0
-                && shape.min.x <= 0.0
-                && shape.min.z <= 0.0
-                && shape.max.x >= 1.0
-                && shape.max.z >= 1.0
-        })
 }
 
 #[expect(clippy::too_many_arguments)]

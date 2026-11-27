@@ -19,7 +19,7 @@ use crate::entity::projectile::{
     ProjectileHit, get_hit_result_on_move_vector, hit_target_or_deflect_self,
     rotate_towards_movement,
 };
-use crate::entity::{Entity, EntityBase};
+use crate::entity::{Entity, EntityBase, EntityBehavior};
 use crate::server::Server;
 use crate::world::game_event::GameEventContext;
 use pumpkin_data::block_properties::Axis;
@@ -56,19 +56,32 @@ pub struct ShulkerBulletEntity {
 
 use std::sync::atomic::AtomicU8;
 
+struct ShulkerBulletBehavior;
+
+impl EntityBehavior for ShulkerBulletBehavior {
+    fn renders_fire(&self) -> bool {
+        false
+    }
+
+    fn affected_by_blocks_without_physics(&self) -> bool {
+        true
+    }
+}
+
 impl ShulkerBulletEntity {
     pub fn new(owner: &Entity, target: &Entity, invalid_axis: Axis) -> Self {
         let world = owner.world.load();
 
         let origin = owner.bounding_box.load().get_center();
 
-        let entity = Entity::from_uuid(
+        let mut entity = Entity::from_uuid(
             Uuid::new_v4(),
             (*world).clone(),
             origin,
             &EntityType::SHULKER_BULLET,
         );
 
+        entity.behavior = Some(std::sync::Arc::new(ShulkerBulletBehavior));
         entity.no_physics.store(true, Ordering::Relaxed);
         let bullet = Self {
             entity,
@@ -238,7 +251,8 @@ impl ShulkerBulletEntity {
 
     /// Create a `ShulkerBulletEntity` from a pre-existing Entity (e.g. loaded from
     /// disk or spawned via the /summon command with no context).
-    pub fn orphan(entity: Entity) -> Self {
+    pub fn orphan(mut entity: Entity) -> Self {
+        entity.behavior = Some(std::sync::Arc::new(ShulkerBulletBehavior));
         entity.no_physics.store(true, Ordering::Relaxed);
         Self {
             entity,

@@ -1394,11 +1394,11 @@ impl LivingEntity {
 
     fn update_scale(&self) {
         let scale = self.get_attribute_value(&Attributes::SCALE) as f32;
-        let scale = if self.entity.entity_type == &EntityType::SHULKER {
-            scale.min(super::mob::shulker::MAX_SCALE)
-        } else {
-            scale
-        };
+        let scale = self
+            .entity
+            .behavior
+            .as_ref()
+            .map_or(scale, |behavior| behavior.sanitize_scale(scale));
         if (self.entity.scale.load() - scale).abs() > f32::EPSILON {
             self.entity.scale.store(scale);
             self.entity.refresh_dimensions();
@@ -5432,6 +5432,17 @@ mod tests {
         assert_eq!(living.entity.pos.load(), restored);
         assert_eq!(living.entity.entity_dimension.load().width, 2.0);
         assert_eq!(living.entity.bounding_box.load().max.y, restored.y + 2.0);
+
+        living.update_attribute(&Attributes::SCALE, |attribute| {
+            attribute.base_value = 10.0;
+            attribute.mark_dirty();
+        });
+        living.update_scale();
+        assert_eq!(living.entity.entity_dimension.load().width, 3.0);
+        assert_eq!(
+            living.entity.bounding_box.load().max.x - living.entity.bounding_box.load().min.x,
+            3.0
+        );
 
         let cow = CowEntity::new(Entity::new(
             world.clone(),

@@ -130,6 +130,7 @@ pub const MAX_SCOREBOARD_TAGS: usize = 1024;
 /// Push strength per axis in `Entity.push`.
 pub(crate) const PUSH_STRENGTH: f64 = 0.05f32 as f64;
 
+pub(crate) const COLLISION_QUERY_MARGIN: f64 = 1.0E-7;
 const MAX_LOADED_MOTION: f64 = 10.0;
 const MAX_HORIZONTAL_POSITION: f64 = 3.000_051_2E7;
 const MAX_VERTICAL_POSITION: f64 = 2.0E7;
@@ -620,9 +621,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
-        self.get_entity()
-            .with_shulker(|shulker| shulker.mob_entity.living_entity.is_alive())
-            .unwrap_or(false)
+        self.get_mob().is_some_and(mob::Mob::mob_is_collidable)
     }
 
     fn can_hit(&self) -> bool {
@@ -1087,6 +1086,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         }
     }
 
+    fn on_started_riding(&self) {}
+
+    fn on_stopped_riding(&self) {}
+
     fn is_pushable(&self) -> bool {
         false
     }
@@ -1102,7 +1105,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn push(&self, entity: &dyn EntityBase) {
-        if self.get_entity().shulker.get().is_some() {
+        if self.get_mob().is_some_and(|mob| !mob.mob_can_push()) {
             return;
         }
         // Vanilla `LivingEntity.push`: sleeping entities neither push nor get pushed here.
@@ -1695,7 +1698,7 @@ pub struct Entity {
     pub pose: AtomicCell<EntityPose>,
     /// The bounding box of an entity (hitbox)
     pub bounding_box: EntityBoundingBox,
-    shulker: std::sync::OnceLock<Weak<mob::shulker::ShulkerEntity>>,
+    pub(crate) behavior: Option<Arc<dyn EntityBehavior>>,
     ///The size (width and height) of the bounding box
     pub entity_dimension: AtomicCell<EntityDimensions>,
     /// Vanilla `getDefaultDimensions` when it differs from the type size (baby, slime, ...)
@@ -1794,6 +1797,40 @@ pub struct Entity {
     pub last_sent_velocity: AtomicCell<Vector3<f64>>,
     /// Persistent custom data container for plugins
     pub custom_data: std::sync::Mutex<NbtCompound>,
+}
+
+/// Overrides needed by position and size APIs that operate directly on `Entity`.
+/// Implementations own shared state, without a reference back to the entity.
+pub(crate) trait EntityBehavior: Send + Sync {
+    fn position(&self, _entity: &Entity, position: Vector3<f64>) -> Vector3<f64> {
+        position
+    }
+
+    fn dismount_position(&self, position: Vector3<f64>) -> Vector3<f64> {
+        position
+    }
+
+    fn height_scale(&self) -> f32 {
+        1.0
+    }
+
+    fn bounding_box(&self, _entity: &Entity, _position: Vector3<f64>) -> Option<BoundingBox> {
+        None
+    }
+
+    fn on_position_changed(&self, _entity: &Entity, _old: BlockPos) {}
+
+    fn sanitize_scale(&self, scale: f32) -> f32 {
+        scale
+    }
+
+    fn renders_fire(&self) -> bool {
+        true
+    }
+
+    fn affected_by_blocks_without_physics(&self) -> bool {
+        false
+    }
 }
 
 /// Entity motion, including vanilla shulkers' no-op `setDeltaMovement`.
@@ -2019,13 +2056,13 @@ impl Entity {
             pitch: AtomicCell::new(0.0),
             velocity: EntityVelocity {
                 value: AtomicCell::new(Vector3::default()),
-                movable: entity_type != &EntityType::SHULKER,
+                movable: true,
             },
             pose: AtomicCell::new(EntityPose::Standing),
             bounding_box,
             entity_dimension: AtomicCell::new(bounding_box_size),
             default_dimensions: AtomicCell::new(None),
-            shulker: std::sync::OnceLock::new(),
+            behavior: None,
             scale: AtomicCell::new(1.0),
             invulnerable: AtomicBool::new(false),
             damage_immunities: std::sync::Mutex::new(Vec::new()),
@@ -2446,7 +2483,8 @@ impl Entity {
             return EntityDimensions::new(default.width, 1.0, 0.85);
         }
         let mut dimensions = default.scale(self.scale.load());
-        if let Some(height_scale) = self.with_shulker(mob::shulker::ShulkerEntity::height_scale) {
+        if let Some(behavior) = &self.behavior {
+            let height_scale = behavior.height_scale();
             dimensions.height *= height_scale;
             dimensions.eye_height *= height_scale;
         }
@@ -2458,17 +2496,14 @@ impl Entity {
         f64::from(self.entity_dimension.load().eye_height)
     }
 
-    fn with_shulker<T>(&self, f: impl FnOnce(&mob::shulker::ShulkerEntity) -> T) -> Option<T> {
-        let shulker = self.shulker.get()?.upgrade()?;
-        Some(f(&shulker))
-    }
-
     fn current_bounding_box(
         &self,
         position: Vector3<f64>,
         dimensions: &EntityDimensions,
     ) -> BoundingBox {
-        self.with_shulker(|shulker| shulker.make_bounding_box(position))
+        self.behavior
+            .as_ref()
+            .and_then(|behavior| behavior.bounding_box(self, position))
             .unwrap_or_else(|| Self::make_bounding_box(self.entity_type, position, dimensions))
     }
 
@@ -2478,26 +2513,27 @@ impl Entity {
         pose: EntityPose,
     ) -> (Vector3<f64>, BoundingBox) {
         let dimensions = self.get_dimensions(pose);
-        if self.entity_type == &EntityType::SHULKER {
-            let position = mob::shulker::ShulkerEntity::snap_position(position);
-            (position, self.current_bounding_box(position, &dimensions))
-        } else {
-            (
-                position,
-                BoundingBox::new_from_pos(position.x, position.y, position.z, &dimensions),
-            )
-        }
+        let position = self
+            .behavior
+            .as_ref()
+            .map_or(position, |behavior| behavior.dismount_position(position));
+        let bounds = self
+            .behavior
+            .as_ref()
+            .and_then(|behavior| behavior.bounding_box(self, position))
+            .unwrap_or_else(|| {
+                BoundingBox::new_from_pos(position.x, position.y, position.z, &dimensions)
+            });
+        (position, bounds)
     }
 
     /// Updates the entity's position, block position, and chunk position.
     ///
     /// This function calculates the new position, block position, and chunk position based on the provided coordinates. If any of these values change, the corresponding fields are updated.
     pub fn set_pos(&self, new_position: Vector3<f64>) {
-        let new_position = if self.entity_type == &EntityType::SHULKER && !self.has_vehicle() {
-            mob::shulker::ShulkerEntity::snap_position(new_position)
-        } else {
-            new_position
-        };
+        let new_position = self.behavior.as_ref().map_or(new_position, |behavior| {
+            behavior.position(self, new_position)
+        });
         let old_block_pos = self.block_pos.load();
         let pos = self.pos.load();
         if pos != new_position {
@@ -2534,7 +2570,9 @@ impl Entity {
                     ));
                 }
             }
-            self.with_shulker(|shulker| shulker.on_position_changed(old_block_pos));
+            if let Some(behavior) = &self.behavior {
+                behavior.on_position_changed(self, old_block_pos);
+            }
         }
     }
 
@@ -2622,7 +2660,12 @@ impl Entity {
         if !on_ground_after_collision {
             step_up_box = step_up_box.expand_towards(0.0, f64::from(-1.0E-5f32), 0.0);
         }
-        let (colliders, _) = self.world.load().get_block_collisions(step_up_box, caller);
+        let (mut colliders, _) = self.world.load().get_block_collisions(step_up_box, caller);
+        colliders.extend(
+            self.world
+                .load()
+                .get_entity_collisions(caller, step_up_box.expand_all(COLLISION_QUERY_MARGIN)),
+        );
 
         for step_height in Self::candidate_step_up_heights(
             &grounded_box,
@@ -2640,27 +2683,29 @@ impl Entity {
             {
                 let distance_to_ground = bounding_box.min.y - grounded_box.min.y;
                 let stepped = step_from_ground - Vector3::new(0.0, distance_to_ground, 0.0);
-                let on_ground = movement.y != stepped.y && movement.y < 0.0;
-                self.vertical_collision
-                    .store(movement.y != stepped.y, Ordering::SeqCst);
-                self.on_ground.store(on_ground, Ordering::SeqCst);
-                // Vanilla checks support after the step, the pre-step support is stale.
-                let supporting = on_ground
-                    .then(|| {
-                        let area = Self::support_test_area(&bounding_box.shift(stepped))
-                            .expand_towards(-stepped.x, 0.0, -stepped.z);
-                        let (collisions, block_positions) =
-                            self.world.load().get_block_collisions(area, caller);
-                        Self::supporting_block_after(
-                            &collisions,
-                            &block_positions,
-                            &bounding_box,
-                            stepped,
-                            self.pos.load(),
-                        )
-                    })
-                    .flatten();
-                self.supporting_block_pos.store(supporting);
+                if movement.y != 0.0 || self.entity_type != &EntityType::PLAYER {
+                    let on_ground = movement.y != stepped.y && movement.y < 0.0;
+                    self.vertical_collision
+                        .store(movement.y != stepped.y, Ordering::SeqCst);
+                    self.on_ground.store(on_ground, Ordering::SeqCst);
+                    // Vanilla checks support after the step, the pre-step support is stale.
+                    let supporting = on_ground
+                        .then(|| {
+                            let area = Self::support_test_area(&bounding_box.shift(stepped))
+                                .expand_towards(-stepped.x, 0.0, -stepped.z);
+                            let (collisions, block_positions) =
+                                self.world.load().get_block_collisions(area, caller);
+                            Self::supporting_block_after(
+                                &collisions,
+                                &block_positions,
+                                &bounding_box,
+                                stepped,
+                                self.pos.load(),
+                            )
+                        })
+                        .flatten();
+                    self.supporting_block_pos.store(supporting);
+                }
                 self.horizontal_collision.store(
                     movement.x != stepped.x || movement.z != stepped.z,
                     Ordering::SeqCst,
@@ -2772,19 +2817,24 @@ impl Entity {
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
     ) -> Vector3<f64> {
-        self.vertical_collision.store(false, Ordering::SeqCst);
+        if self.entity_type != &EntityType::PLAYER {
+            self.vertical_collision.store(false, Ordering::SeqCst);
+        }
         if movement.length_squared() == 0.0 {
             return movement;
         }
         let collision = self.collide(movement, caller);
         // Vanilla `onGround`: stopped while moving down, even with no supporting block found.
-        self.on_ground
-            .store(collision.vertical && movement.y < 0.0, Ordering::SeqCst);
-        self.supporting_block_pos.store(collision.supporting);
+        // Vanilla keeps remote players' ground state on purely horizontal movement.
+        if movement.y != 0.0 || self.entity_type != &EntityType::PLAYER {
+            self.on_ground
+                .store(collision.vertical && movement.y < 0.0, Ordering::SeqCst);
+            self.supporting_block_pos.store(collision.supporting);
+            self.vertical_collision
+                .store(collision.vertical, Ordering::SeqCst);
+        }
         self.horizontal_collision
             .store(collision.horizontal, Ordering::SeqCst);
-        self.vertical_collision
-            .store(collision.vertical, Ordering::SeqCst);
         collision.movement
     }
 
@@ -2793,10 +2843,15 @@ impl Entity {
     pub(crate) fn collide(&self, movement: Vector3<f64>, caller: &dyn EntityBase) -> Collision {
         let bounding_box = self.bounding_box.load();
 
-        let (collisions, block_positions) = self
+        let (mut collisions, block_positions) = self
             .world
             .load()
             .get_block_collisions(bounding_box.stretch(movement), caller);
+
+        let area = bounding_box
+            .stretch(movement)
+            .expand_all(COLLISION_QUERY_MARGIN);
+        collisions.extend(self.world.load().get_entity_collisions(caller, area));
 
         if collisions.is_empty() {
             return Collision::free(movement);
@@ -3535,10 +3590,6 @@ impl Entity {
 
         self.move_pos(final_move);
 
-        if shulker_move && self.entity_type == &EntityType::PLAYER {
-            self.refresh_support_after_external_move(caller);
-        }
-
         // Vanilla `Entity.move`: velocity is kept, a wall zeroes its axis, the speed factor only slows X/Z.
         let speed_factor = f64::from(caller.get_block_speed_factor());
         let mut velocity = self.velocity.load();
@@ -3582,30 +3633,6 @@ impl Entity {
     pub fn emit_client_movement(&self, caller: &dyn EntityBase, movement: Vector3<f64>) {
         let (effect_pos, _, effect_state) = self.get_block_with_y_offset(0.2);
         self.emit_movement(caller, movement, &effect_pos, effect_state);
-    }
-
-    fn refresh_support_after_external_move(&self, caller: &dyn EntityBase) {
-        let motion = Vector3::new(0.0, -1.0E-5, 0.0);
-        let support = self.collide(motion, caller).supporting;
-        let bounds = self.bounding_box.load();
-        let entity_support = support.is_none()
-            && self
-                .world
-                .load()
-                .get_all_at_box(&bounds.stretch(motion))
-                .iter()
-                .any(|other| {
-                    World::entity_blocks_collision(caller, other.as_ref())
-                        && Self::collide_axis(
-                            &bounds,
-                            &other.get_entity().bounding_box.load(),
-                            Axis::Y,
-                            motion.y,
-                        ) > motion.y
-                });
-        self.on_ground
-            .store(support.is_some() || entity_support, Ordering::Relaxed);
-        self.supporting_block_pos.store(support);
     }
 
     fn emit_movement(
@@ -4378,7 +4405,11 @@ impl Entity {
 
     #[must_use]
     pub fn is_on_fire(&self) -> bool {
-        if self.entity_type == &EntityType::SHULKER_BULLET {
+        if self
+            .behavior
+            .as_ref()
+            .is_some_and(|behavior| !behavior.renders_fire())
+        {
             return false;
         }
         self.fire_ticks.load(Ordering::Relaxed) > 0 || self.has_visual_fire.load(Ordering::Relaxed)
@@ -5080,7 +5111,10 @@ impl Entity {
     pub fn is_affected_by_blocks(&self) -> bool {
         !self.is_removed()
             && (!self.no_physics.load(Ordering::Relaxed)
-                || self.entity_type == &EntityType::SHULKER_BULLET)
+                || self
+                    .behavior
+                    .as_ref()
+                    .is_some_and(|behavior| behavior.affected_by_blocks_without_physics()))
     }
 
     #[must_use]
@@ -5909,7 +5943,7 @@ impl Entity {
         {
             return;
         }
-        passenger_entity.with_shulker(|shulker| shulker.set_attach_face(BlockDirection::Down));
+        passenger.on_started_riding();
         *passenger_entity
             .vehicle
             .lock()
@@ -5998,9 +6032,7 @@ impl Entity {
         vehicle: Arc<dyn EntityBase>,
         passenger: Arc<dyn EntityBase>,
     ) {
-        passenger
-            .get_entity()
-            .with_shulker(|shulker| shulker.set_attach_face(BlockDirection::Down));
+        passenger.on_started_riding();
         *passenger
             .get_entity()
             .vehicle
@@ -6080,28 +6112,15 @@ impl Entity {
     }
 
     pub fn remove_passenger(&self, passenger_id: i32) {
-        self.remove_passenger_internal(passenger_id, true, &|| true);
+        self.remove_passenger_internal(passenger_id, true);
     }
 
     pub fn remove_passenger_before_teleport(&self, passenger_id: i32) {
-        self.remove_passenger_internal(passenger_id, false, &|| true);
-    }
-
-    pub(crate) fn remove_passenger_before_teleport_if(
-        &self,
-        passenger_id: i32,
-        can_unlink: &dyn Fn() -> bool,
-    ) {
-        self.remove_passenger_internal(passenger_id, false, can_unlink);
+        self.remove_passenger_internal(passenger_id, false);
     }
 
     #[allow(clippy::too_many_lines)]
-    fn remove_passenger_internal(
-        &self,
-        passenger_id: i32,
-        reposition: bool,
-        can_unlink: &dyn Fn() -> bool,
-    ) {
+    fn remove_passenger_internal(&self, passenger_id: i32, reposition: bool) {
         let mut dismount_event =
             crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
                 passenger_id,
@@ -6120,7 +6139,7 @@ impl Entity {
                 .plugin_manager
                 .fire_blocking(&server, &mut vehicle_exit);
         }
-        if dismount_event.cancelled || vehicle_exit.cancelled || !can_unlink() {
+        if dismount_event.cancelled || vehicle_exit.cancelled {
             return;
         }
 
@@ -6154,7 +6173,7 @@ impl Entity {
         if let Some(passenger) = removed_passenger {
             let vehicle_box = self.bounding_box.load();
             let passenger_entity = passenger.get_entity();
-            passenger_entity.with_shulker(|_| passenger_entity.body_yaw.store(0.0));
+            passenger.on_stopped_riding();
 
             // Pre-allocate teleport ID and block movement packets BEFORE sending
             // CSetPassengers. This prevents a race condition where the client receives
@@ -6823,7 +6842,10 @@ impl Entity {
         // Check if visual fire should be sent
         let should_render_fire = self.fire_ticks.load(Ordering::Relaxed) > 0
             && !is_immune
-            && self.entity_type != &EntityType::SHULKER_BULLET;
+            && self
+                .behavior
+                .as_ref()
+                .is_none_or(|behavior| behavior.renders_fire());
         self.set_on_fire(should_render_fire);
 
         let riding_cooldown = self.riding_cooldown.load(Ordering::Relaxed);
@@ -7129,8 +7151,7 @@ mod dimension_tests {
     }
 
     #[tokio::test]
-    async fn horizontal_shell_displacement_recognizes_entity_support_without_a_fake_block()
-    -> TestResult {
+    async fn horizontal_shell_displacement_preserves_client_ground_state() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
         let shulker = crate::entity::mob::shulker::ShulkerEntity::new(Entity::new(
@@ -7144,19 +7165,27 @@ mod dimension_tests {
             Vector3::new(0.5, 65.0, 0.5),
             &EntityType::PLAYER,
         );
+        player
+            .on_ground
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         player.move_by_shulker(&player, Vector3::new(0.1, 0.0, 0.0));
         assert!(player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
         assert!(player.supporting_block_pos.load().is_none());
         player.move_by_shulker(&player, Vector3::new(1.0, 0.0, 0.0));
-        assert!(!player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
         player.set_pos(Vector3::new(0.5, 64.5, 1.2));
         player.move_by_shulker(&player, Vector3::new(0.1, 0.0, 0.0));
-        assert!(!player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
         shulker
             .get_living_entity()
             .ok_or("missing living entity")?
             .set_health(0.0);
         player.set_pos(Vector3::new(0.5, 65.0, 0.5));
+        player.move_by_shulker(&player, Vector3::new(0.1, 0.0, 0.0));
+        assert!(player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        player
+            .on_ground
+            .store(false, std::sync::atomic::Ordering::Relaxed);
         player.move_by_shulker(&player, Vector3::new(0.1, 0.0, 0.0));
         assert!(!player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
         world.level.shutdown().await;
@@ -7164,7 +7193,31 @@ mod dimension_tests {
     }
 
     #[tokio::test]
-    async fn shell_displacement_rechecks_player_support() -> TestResult {
+    async fn vertical_shell_displacement_lands_on_entities_without_a_supporting_block() -> TestResult
+    {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let shulker = crate::entity::mob::shulker::ShulkerEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 64.0, 0.5),
+            &EntityType::SHULKER,
+        ));
+        world.spawn_entity(shulker);
+        let player = Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 65.25, 0.5),
+            &EntityType::PLAYER,
+        );
+        player.move_by_shulker(&player, Vector3::new(0.0, -0.5, 0.0));
+        assert_eq!(player.pos.load().y, 65.0);
+        assert!(player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        assert!(player.supporting_block_pos.load().is_none());
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn vertical_shell_displacement_updates_player_support() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
         world.level.loaded_chunks.insert(
@@ -7190,15 +7243,18 @@ mod dimension_tests {
         player.move_by_shulker(&player, Vector3::new(0.0, 0.25, 0.0));
         assert!(!player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
         assert!(player.supporting_block_pos.load().is_none());
-        player.move_by_shulker(&player, Vector3::new(0.0, -0.25, 0.0));
+        player.move_by_shulker(&player, Vector3::new(0.0, -0.5, 0.0));
         assert!(player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
         assert_eq!(
             player.supporting_block_pos.load(),
             Some(pumpkin_util::math::position::BlockPos::new(0, 63, 0))
         );
         player.move_by_shulker(&player, Vector3::new(1.0, 0.0, 0.0));
-        assert!(!player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
-        assert!(player.supporting_block_pos.load().is_none());
+        assert!(player.on_ground.load(std::sync::atomic::Ordering::Relaxed));
+        assert_eq!(
+            player.supporting_block_pos.load(),
+            Some(pumpkin_util::math::position::BlockPos::new(0, 63, 0))
+        );
         world.level.shutdown().await;
         Ok(())
     }

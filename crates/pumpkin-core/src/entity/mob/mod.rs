@@ -1530,13 +1530,20 @@ impl MobEntity {
         let fluid_push = super::max_fluid_push_speed(world.dimension.fast_lava);
         let velocity = entity.velocity.load();
         let spawns = mob.audited_spawn_distance();
-        let horizontal = velocity.x.hypot(velocity.z) + acceleration + fluid_push + spawns;
+        let horizontal = velocity.x.hypot(velocity.z)
+            + acceleration
+            + fluid_push
+            + spawns
+            + super::COLLISION_QUERY_MARGIN;
         let vertical = velocity.y.abs()
             + living.get_jump_velocity(1.0)
             + living.get_attribute_value(&Attributes::GRAVITY)
             + SURFACE_UPWARD_ACCELERATION
             + fluid_push
-            + spawns;
+            + spawns
+            // Collision scans include the step-up box, even if no step is taken.
+            + f64::from(Entity::max_up_step(mob))
+            + super::COLLISION_QUERY_MARGIN;
 
         let mut links = entity_islands::links_of(mob);
         links.extend(goals.links);
@@ -2941,6 +2948,18 @@ pub trait Mob: EntityBase + Send + Sync {
     }
     fn mob_set_sound_variant_name(&self, _name: &str) {}
 
+    fn mob_is_collidable(&self) -> bool {
+        false
+    }
+
+    fn mob_can_push(&self) -> bool {
+        true
+    }
+
+    fn mob_on_started_riding(&self) {}
+
+    fn mob_on_stopped_riding(&self) {}
+
     fn mob_is_pushable(&self) -> bool {
         self.get_mob_entity()
             .living_entity
@@ -3008,6 +3027,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)
+    }
+
+    fn on_started_riding(&self) {
+        self.mob_on_started_riding();
+    }
+
+    fn on_stopped_riding(&self) {
+        self.mob_on_stopped_riding();
     }
 
     fn is_pushable(&self) -> bool {
@@ -3784,6 +3811,40 @@ mod lifecycle_tests {
     };
 
     struct ControlProbe(Controls, Arc<AtomicBool>);
+
+    #[tokio::test]
+    async fn audited_reach_covers_entity_collisions_at_an_increased_step_height()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let cow = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        cow.get_mob_entity().living_entity.update_attribute(
+            &Attributes::STEP_HEIGHT,
+            |attribute| {
+                attribute.base_value = 10.0;
+                attribute.mark_dirty();
+            },
+        );
+        let shulker = super::shulker::ShulkerEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 74.0, 0.5),
+            &EntityType::SHULKER,
+        ));
+        let reach = cow
+            .get_mob_entity()
+            .audited_reach(cow.as_ref())
+            .ok_or("missing audited reach")?;
+        let body = reach
+            .bounding_box
+            .expand(reach.motion.0, reach.motion.1, reach.motion.0);
+        assert!(body.intersects(&shulker.get_entity().bounding_box.load()));
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[tokio::test]
     async fn audited_reach_covers_a_route_after_the_mob_grows_up()

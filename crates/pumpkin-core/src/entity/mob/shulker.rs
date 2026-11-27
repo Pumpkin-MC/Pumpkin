@@ -37,7 +37,7 @@ use crate::entity::ai::goal::{Controls, Goal, to_goal_ticks};
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
-use crate::entity::{Entity, EntityBase};
+use crate::entity::{Entity, EntityBase, EntityBehavior};
 
 const DEFAULT_ATTACH_FACE: BlockDirection = BlockDirection::Down;
 const NO_COLOR: u8 = 16;
@@ -46,33 +46,99 @@ const MAX_TELEPORT_DISTANCE: i32 = 8;
 const OTHER_SHULKER_SCAN_RADIUS: f64 = 8.0;
 const OTHER_SHULKER_LIMIT: f32 = 5.0;
 const COVERED_ARMOR_MODIFIER_ID: &str = "minecraft:covered";
-pub(crate) const MAX_SCALE: f32 = 3.0;
+const MAX_SCALE: f32 = 3.0;
 
 pub struct ShulkerEntity {
     pub mob_entity: MobEntity,
-    attach_face: AtomicU8,
-    peek_amount: AtomicU8,
+    state: Arc<ShulkerState>,
     color: AtomicU8,
-    current_peek_amount: AtomicCell<f32>,
     prev_peek_amount: AtomicCell<f32>,
     random: Mutex<LegacyRand>,
 }
 
+struct ShulkerState {
+    attach_face: AtomicU8,
+    peek_amount: AtomicU8,
+    current_peek_amount: AtomicCell<f32>,
+}
+
+impl ShulkerState {
+    fn get_attach_face(&self) -> BlockDirection {
+        BlockDirection::try_from(i32::from(self.attach_face.load(Ordering::Relaxed)))
+            .unwrap_or(DEFAULT_ATTACH_FACE)
+    }
+
+    fn store_peek(&self, entity: &Entity, amount: u8) {
+        self.peek_amount.store(amount, Ordering::Relaxed);
+        entity.set_synced_data(pumpkin_data::tracked_data::shulker::PEEK_ID, amount);
+    }
+}
+
+impl EntityBehavior for ShulkerState {
+    fn position(&self, entity: &Entity, position: Vector3<f64>) -> Vector3<f64> {
+        if entity.has_vehicle() {
+            position
+        } else {
+            ShulkerEntity::snap_position(position)
+        }
+    }
+
+    fn dismount_position(&self, position: Vector3<f64>) -> Vector3<f64> {
+        ShulkerEntity::snap_position(position)
+    }
+
+    fn height_scale(&self) -> f32 {
+        let peek = self.current_peek_amount.load();
+        if self.attach_face.load(Ordering::Relaxed) == BlockDirection::Down as u8 && peek > 0.0 {
+            1.0 + peek
+        } else {
+            1.0
+        }
+    }
+
+    fn bounding_box(&self, entity: &Entity, position: Vector3<f64>) -> Option<BoundingBox> {
+        let face = self.get_attach_face();
+        Some(ShulkerEntity::progress_aabb(
+            entity.scale.load(),
+            face.opposite(),
+            -1.0,
+            ShulkerEntity::physical_peek(self.current_peek_amount.load()),
+            position,
+        ))
+    }
+
+    fn on_position_changed(&self, entity: &Entity, old: BlockPos) {
+        if entity.tick_count.load(Ordering::Relaxed) != 0 && old != entity.block_pos.load() {
+            self.store_peek(entity, 0);
+            entity.velocity_dirty.store(true, Ordering::Relaxed);
+        }
+    }
+
+    fn sanitize_scale(&self, scale: f32) -> f32 {
+        scale.min(MAX_SCALE)
+    }
+}
+
 impl ShulkerEntity {
-    pub fn new(entity: Entity) -> Arc<Self> {
+    pub fn new(mut entity: Entity) -> Arc<Self> {
+        let state = Arc::new(ShulkerState {
+            attach_face: AtomicU8::new(DEFAULT_ATTACH_FACE as u8),
+            peek_amount: AtomicU8::new(0),
+            current_peek_amount: AtomicCell::new(0.0),
+        });
+        entity.behavior = Some(state.clone());
+        entity.velocity.store(Vector3::default());
+        entity.velocity.movable = false;
         entity.set_pos(Self::snap_position(entity.pos.load()));
         let mob_entity = MobEntity::new(entity);
         let shulker = Self {
             mob_entity,
-            attach_face: AtomicU8::new(DEFAULT_ATTACH_FACE as u8),
-            peek_amount: AtomicU8::new(0),
+            state,
             color: AtomicU8::new(NO_COLOR),
-            current_peek_amount: AtomicCell::new(0.0),
             prev_peek_amount: AtomicCell::new(0.0),
             random: Mutex::new(LegacyRand::from_seed(get_seed())),
         };
         let mob_arc = Arc::new(shulker);
-        let _ = mob_arc.get_entity().shulker.set(Arc::downgrade(&mob_arc));
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
@@ -130,12 +196,11 @@ impl ShulkerEntity {
     }
 
     pub fn get_attach_face(&self) -> BlockDirection {
-        BlockDirection::try_from(i32::from(self.attach_face.load(Ordering::Relaxed)))
-            .unwrap_or(DEFAULT_ATTACH_FACE)
+        self.state.get_attach_face()
     }
 
     pub fn set_attach_face(&self, face: BlockDirection) {
-        self.attach_face.store(face as u8, Ordering::Relaxed);
+        self.state.attach_face.store(face as u8, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
         entity.set_synced_data(
             pumpkin_data::tracked_data::shulker::ATTACH_FACE_ID,
@@ -157,7 +222,7 @@ impl ShulkerEntity {
     }
 
     pub fn get_raw_peek(&self) -> u8 {
-        self.peek_amount.load(Ordering::Relaxed)
+        self.state.peek_amount.load(Ordering::Relaxed)
     }
 
     pub fn set_raw_peek(&self, amount: u8) {
@@ -199,17 +264,15 @@ impl ShulkerEntity {
 
     // Vanilla's direct DATA_PEEK_ID writes leave the covered modifier unchanged.
     fn store_peek(&self, amount: u8) {
-        self.peek_amount.store(amount, Ordering::Relaxed);
-        self.get_entity()
-            .set_synced_data(pumpkin_data::tracked_data::shulker::PEEK_ID, amount);
+        self.state.store_peek(self.get_entity(), amount);
     }
 
     pub fn is_closed(&self) -> bool {
-        self.peek_amount.load(Ordering::Relaxed) == 0
+        self.state.peek_amount.load(Ordering::Relaxed) == 0
     }
 
     fn update_peek_amount(&self) -> bool {
-        let current = self.current_peek_amount.load();
+        let current = self.state.current_peek_amount.load();
         self.prev_peek_amount.store(current);
         let target = f32::from(self.get_raw_peek() as i8) * 0.01;
 
@@ -225,7 +288,7 @@ impl ShulkerEntity {
         // Saved bytes can put the bounds in reverse order; match Mth.clamp there too.
         let new = if value < min { min } else { value.min(max) };
 
-        self.current_peek_amount.store(new);
+        self.state.current_peek_amount.store(new);
         true
     }
 
@@ -235,14 +298,6 @@ impl ShulkerEntity {
             (pos.y + 0.5).floor(),
             pos.z.floor() + 0.5,
         )
-    }
-
-    pub(crate) fn on_position_changed(&self, old: BlockPos) {
-        let entity = self.get_entity();
-        if entity.tick_count.load(Ordering::Relaxed) != 0 && old != entity.block_pos.load() {
-            self.store_peek(0);
-            entity.velocity_dirty.store(true, Ordering::Relaxed);
-        }
     }
 
     fn physical_peek(amount: f32) -> f32 {
@@ -284,30 +339,11 @@ impl ShulkerEntity {
         bounds.shift(pos)
     }
 
-    pub(crate) fn height_scale(&self) -> f32 {
-        let peek = self.current_peek_amount.load();
-        if self.get_attach_face() == BlockDirection::Down && peek > 0.0 {
-            1.0 + peek
-        } else {
-            1.0
-        }
-    }
-
-    pub(crate) fn make_bounding_box(&self, pos: Vector3<f64>) -> BoundingBox {
-        Self::progress_aabb(
-            self.get_entity().scale.load(),
-            self.get_attach_face().opposite(),
-            -1.0,
-            Self::physical_peek(self.current_peek_amount.load()),
-            pos,
-        )
-    }
-
     fn on_peek_amount_change(&self) {
         let entity = self.get_entity();
         entity.refresh_dimensions();
         let old = Self::physical_peek(self.prev_peek_amount.load());
-        let current = Self::physical_peek(self.current_peek_amount.load());
+        let current = Self::physical_peek(self.state.current_peek_amount.load());
         let push = (current - old) * entity.scale.load();
         if push <= 0.0 {
             return;
@@ -375,19 +411,7 @@ impl ShulkerEntity {
         {
             return None;
         }
-        let bounds = Self::progress_aabb(
-            entity.scale.load(),
-            face.opposite(),
-            -1.0,
-            1.0,
-            pos.to_f64().add_raw(0.5, 0.0, 0.5),
-        )
-        .contract_all(1.0E-6);
-        let min = bounds.min_block_pos();
-        let max = bounds.max_block_pos();
-        (world.has_chunks_at(min.0.x, min.0.z, max.0.x, max.0.z)
-            && world.no_entity_collision_with_vehicle(Some(self), bounds, true))
-        .then_some(face)
+        Some(face)
     }
 
     fn no_collision(&self, bounds: BoundingBox) -> bool {
@@ -446,9 +470,9 @@ impl ShulkerEntity {
                     random.next_bounded_i32(MAX_TELEPORT_DISTANCE * 2 + 1) - MAX_TELEPORT_DISTANCE,
                 ))
             };
-            if self.find_teleport_attachment(&candidate).is_none() {
+            let Some(face) = self.find_teleport_attachment(&candidate) else {
                 continue;
-            }
+            };
             let new_pos = Vector3::new(
                 f64::from(candidate.0.x) + 0.5,
                 f64::from(candidate.0.y),
@@ -478,15 +502,9 @@ impl ShulkerEntity {
                 return false;
             }
             if let Some(vehicle) = entity.get_vehicle() {
-                if self.find_teleport_attachment(&candidate).is_none() {
-                    continue;
-                }
                 vehicle
                     .get_entity()
-                    .remove_passenger_before_teleport_if(entity.entity_id, &|| {
-                        self.mob_entity.living_entity.is_alive()
-                            && self.find_teleport_attachment(&candidate).is_some()
-                    });
+                    .remove_passenger_before_teleport(entity.entity_id);
                 if entity.has_vehicle() {
                     return false;
                 }
@@ -494,9 +512,6 @@ impl ShulkerEntity {
             if !self.mob_entity.living_entity.is_alive() {
                 return false;
             }
-            let Some(face) = self.find_teleport_attachment(&candidate) else {
-                continue;
-            };
             self.set_attach_face(face);
             self.play_entity_sound(Sound::EntityShulkerTeleport, 1.0, 1.0);
             entity.set_pos(new_pos);
@@ -562,9 +577,28 @@ impl ShulkerEntity {
 }
 
 impl Mob for ShulkerEntity {
+    fn mob_is_collidable(&self) -> bool {
+        self.mob_entity.living_entity.is_alive()
+    }
+
+    fn mob_can_push(&self) -> bool {
+        false
+    }
+
+    fn mob_on_started_riding(&self) {
+        self.set_attach_face(BlockDirection::Down);
+    }
+
+    fn mob_on_stopped_riding(&self) {
+        self.get_entity().body_yaw.store(0.0);
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        nbt.put_byte("AttachFace", self.attach_face.load(Ordering::Relaxed) as i8);
-        nbt.put_byte("Peek", self.peek_amount.load(Ordering::Relaxed) as i8);
+        nbt.put_byte(
+            "AttachFace",
+            self.state.attach_face.load(Ordering::Relaxed) as i8,
+        );
+        nbt.put_byte("Peek", self.state.peek_amount.load(Ordering::Relaxed) as i8);
         nbt.put_byte("Color", self.color.load(Ordering::Relaxed) as i8);
     }
 
@@ -1091,8 +1125,9 @@ mod tests {
         );
         assert_eq!(
             clones[0]
-                .get_entity()
-                .with_shulker(ShulkerEntity::get_color),
+                .cast_any()
+                .downcast_ref::<ShulkerEntity>()
+                .map(ShulkerEntity::get_color),
             Some(Some(11))
         );
         world.level.shutdown().await;
@@ -1411,7 +1446,10 @@ mod tests {
             flags,
         );
         assert!(shulker.can_stay_at(&edge, BlockDirection::West));
-        assert_eq!(shulker.find_teleport_attachment(&edge), None);
+        assert_eq!(
+            shulker.find_teleport_attachment(&edge),
+            Some(BlockDirection::West)
+        );
         world
             .level
             .loaded_chunks
@@ -1461,20 +1499,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn teleport_clearance_checks_the_vehicle_before_unlinking() -> TestResult {
+    async fn teleport_checks_clearance_before_unride_and_keeps_the_selected_face() -> TestResult {
         let folder = tempfile::tempdir()?;
         let world = world(&folder);
-        world
-            .level
-            .loaded_chunks
-            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
-        let shulker = spawn(&world);
-        let candidate = BlockPos::new(2, 64, 2);
-        let clear_candidate = BlockPos::new(5, 64, 2);
-        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
-        for pos in [candidate, clear_candidate] {
-            world.set_block_state(&pos.down(), Block::STONE.default_state.id, flags);
+        for x in -1..=0 {
+            for z in -1..=0 {
+                world
+                    .level
+                    .loaded_chunks
+                    .insert(Vector2::new(x, z), ChunkData::empty_sync(0, 0));
+            }
         }
+        let shulker = spawn(&world);
+        let entity = shulker.get_entity();
+        let mut random = LegacyRand::from_seed(42);
+        let candidate = entity.block_pos.load().offset(Vector3::new(
+            random.next_bounded_i32(MAX_TELEPORT_DISTANCE * 2 + 1) - MAX_TELEPORT_DISTANCE,
+            random.next_bounded_i32(MAX_TELEPORT_DISTANCE * 2 + 1) - MAX_TELEPORT_DISTANCE,
+            random.next_bounded_i32(MAX_TELEPORT_DISTANCE * 2 + 1) - MAX_TELEPORT_DISTANCE,
+        ));
+        *shulker.random() = LegacyRand::from_seed(42);
+        world.set_block_state(
+            &candidate.down(),
+            Block::STONE.default_state.id,
+            BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE,
+        );
         let vehicle = Arc::new(Entity::new(
             world.clone(),
             candidate.to_f64().add_raw(0.5, 0.0, 0.5),
@@ -1482,81 +1531,16 @@ mod tests {
         ));
         world.spawn_entity(vehicle.clone());
         vehicle.add_passenger_silently(vehicle.clone(), shulker.clone());
-        assert!(
-            world.no_entity_collision(Some(shulker.as_ref()), BoundingBox::from_block(&candidate))
-        );
-        assert!(shulker.find_teleport_attachment(&candidate).is_none());
-        assert!(shulker.get_entity().has_vehicle());
-        assert!(shulker.find_teleport_attachment(&clear_candidate).is_some());
-        let passenger = Arc::new(Entity::new(
-            world.clone(),
-            clear_candidate.to_f64().add_raw(0.5, 0.0, 0.5),
-            &EntityType::OAK_BOAT,
-        ));
-        world.spawn_entity(passenger.clone());
-        shulker
-            .get_entity()
-            .add_passenger_silently(shulker.clone(), passenger);
-        assert!(shulker.find_teleport_attachment(&clear_candidate).is_some());
-        vehicle.remove_passenger_before_teleport_if(shulker.get_entity().entity_id, &|| {
-            shulker.find_teleport_attachment(&candidate).is_some()
-        });
-        assert!(shulker.get_entity().has_vehicle());
-        vehicle.remove_passenger_before_teleport_if(shulker.get_entity().entity_id, &|| {
-            shulker.find_teleport_attachment(&clear_candidate).is_some()
-        });
-        assert!(!shulker.get_entity().has_vehicle());
-        assert!(shulker.find_teleport_attachment(&candidate).is_none());
-        assert!(shulker.find_teleport_attachment(&clear_candidate).is_some());
-        world.level.shutdown().await;
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn invalidated_teleport_keeps_the_rider_linked_before_unlinking() -> TestResult {
-        let folder = tempfile::tempdir()?;
-        let world = world(&folder);
-        world
-            .level
-            .loaded_chunks
-            .insert(Vector2::new(0, 0), ChunkData::empty_sync(0, 0));
-        let shulker = spawn(&world);
-        let vehicle = Arc::new(Entity::new(
-            world.clone(),
-            shulker.get_entity().pos.load(),
-            &EntityType::COW,
-        ));
-        world.spawn_entity(vehicle.clone());
-        vehicle.add_passenger_silently(vehicle.clone(), shulker.clone());
-        let candidate = BlockPos::new(2, 64, 2);
-        let flags = BlockFlags::SKIP_BLOCK_ADDED_CALLBACK | BlockFlags::UPDATE_KNOWN_SHAPE;
-        world.set_block_state(&candidate.down(), Block::STONE.default_state.id, flags);
-        assert!(shulker.find_teleport_attachment(&candidate).is_some());
-        vehicle.remove_passenger_before_teleport_if(shulker.get_entity().entity_id, &|| {
-            world.set_block_state(&candidate, Block::STONE.default_state.id, flags);
-            shulker.find_teleport_attachment(&candidate).is_some()
-        });
-        assert!(shulker.get_entity().has_vehicle());
         assert_eq!(
-            vehicle
-                .passengers
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .len(),
-            1
+            shulker.find_teleport_attachment(&candidate),
+            Some(BlockDirection::Down)
         );
-        world.set_block_state(&candidate, Block::AIR.default_state.id, flags);
-        vehicle.remove_passenger_before_teleport_if(shulker.get_entity().entity_id, &|| {
-            shulker.find_teleport_attachment(&candidate).is_some()
-        });
-        assert!(!shulker.get_entity().has_vehicle());
-        assert!(
-            vehicle
-                .passengers
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_empty()
-        );
+        assert!(shulker.teleport_somewhere());
+        assert!(!entity.has_vehicle());
+        assert_eq!(entity.block_pos.load(), candidate);
+        // Once unlinked, the same boat blocks clearance. Vanilla does not recheck it.
+        assert!(shulker.find_teleport_attachment(&candidate).is_none());
+        assert_eq!(shulker.get_attach_face(), BlockDirection::Down);
         world.level.shutdown().await;
         Ok(())
     }
