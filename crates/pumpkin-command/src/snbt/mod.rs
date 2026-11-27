@@ -53,6 +53,8 @@ pub const EXPECTED_INTEGER_TYPE: CommandErrorType<0> = CommandErrorType::new(
 pub struct SnbtParser<'r, 's> {
     reader: &'r mut StringReader<'s>,
     errors: ParserErrors,
+    /// How many maps and lists are open around the literal being parsed.
+    depth: usize,
 }
 
 //
@@ -66,6 +68,7 @@ impl SnbtParser<'_, '_> {
             let mut parser = SnbtParser {
                 reader,
                 errors: ParserErrors::default(),
+                depth: 0,
             };
 
             let literal = parser.parse();
@@ -112,6 +115,7 @@ impl SnbtParser<'_, '_> {
             let mut parser = SnbtParser {
                 reader: &mut reader,
                 errors: ParserErrors::default(),
+                depth: 0,
             };
 
             let _ = parser.parse();
