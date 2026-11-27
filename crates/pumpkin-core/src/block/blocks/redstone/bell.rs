@@ -71,8 +71,8 @@ fn is_point_on_bell(
     if hit.face == &BlockDirection::Up || hit.face == &BlockDirection::Down {
         return false;
     }
-    if hit.cursor_pos.y <= 0.8124f32 {
-        match attachment {
+    hit.cursor_pos.y <= 0.8124f32
+        && match attachment {
             BellAttachment::Floor => {
                 hit.face.to_axis() == block_face.to_block_direction().to_axis()
             }
@@ -81,9 +81,6 @@ fn is_point_on_bell(
             }
             BellAttachment::Ceiling => true,
         }
-    } else {
-        false
-    }
 }
 
 #[pumpkin_block("minecraft:bell")]

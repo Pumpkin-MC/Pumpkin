@@ -239,11 +239,7 @@ impl<'a> ServerPacket<'a> for CParticle<'a> {
             (id, important, false)
         } else {
             let important = bytebuf.get_bool()?;
-            let force_spawn = if *version >= JavaMinecraftVersion::V_1_21_4 {
-                bytebuf.get_bool()?
-            } else {
-                false
-            };
+            let force_spawn = *version >= JavaMinecraftVersion::V_1_21_4 && bytebuf.get_bool()?;
             (VarInt(0), important, force_spawn)
         };
 

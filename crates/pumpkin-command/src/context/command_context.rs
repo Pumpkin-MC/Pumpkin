@@ -500,8 +500,8 @@ impl<'a, S: CommandSource> CommandContextBuilder<'a, S> {
         if self.range.end < cursor {
             self.child.as_ref().map_or_else(
                 || {
-                    self.nodes.last().as_ref().map_or_else(
-                        || SuggestionContext {
+                    self.nodes.last().as_ref().map_or(
+                        SuggestionContext {
                             parent: self.root,
                             starting_position: self.range.start,
                         },

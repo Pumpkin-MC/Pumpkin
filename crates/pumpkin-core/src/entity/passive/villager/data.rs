@@ -122,31 +122,6 @@ impl GossipType {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::GossipType;
-
-    #[test]
-    fn gossip_types_use_vanilla_names_and_values() {
-        let types = [
-            (GossipType::MajorNegative, "major_negative", -5, 100, 10),
-            (GossipType::MinorNegative, "minor_negative", -1, 200, 20),
-            (GossipType::MinorPositive, "minor_positive", 1, 25, 1),
-            (GossipType::MajorPositive, "major_positive", 5, 20, 0),
-            (GossipType::Trading, "trading", 1, 25, 2),
-        ];
-
-        for (index, (gossip_type, name, weight, max, decay)) in types.into_iter().enumerate() {
-            assert_eq!(gossip_type.name(), name);
-            assert_eq!(GossipType::from_name(name), Some(gossip_type));
-            assert_eq!(GossipType::from_legacy_id(index as i32), Some(gossip_type));
-            assert_eq!(gossip_type.weight(), weight);
-            assert_eq!(gossip_type.max_value(), max);
-            assert_eq!(gossip_type.daily_decay(), decay);
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VillagerData {
     pub r#type: VarInt,
@@ -219,5 +194,30 @@ impl VillagerData {
         );
         nbt.put_int("level", self.level.0);
         nbt
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GossipType;
+
+    #[test]
+    fn gossip_types_use_vanilla_names_and_values() {
+        let types = [
+            (GossipType::MajorNegative, "major_negative", -5, 100, 10),
+            (GossipType::MinorNegative, "minor_negative", -1, 200, 20),
+            (GossipType::MinorPositive, "minor_positive", 1, 25, 1),
+            (GossipType::MajorPositive, "major_positive", 5, 20, 0),
+            (GossipType::Trading, "trading", 1, 25, 2),
+        ];
+
+        for (index, (gossip_type, name, weight, max, decay)) in types.into_iter().enumerate() {
+            assert_eq!(gossip_type.name(), name);
+            assert_eq!(GossipType::from_name(name), Some(gossip_type));
+            assert_eq!(GossipType::from_legacy_id(index as i32), Some(gossip_type));
+            assert_eq!(gossip_type.weight(), weight);
+            assert_eq!(gossip_type.max_value(), max);
+            assert_eq!(gossip_type.daily_decay(), decay);
+        }
     }
 }

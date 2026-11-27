@@ -149,11 +149,8 @@ impl SpreadingSnowyBlock {
                     && Self::can_propagate(default_block_state, world, &test_pos)
                 {
                     let above_test = test_pos.up();
-                    let is_snowy = if world.is_loaded(&above_test) {
-                        SnowyBlock::is_snowy_setting(world.get_block_state(&above_test))
-                    } else {
-                        false
-                    };
+                    let is_snowy = world.is_loaded(&above_test)
+                        && SnowyBlock::is_snowy_setting(world.get_block_state(&above_test));
                     let mut props = GrassBlockLikeProperties::from_state_id(default_block_state.id);
                     props.snowy = is_snowy;
                     let new_state_id = props.to_state_id(default_block_state.id.to_block());

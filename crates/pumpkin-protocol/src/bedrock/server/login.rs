@@ -95,46 +95,6 @@ impl PacketRead for SLogin {
         })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use std::io::Cursor;
-
-    use crate::serial::{PacketRead, PacketWrite};
-
-    use super::*;
-
-    #[test]
-    fn reads_raw_token_larger_than_two_mib() {
-        const RAW_TOKEN_LEN: usize = 2 * 1024 * 1024 + 1;
-        let jwt = b"{}";
-        let client_token = vec![0x41; RAW_TOKEN_LEN];
-        let connection_request_len = 4 + jwt.len() + 4 + client_token.len();
-        let mut input = Vec::new();
-
-        2225i32
-            .write_be(&mut input)
-            .expect("write protocol version");
-        VarUInt(connection_request_len as u32)
-            .write(&mut input)
-            .expect("write connection request length");
-        (jwt.len() as u32)
-            .write(&mut input)
-            .expect("write JWT length");
-        input.extend_from_slice(jwt);
-        (client_token.len() as u32)
-            .write(&mut input)
-            .expect("write raw token length");
-        input.extend_from_slice(&client_token);
-
-        let packet = SLogin::read(&mut Cursor::new(input)).expect("read login packet");
-
-        assert_eq!(packet.protocol_version, 2225);
-        assert_eq!(packet.jwt, jwt);
-        assert_eq!(packet.raw_token.len(), RAW_TOKEN_LEN);
-        assert_eq!(packet.raw_token, client_token);
-    }
-}
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "PascalCase")]
 pub struct LoginSkinAnimation {
@@ -264,4 +224,44 @@ pub struct ClientData {
     pub persona_pieces: Vec<LoginPersonaPiece>,
     #[serde(rename = "PieceTintColors", default)]
     pub piece_tint_colours: Vec<LoginPersonaPieceTintColour>,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use crate::serial::{PacketRead, PacketWrite};
+
+    use super::*;
+
+    #[test]
+    fn reads_raw_token_larger_than_two_mib() {
+        const RAW_TOKEN_LEN: usize = 2 * 1024 * 1024 + 1;
+        let jwt = b"{}";
+        let client_token = vec![0x41; RAW_TOKEN_LEN];
+        let connection_request_len = 4 + jwt.len() + 4 + client_token.len();
+        let mut input = Vec::new();
+
+        2225i32
+            .write_be(&mut input)
+            .expect("write protocol version");
+        VarUInt(connection_request_len as u32)
+            .write(&mut input)
+            .expect("write connection request length");
+        (jwt.len() as u32)
+            .write(&mut input)
+            .expect("write JWT length");
+        input.extend_from_slice(jwt);
+        (client_token.len() as u32)
+            .write(&mut input)
+            .expect("write raw token length");
+        input.extend_from_slice(&client_token);
+
+        let packet = SLogin::read(&mut Cursor::new(input)).expect("read login packet");
+
+        assert_eq!(packet.protocol_version, 2225);
+        assert_eq!(packet.jwt, jwt);
+        assert_eq!(packet.raw_token.len(), RAW_TOKEN_LEN);
+        assert_eq!(packet.raw_token, client_token);
+    }
 }

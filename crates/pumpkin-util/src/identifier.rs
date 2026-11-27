@@ -348,11 +348,19 @@ impl Identifier {
     }
 }
 
-impl TryFrom<&str> for Identifier {
-    type Error = IdentifierError;
+impl std::str::FromStr for Identifier {
+    type Err = IdentifierError;
 
-    fn try_from(value: &str) -> IdentifierCreationResult {
+    fn from_str(value: &str) -> IdentifierCreationResult {
         Self::parse(value)
+    }
+}
+
+impl TryFrom<&str> for Identifier {
+    type Error = <Self as std::str::FromStr>::Err;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        value.parse()
     }
 }
 

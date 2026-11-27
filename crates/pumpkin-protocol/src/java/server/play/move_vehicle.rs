@@ -23,11 +23,7 @@ impl<'a> ServerPacket<'a> for SMoveVehicle {
         let z = bytebuf.get_f64_be()?;
         let yaw = bytebuf.get_f32_be()?;
         let pitch = bytebuf.get_f32_be()?;
-        let on_ground = if *version >= JavaMinecraftVersion::V_1_21_4 {
-            bytebuf.get_bool()?
-        } else {
-            false
-        };
+        let on_ground = *version >= JavaMinecraftVersion::V_1_21_4 && bytebuf.get_bool()?;
 
         Ok(Self {
             x,

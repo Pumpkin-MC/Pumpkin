@@ -3200,10 +3200,10 @@ impl Enchantment {
             victim_type.is_some_and(|t| {
                 t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_BANE_OF_ARTHROPODS)
             })
-        } else if self == &Self::IMPALING {
-            victim_type.is_some_and(|t| t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_IMPALING))
         } else {
-            false
+            self == &Self::IMPALING
+                && victim_type
+                    .is_some_and(|t| t.has_tag(&EntityTypeTag::MINECRAFT_SENSITIVE_TO_IMPALING))
         };
         if is_applicable {
             self.modify_damage(level, damage);
@@ -3226,10 +3226,8 @@ impl Enchantment {
             damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_EXPLOSION)
         } else if self == &Self::PROJECTILE_PROTECTION {
             damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_PROJECTILE)
-        } else if self == &Self::FEATHER_FALLING {
-            damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_FALL)
         } else {
-            false
+            self == &Self::FEATHER_FALLING && damage_type.has_tag(&DamageTypeTag::MINECRAFT_IS_FALL)
         };
         if is_applicable {
             self.modify_damage_protection(level, protection);

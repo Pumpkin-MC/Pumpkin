@@ -191,10 +191,8 @@ impl BlockBehaviour for BeehiveBlock {
         let used_item_id = args.item_stack.item.id;
         let hive_emptied = if used_item_id == Item::SHEARS.id {
             Self::shear_honeycomb(&args, state_id)
-        } else if used_item_id == Item::GLASS_BOTTLE.id {
-            Self::collect_honey_bottle(&mut args)
         } else {
-            false
+            used_item_id == Item::GLASS_BOTTLE.id && Self::collect_honey_bottle(&mut args)
         };
 
         if !hive_emptied {

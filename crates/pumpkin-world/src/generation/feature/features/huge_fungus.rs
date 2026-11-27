@@ -67,10 +67,9 @@ impl HugeFungusFeature {
                 .is_air()
         {
             true
-        } else if check_non_replaceable_plants {
-            self.replaceable_blocks.test(block_registry, chunk, &pos)
         } else {
-            false
+            check_non_replaceable_plants
+                && self.replaceable_blocks.test(block_registry, chunk, &pos)
         }
     }
 

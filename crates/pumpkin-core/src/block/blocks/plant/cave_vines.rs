@@ -213,10 +213,9 @@ impl BlockBehaviour for CaveVinesBlock {
     fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
         if args.block == &Block::CAVE_VINES {
             !CaveVinesLikeProperties::from_state_id(args.state_id).berries
-        } else if args.block == &Block::CAVE_VINES_PLANT {
-            !CaveVinesPlantLikeProperties::from_state_id(args.state_id).berries
         } else {
-            false
+            args.block == &Block::CAVE_VINES_PLANT
+                && !CaveVinesPlantLikeProperties::from_state_id(args.state_id).berries
         }
     }
 

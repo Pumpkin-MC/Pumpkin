@@ -107,10 +107,8 @@ impl<'a> ServerPacket<'a> for CUpdateEntityPosRot {
         let pitch = bytebuf.get_u8()?;
         let on_ground = if let Some(on_ground) = packed_on_ground {
             on_ground
-        } else if *version >= JavaMinecraftVersion::V_1_8 {
-            bytebuf.get_bool()?
         } else {
-            false
+            *version >= JavaMinecraftVersion::V_1_8 && bytebuf.get_bool()?
         };
         Ok(Self {
             entity_id,

@@ -77,11 +77,7 @@ impl<'a> ServerPacket<'a> for SInteract {
             }
         };
 
-        let sneaking = if version >= &JavaMinecraftVersion::V_1_16 {
-            read.get_bool()?
-        } else {
-            false
-        };
+        let sneaking = version >= &JavaMinecraftVersion::V_1_16 && read.get_bool()?;
 
         Ok(Self {
             entity_id,

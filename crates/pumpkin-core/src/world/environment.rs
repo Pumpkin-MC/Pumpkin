@@ -117,14 +117,12 @@ impl<'a> EnvironmentAttributes<'a> {
                 self.world.dimension.nether_portal_spawns_piglin
             }
             EnvironmentAttribute::GameplayCanPillagerPatrolSpawn => {
-                if self.world.dimension.has_skylight && !self.world.dimension.has_fixed_time {
-                    sample_unbounded_bool_track(
+                self.world.dimension.has_skylight
+                    && !self.world.dimension.has_fixed_time
+                    && sample_unbounded_bool_track(
                         EarlyGameTimeline::CAN_PILLAGER_PATROL_SPAWN_KEYFRAMES,
                         self.world.get_time_of_day(),
                     )
-                } else {
-                    false
-                }
             }
             EnvironmentAttribute::GameplayMonstersBurn => {
                 self.world.dimension.has_skylight

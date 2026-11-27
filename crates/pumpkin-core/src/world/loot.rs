@@ -506,11 +506,9 @@ pub fn evaluate_predicate_value(
     })
     .map_or_else(
         || {
-            if value.is_object() && params.this_entity.is_some() {
-                predicates::matches_entity(LootEntityTarget::This, value, params)
-            } else {
-                false
-            }
+            value.is_object()
+                && params.this_entity.is_some()
+                && predicates::matches_entity(LootEntityTarget::This, value, params)
         },
         |cond| {
             let has_silk_touch = params.tool.as_ref().is_some_and(|tool| {

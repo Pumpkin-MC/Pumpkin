@@ -59,11 +59,7 @@ impl<'a> ServerPacket<'a> for CChangeDifficulty {
         } else {
             bytebuf.get_u8()?
         };
-        let locked = if *version >= JavaMinecraftVersion::V_1_14 {
-            bytebuf.get_bool()?
-        } else {
-            false
-        };
+        let locked = *version >= JavaMinecraftVersion::V_1_14 && bytebuf.get_bool()?;
         Ok(Self { difficulty, locked })
     }
 }

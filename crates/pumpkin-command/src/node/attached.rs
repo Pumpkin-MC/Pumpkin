@@ -355,11 +355,7 @@ impl<S: CommandSource> AttachedNode<S> {
             Self::Argument(node) => {
                 let mut reader = StringReader::new(input);
                 let parsed = node.meta.argument_type.parse(&mut reader);
-                if parsed.is_ok() {
-                    matches!(reader.peek(), Some(' ') | None)
-                } else {
-                    false
-                }
+                parsed.is_ok() && matches!(reader.peek(), Some(' ') | None)
             }
         }
     }

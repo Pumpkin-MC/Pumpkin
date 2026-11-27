@@ -89,28 +89,6 @@ impl Default for BedrockAuthenticationConfig {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::NetherNetConfig;
-
-    #[test]
-    fn empty_external_ip_uses_automatic_detection() {
-        let config: NetherNetConfig = toml::from_str("external_ip = \"\"").unwrap();
-        assert_eq!(config.external_ip, None);
-        assert!(
-            toml::to_string(&config)
-                .unwrap()
-                .contains("external_ip = \"\"")
-        );
-    }
-
-    #[test]
-    fn explicit_external_ip_is_preserved() {
-        let config: NetherNetConfig = toml::from_str("external_ip = \"203.0.113.7\"").unwrap();
-        assert_eq!(config.external_ip.unwrap().to_string(), "203.0.113.7");
-    }
-}
-
 /// Configuration for Bedrock Edition client connections.
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
@@ -164,5 +142,27 @@ impl Default for BedrockConfig {
             chunk_caching: true,
             packet_limiter: PacketLimiterConfig::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NetherNetConfig;
+
+    #[test]
+    fn empty_external_ip_uses_automatic_detection() {
+        let config: NetherNetConfig = toml::from_str("external_ip = \"\"").unwrap();
+        assert_eq!(config.external_ip, None);
+        assert!(
+            toml::to_string(&config)
+                .unwrap()
+                .contains("external_ip = \"\"")
+        );
+    }
+
+    #[test]
+    fn explicit_external_ip_is_preserved() {
+        let config: NetherNetConfig = toml::from_str("external_ip = \"203.0.113.7\"").unwrap();
+        assert_eq!(config.external_ip.unwrap().to_string(), "203.0.113.7");
     }
 }

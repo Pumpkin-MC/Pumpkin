@@ -53,10 +53,8 @@ fn matches_poi_memory(
         profession.held_job_site().contains(&poi_type)
     } else if memory_id == types::POTENTIAL_JOB_SITE.id() {
         poi_type.has_tag(&PointOfInterestType::MINECRAFT_ACQUIRABLE_JOB_SITE)
-    } else if memory_id == types::MEETING_POINT.id() {
-        poi_type == PoiType::Meeting
     } else {
-        false
+        memory_id == types::MEETING_POINT.id() && poi_type == PoiType::Meeting
     }
 }
 

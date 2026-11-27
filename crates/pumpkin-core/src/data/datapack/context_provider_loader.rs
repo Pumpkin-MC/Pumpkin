@@ -23,7 +23,7 @@ pub fn json_value_to_nbt(value: &Value) -> NbtTag {
                             |_| {
                                 #[allow(clippy::cast_precision_loss)]
                                 i64::try_from(u_val)
-                                    .map_or_else(|_| NbtTag::Double(u_val as f64), NbtTag::Long)
+                                    .map_or(NbtTag::Double(u_val as f64), NbtTag::Long)
                             },
                             NbtTag::Int,
                         )

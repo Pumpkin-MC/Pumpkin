@@ -248,13 +248,11 @@ impl CrafterBlockEntity {
 
     #[must_use]
     pub fn is_slot_disabled(&self, slot: usize) -> bool {
-        if slot < Self::INVENTORY_SIZE {
-            self.disabled_slots
+        slot < Self::INVENTORY_SIZE
+            && self
+                .disabled_slots
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)[slot]
-        } else {
-            false
-        }
     }
 
     pub fn set_slot_state(&self, slot: usize, enabled: bool) {
