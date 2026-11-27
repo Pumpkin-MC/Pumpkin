@@ -66,12 +66,25 @@ pub(super) async fn test_zombie_pathfinds_to_villager(test: GameTestContext) -> 
 pub(super) async fn test_villager_stays_when_player_is_far(
     test: GameTestContext,
 ) -> GameTestResult<()> {
+    assert_stays_when_player_is_far(test, "minecraft:villager").await
+}
+
+pub(super) async fn test_wandering_trader_stays_when_player_is_far(
+    test: GameTestContext,
+) -> GameTestResult<()> {
+    assert_stays_when_player_is_far(test, "minecraft:wandering_trader").await
+}
+
+async fn assert_stays_when_player_is_far(
+    test: GameTestContext,
+    entity: &'static str,
+) -> GameTestResult<()> {
     test.set_dimensions(5, 4, 5).await?;
     test.build_floor(5, 5, &Block::STONE).await?;
 
     test.execute_command(
         &BlockPos::new(2, 1, 2),
-        "summon minecraft:villager ~ ~ ~ {NoAI:1b}",
+        &format!("summon {entity} ~ ~ ~ {{NoAI:1b}}"),
     )
     .await?;
     test.spawn_simulated_player(
@@ -83,7 +96,7 @@ pub(super) async fn test_villager_stays_when_player_is_far(
 
     test.start_sequence()
         .then_idle(10)
-        .then_execute(|test| async move { test.assert_entity_present("minecraft:villager").await })
+        .then_execute(move |test| async move { test.assert_entity_present(entity).await })
         .then_succeed();
     Ok(())
 }
