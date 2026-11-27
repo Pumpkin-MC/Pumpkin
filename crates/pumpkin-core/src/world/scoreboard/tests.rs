@@ -28,6 +28,20 @@ use crate::{
     server::Server,
 };
 
+fn test_team(name: &str, players: Vec<String>) -> Team {
+    Team {
+        name: name.into(),
+        display_name: TextComponent::text(""),
+        options: 0,
+        nametag_visibility: NameTagVisibility::Always,
+        collision_rule: CollisionRule::Always,
+        color: NamedColor::White,
+        player_prefix: TextComponent::text("Online players: "),
+        player_suffix: TextComponent::text(""),
+        players,
+    }
+}
+
 fn populate(board: &mut Scoreboard, target: &impl ScoreboardTarget) {
     let mut objective = ScoreboardObjective::new(
         "gone",
@@ -44,17 +58,7 @@ fn populate(board: &mut Scoreboard, target: &impl ScoreboardTarget) {
         target,
         ScoreboardScore::new("entry", "test_board", VarInt(7), None, None),
     );
-    let mut team = Team {
-        name: "gone_team".into(),
-        display_name: TextComponent::text(""),
-        options: 0,
-        nametag_visibility: NameTagVisibility::Always,
-        collision_rule: CollisionRule::Always,
-        color: NamedColor::White,
-        player_prefix: TextComponent::text("Online players: "),
-        player_suffix: TextComponent::text(""),
-        players: vec!["entry".into()],
-    };
+    let mut team = test_team("gone_team", vec!["entry".into()]);
     board.add_team(target, team.clone());
     board.remove_team(target, "gone_team");
     team.name = "test_team".into();
@@ -151,9 +155,7 @@ fn assert_login_packets(packets: &[pumpkin_protocol::RawPacket]) -> Result<(), B
     Ok(())
 }
 
-#[tokio::test]
-async fn login_sends_preexisting_scoreboard_once() -> Result<(), Box<dyn Error>> {
-    let directory = tempfile::tempdir()?;
+async fn test_server(directory: &tempfile::TempDir) -> Result<Arc<Server>, Box<dyn Error>> {
     let basic = BasicConfiguration {
         default_level_name: directory
             .path()
@@ -174,6 +176,13 @@ async fn login_sends_preexisting_scoreboard_once() -> Result<(), Box<dyn Error>>
         vec![],
     )
     .await?;
+    Ok(server)
+}
+
+#[tokio::test]
+async fn login_sends_preexisting_scoreboard_once() -> Result<(), Box<dyn Error>> {
+    let directory = tempfile::tempdir()?;
+    let server = test_server(&directory).await?;
     let world = server.worlds.load().first().cloned().ok_or("No world")?;
 
     for custom in [false, true] {
@@ -233,6 +242,109 @@ async fn login_sends_preexisting_scoreboard_once() -> Result<(), Box<dyn Error>>
         client.close();
         client.await_tasks().await;
         let _ = world.remove_player(&player, false).await;
+    }
+    server.stop();
+    server.shutdown().await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn custom_scoreboard_login_replays_fallback_world_teams() -> Result<(), Box<dyn Error>> {
+    let directory = tempfile::tempdir()?;
+    let server = test_server(&directory).await?;
+    let world = server.worlds.load().first().cloned().ok_or("No world")?;
+    for custom_member in [None, Some("someone_else"), Some("ScoreboardTest")] {
+        let (player, peer) = player_with_transport(&server, &world)?;
+        world.add_player(&player)?;
+        let client = player.client.java().ok_or("No Java client")?;
+        let team = test_team("world_team", vec![player.gameprofile.name.clone()]);
+        let mut custom = Scoreboard::new();
+        custom.add_objective(
+            &NoTarget,
+            ScoreboardObjective::new(
+                "custom",
+                TextComponent::text("Custom"),
+                RenderType::Integer,
+                None,
+                "dummy",
+            ),
+        );
+        if let Some(member) = custom_member {
+            custom.add_team(
+                &NoTarget,
+                Team {
+                    name: "custom_team".into(),
+                    players: vec![member.into()],
+                    ..team.clone()
+                },
+            );
+        }
+        player
+            .as_java()
+            .ok_or("No Java player")?
+            .set_scoreboard(Some(custom));
+        world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .add_team(&world, team);
+        let overridden = custom_member == Some(player.gameprofile.name.as_str());
+        assert_eq!(
+            player.get_team_name().as_deref(),
+            Some(if overridden {
+                "custom_team"
+            } else {
+                "world_team"
+            })
+        );
+        assert_eq!(client.pending_bytes.load(Ordering::Acquire), 0);
+        player.initialize_scoreboard();
+        player.initialize_scoreboard();
+        client.try_send_packet(&CKeepAlive::new(1));
+        let packets = read_scoreboard_packets(peer).await?;
+        let objective_names = packets
+            .iter()
+            .filter(|p| p.id == CUpdateObjectives::to_id(CURRENT_MC_VERSION))
+            .map(|p| (&p.payload[..]).get_str().map(String::from))
+            .collect::<Result<Vec<_>, _>>()?;
+        assert_eq!(objective_names, ["custom"]);
+        let mut team_names = packets
+            .iter()
+            .filter(|p| p.id == CSetPlayerTeam::to_id(CURRENT_MC_VERSION))
+            .map(|p| (&p.payload[..]).get_str().map(String::from))
+            .collect::<Result<Vec<_>, _>>()?;
+        team_names.sort();
+        let expected = if custom_member.is_some() {
+            vec!["custom_team", "world_team"]
+        } else {
+            vec!["world_team"]
+        };
+        assert_eq!(team_names, expected);
+        let world_team = packets
+            .iter()
+            .find(|packet| {
+                packet.id == CSetPlayerTeam::to_id(CURRENT_MC_VERSION)
+                    && (&packet.payload[..])
+                        .get_str()
+                        .is_ok_and(|name| name.as_ref() == "world_team")
+            })
+            .ok_or("Missing world team packet")?;
+        let name = player.gameprofile.name.as_bytes();
+        assert_eq!(
+            world_team
+                .payload
+                .windows(name.len())
+                .any(|bytes| bytes == name),
+            !overridden
+        );
+        client.close();
+        client.await_tasks().await;
+        let _ = world.remove_player(&player, false).await;
+        world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove_team(&NoTarget, "world_team");
     }
     server.stop();
     server.shutdown().await;

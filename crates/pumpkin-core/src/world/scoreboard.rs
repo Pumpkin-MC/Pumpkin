@@ -713,7 +713,14 @@ impl Scoreboard {
             }
         }
 
+        self.send_teams_to_player(player, None);
+    }
+
+    pub(crate) fn send_teams_to_player(&self, player: &Player, overrides: Option<&Self>) {
         for team in self.teams.values() {
+            if overrides.is_some_and(|board| board.teams.contains_key(&team.name)) {
+                continue;
+            }
             let parameters = TeamParameters {
                 display_name: &team.display_name,
                 options: team.options,
@@ -727,7 +734,14 @@ impl Scoreboard {
                 team_name: team.name.clone(),
                 method: TeamMethod::Create,
                 parameters: Some(parameters),
-                players: team.players.clone().into(),
+                players: team
+                    .players
+                    .iter()
+                    .filter(|member| {
+                        overrides.is_none_or(|board| board.get_entity_team(member).is_none())
+                    })
+                    .cloned()
+                    .collect(),
             };
             player.try_send_client_packet(&je_packet);
         }

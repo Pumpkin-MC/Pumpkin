@@ -4705,6 +4705,7 @@ impl Player {
                 if matches!(self.client.as_ref(), ClientPlatform::Java(_)) =>
             {
                 custom.send_to_player(self);
+                world_scoreboard.send_teams_to_player(self, Some(custom));
             }
             Some(CustomScoreboard::Bedrock(custom))
                 if matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) =>
