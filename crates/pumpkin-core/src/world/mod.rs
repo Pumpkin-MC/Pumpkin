@@ -4475,7 +4475,7 @@ impl World {
         let particle = explosion.particle();
         let sound = IdOr::<SoundEvent>::Id(explosion.sound() as u16);
         for player in self.players.load().iter() {
-            let knockback = explosion.player_knockback(player.entity_id());
+            let knockback = explosion.player_knockback_if_current(player);
             if player.position().squared_distance_to_vec(&position) > EXPLOSION_PACKET_RANGE_SQUARED
             {
                 // Vanilla only sends CExplosion within 64 blocks; preserve hurt-motion

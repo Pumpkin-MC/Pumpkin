@@ -21,7 +21,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     block::{ExplodeArgs, collect_loot},
-    entity::{Entity, EntityBase, item::ItemEntity, projectile::is_redirectable, tnt::TNTEntity},
+    entity::{
+        Entity, EntityBase, item::ItemEntity, player::Player, projectile::is_redirectable,
+        tnt::TNTEntity,
+    },
     world::loot::LootContextParameters,
 };
 
@@ -181,6 +184,12 @@ impl ExplosionDamageCalculator for SimpleExplosionDamageCalculator {
     }
 }
 
+#[derive(Clone, Copy)]
+struct RecordedKnockback {
+    impulse: Vector3<f64>,
+    own_motion_revision: u64,
+}
+
 pub struct Explosion<'a> {
     power: f32,
     pos: Vector3<f64>,
@@ -196,7 +205,7 @@ pub struct Explosion<'a> {
     large_particle: Particle,
     sound: Sound,
     from_wind_charge: bool,
-    hit_players: Mutex<BTreeMap<i32, Vector3<f64>>>,
+    hit_players: Mutex<BTreeMap<i32, RecordedKnockback>>,
 }
 
 impl<'a> Explosion<'a> {
@@ -288,7 +297,17 @@ impl<'a> Explosion<'a> {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&entity_id)
-            .copied()
+            .map(|record| record.impulse)
+    }
+
+    pub(crate) fn player_knockback_if_current(&self, player: &Player) -> Option<Vector3<f64>> {
+        let record = self
+            .hit_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&player.entity_id())
+            .copied()?;
+        (record.own_motion_revision == player.own_motion_revision()).then_some(record.impulse)
     }
 
     #[must_use]
@@ -670,7 +689,13 @@ impl<'a> Explosion<'a> {
         self.hit_players
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(entity.entity_id, knockback);
+            .insert(
+                entity.entity_id,
+                RecordedKnockback {
+                    impulse: knockback,
+                    own_motion_revision: player.own_motion_revision(),
+                },
+            );
     }
 
     /// A pushed redirectable projectile now belongs to whoever caused the explosion, and a player remembers the
@@ -878,8 +903,8 @@ fn add_or_append_stack(
 #[cfg(test)]
 mod tests {
     use super::{
-        BlockInteraction, Explosion, ExplosionDamageCalculator, SimpleExplosionDamageCalculator,
-        add_or_append_stack,
+        BlockInteraction, Explosion, ExplosionDamageCalculator, RecordedKnockback,
+        SimpleExplosionDamageCalculator, add_or_append_stack,
     };
     use pumpkin_data::item::Item;
     use pumpkin_data::item_stack::ItemStack;
@@ -975,7 +1000,13 @@ mod tests {
             .hit_players
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(7, Vector3::new(1.0, 2.0, 3.0));
+            .insert(
+                7,
+                RecordedKnockback {
+                    impulse: Vector3::new(1.0, 2.0, 3.0),
+                    own_motion_revision: 0,
+                },
+            );
 
         explosion.damage_entities(&world);
 

@@ -1,9 +1,13 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::AtomicUsize};
 
 use bytes::Buf;
 use pumpkin_core::{
     block::entities::block_entity_from_nbt,
     entity::{Entity, EntityBase, decoration::end_crystal::EndCrystalEntity, player::Player},
+    plugin::{
+        BoxFuture, EventPriority, EventRwHandler,
+        api::events::block::block_explode::BlockExplodeEvent,
+    },
     server::Server,
     world::{BlockFlags, ExplosionInteraction, World},
 };
@@ -16,6 +20,26 @@ use pumpkin_protocol::{
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::bot::HeadlessBot;
+
+#[derive(Default)]
+struct ZeroVelocityOnBlockExplode {
+    calls: AtomicUsize,
+}
+
+impl EventRwHandler<BlockExplodeEvent> for ZeroVelocityOnBlockExplode {
+    fn handle<'a>(
+        &'a self,
+        server: &'a Arc<Server>,
+        _event: &'a mut BlockExplodeEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if let Some(player) = server.get_player_by_name("TestBot2") {
+                player.set_velocity(Vector3::default());
+            }
+        })
+    }
+}
 
 pub async fn run_explosion_knockback_test(
     server: &Arc<Server>,
@@ -174,8 +198,67 @@ async fn check_distant_explosion_knockback(
         return Err("Distant player also received CExplosion after its motion".into());
     }
 
+    check_absolute_motion_supersedes_knockback(server, bot, world, center).await?;
+
     bot.move_to(original_position, true).await?;
     server.tick();
+    Ok(())
+}
+
+async fn check_absolute_motion_supersedes_knockback(
+    server: &Arc<Server>,
+    bot: &mut HeadlessBot,
+    world: &Arc<World>,
+    center: Vector3<f64>,
+) -> Result<(), String> {
+    bot.move_to(center.add_raw(-1.0, 0.0, 0.0), true).await?;
+    server.tick();
+
+    let marker_center = center.add_raw(0.0, 17.0, 0.0);
+    world.explode(marker_center, 1.0, ExplosionInteraction::None);
+    loop {
+        let (packet_center, _, _) = next_explosion_packet(bot).await?;
+        if packet_center == marker_center {
+            break;
+        }
+    }
+
+    let player = server
+        .get_player_by_name("TestBot2")
+        .ok_or("Missing TestBot2")?;
+    let entity = player.get_entity();
+    entity.velocity.store(Vector3::default());
+    entity.last_sent_velocity.store(Vector3::default());
+    entity
+        .sync_velocity
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let handler = Arc::new(ZeroVelocityOnBlockExplode::default());
+    server
+        .plugin_manager
+        .register_blocking(handler.clone(), EventPriority::Normal, None);
+    world.explode(center, 6.0, ExplosionInteraction::Block);
+
+    let motion = next_own_motion(bot, player.entity_id()).await?;
+    if motion != Vector3::default() {
+        return Err(format!(
+            "BlockExplodeEvent sent an unexpected absolute motion: {motion:?}"
+        ));
+    }
+    let (packet_center, radius, knockback) = next_explosion_packet(bot).await?;
+    if packet_center != center || radius != 6.0 {
+        return Err("Missing the destructive explosion after absolute zero motion".into());
+    }
+    if knockback.is_some() {
+        return Err(format!(
+            "Absolute zero motion did not invalidate the recorded knockback: {knockback:?}"
+        ));
+    }
+    if entity.velocity.load() != Vector3::default()
+        || handler.calls.load(std::sync::atomic::Ordering::SeqCst) != 1
+    {
+        return Err("BlockExplodeEvent did not leave the server velocity at zero".into());
+    }
     Ok(())
 }
 
@@ -230,7 +313,7 @@ async fn next_own_motion(bot: &mut HeadlessBot, entity_id: i32) -> Result<Vector
     loop {
         let packet = bot.next_packet().await?;
         if packet.id == explosion_id {
-            return Err("Distant player received CExplosion instead of motion fallback".into());
+            return Err("Received CExplosion while waiting for absolute self-motion".into());
         }
         if packet.id != motion_id {
             continue;
