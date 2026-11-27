@@ -57,14 +57,17 @@ async fn main() {
         Err(error) => error.exit(),
     };
 
-    initialize_runtime();
+    let rayon_init = initialize_runtime();
     if let Err(err) = setup_sighandler() {
         tracing::error!("Unable to setup signal handlers: {err}");
     }
 
     match command {
-        StartupCommand::DedicatedServer(options) => dedicated_server::run(options).await,
+        StartupCommand::DedicatedServer(options) => {
+            dedicated_server::run(options, rayon_init).await
+        }
         StartupCommand::GameTestServer(options) => {
+            await_rayon_init(rayon_init).await;
             if let Err(error) = game_test_server::run(options).await {
                 tracing::error!("{error}");
                 exit(1);
@@ -73,23 +76,34 @@ async fn main() {
     }
 }
 
-fn initialize_runtime() {
+fn initialize_runtime() -> tokio::task::JoinHandle<()> {
     let _ = MAIN_THREAD.set(thread::current().id());
 
     // reqwest is built with `rustls-no-provider`, so pick the ring provider (the one
     // wasmtime-wasi-http/rtc already force) before any client can be constructed.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Initialize global Rayon thread pool with named worker threads
-    let _ = rayon::ThreadPoolBuilder::new()
-        .thread_name(|i| format!("Rayon-Worker-{i}"))
-        .build_global();
+    // Prepare Rayon while configuration and administrative JSON files are loaded.
+    let rayon_init = tokio::task::spawn_blocking(|| {
+        let _ = rayon::ThreadPoolBuilder::new()
+            .thread_name(|i| format!("Rayon-Worker-{i}"))
+            .build_global();
+    });
 
     // Set the panic handler.
     std::panic::set_hook(Box::new(handle_panic));
 
     #[cfg(feature = "console-subscriber")]
     console_subscriber::init();
+
+    rayon_init
+}
+
+async fn await_rayon_init(rayon_init: tokio::task::JoinHandle<()>) {
+    if let Err(error) = rayon_init.await {
+        tracing::error!("Failed to initialize Rayon workers: {error}");
+        exit(1);
+    }
 }
 
 #[derive(Clone, Copy)]

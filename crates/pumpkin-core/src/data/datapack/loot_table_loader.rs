@@ -1,6 +1,8 @@
 use pumpkin_util::loot_table::DynamicLootTable;
 use pumpkin_util::loot_table::parser::parse_loot_table_with_predicates;
-use std::{collections::HashMap, fs, path::Path, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
+
+use super::file_loader::{collect_files, load_files_parallel};
 
 #[must_use]
 pub fn parse_loot_table(json: &str) -> Option<DynamicLootTable> {
@@ -19,66 +21,38 @@ pub fn load_loot_tables_from_dir<S: std::hash::BuildHasher>(
         return 0;
     }
     let before = registry.len();
-    load_loot_tables_recursive(namespace, dir, dir, registry);
-    registry.len() - before
-}
-
-fn load_loot_tables_recursive<S: std::hash::BuildHasher>(
-    namespace: &str,
-    base_dir: &Path,
-    current_dir: &Path,
-    registry: &mut HashMap<String, Arc<DynamicLootTable>, S>,
-) {
-    let Ok(entries) = fs::read_dir(current_dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            load_loot_tables_recursive(namespace, base_dir, &path, registry);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-            && let Ok(rel_path) = path.strip_prefix(base_dir)
-        {
-            let mut stem_path = rel_path.to_string_lossy().to_string();
-            if let Some(stem) = stem_path.strip_suffix(".json") {
-                stem_path = stem.to_string();
-            }
-            let stem_path = stem_path.replace('\\', "/");
-            let loot_table_id = format!("{namespace}:{stem_path}");
-
-            if let Ok(content) = fs::read_to_string(&path)
-                && let Some(table) = parse_loot_table_with_predicates(&content, &|name| {
-                    let id = pumpkin_util::identifier::Identifier::parse(name).ok()?;
-                    let (namespace, path) = (id.namespace(), id.path());
-                    if !Path::new(namespace)
-                        .components()
-                        .chain(Path::new(path).components())
-                        .all(|part| matches!(part, std::path::Component::Normal(_)))
-                    {
-                        return None;
-                    }
-                    let data_dir = base_dir.parent()?.parent()?;
-                    let file = data_dir
-                        .join(namespace)
-                        .join("predicate")
-                        .join(format!("{path}.json"));
-                    fs::read_to_string(file)
-                        .ok()
-                        .and_then(|json| serde_json::from_str(&json).ok())
-                        .or_else(|| {
-                            pumpkin_data::loot_table::get_loot_predicate(&format!(
-                                "{namespace}:{path}"
-                            ))
-                            .cloned()
-                        })
-                })
+    let files = collect_files(dir, "json");
+    let loaded = load_files_parallel(namespace, dir, &files, "json", |_id, _path, content| {
+        parse_loot_table_with_predicates(content, &|name| {
+            let id = pumpkin_util::identifier::Identifier::parse(name).ok()?;
+            let (namespace, path) = (id.namespace(), id.path());
+            if !Path::new(namespace)
+                .components()
+                .chain(Path::new(path).components())
+                .all(|part| matches!(part, std::path::Component::Normal(_)))
             {
-                registry.insert(loot_table_id, Arc::new(table));
+                return None;
             }
-        }
+            let data_dir = dir.parent()?.parent()?;
+            let file = data_dir
+                .join(namespace)
+                .join("predicate")
+                .join(format!("{path}.json"));
+            std::fs::read_to_string(file)
+                .ok()
+                .and_then(|json| serde_json::from_str(&json).ok())
+                .or_else(|| {
+                    pumpkin_data::loot_table::get_loot_predicate(&format!("{namespace}:{path}"))
+                        .cloned()
+                })
+        })
+        .map(Arc::new)
+    });
+
+    for (entry_id, _rel, table) in loaded {
+        registry.insert(entry_id, table);
     }
+    registry.len() - before
 }
 
 #[cfg(test)]
@@ -88,6 +62,7 @@ mod tests {
         DynamicLootCondition, DynamicLootEntryKind, LootBonusFormula, LootFunctionKind,
         LootNumberProvider,
     };
+    use std::fs;
 
     #[test]
     fn parse_simple_loot_table() {

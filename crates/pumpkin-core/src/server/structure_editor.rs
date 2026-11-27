@@ -227,7 +227,11 @@ pub async fn capture_structure(
     }
     if include_entities {
         for &chunk in &tickets.chunks {
-            let entities = world.level.get_entity_chunk(chunk).await;
+            let entities = world
+                .level
+                .get_entity_chunk(chunk)
+                .await
+                .ok_or("Failed to load structure entities")?;
             world.activate_entity_chunk(&entities);
         }
     }

@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::{any::Any, fs, net::SocketAddr, path::Path, sync::Arc};
+use std::{any::Any, fs, io::Write, net::SocketAddr, path::Path, sync::Arc};
 use wasmtime::{Cache, CacheConfig, Engine, component::Component, component::Linker};
 use wasmtime_wasi::{FsPerms, WasiCtxBuilder, sockets::SocketAddrUse};
 
@@ -383,13 +383,17 @@ fn load_component(
 
     let component =
         Component::new(engine, wasm_bytes).map_err(PluginInitError::ComponentNewFailed)?;
-    fs::write(
-        &cache_path,
-        component
-            .serialize()
-            .map_err(PluginInitError::ComponentCacheSerializeFailed)?,
-    )
-    .map_err(PluginInitError::ComponentCacheWriteFailed)?;
+    let serialized = component
+        .serialize()
+        .map_err(PluginInitError::ComponentCacheSerializeFailed)?;
+    let mut cache_file = tempfile::NamedTempFile::new_in(cache_dir)
+        .map_err(PluginInitError::ComponentCacheWriteFailed)?;
+    cache_file
+        .write_all(&serialized)
+        .map_err(PluginInitError::ComponentCacheWriteFailed)?;
+    cache_file
+        .persist(&cache_path)
+        .map_err(|error| PluginInitError::ComponentCacheWriteFailed(error.error))?;
     Ok(component)
 }
 
@@ -690,6 +694,23 @@ mod tests {
             );
         }
         component.finish()
+    }
+
+    #[test]
+    fn identical_components_can_prepare_the_same_cache_concurrently() {
+        let dir = tempfile::tempdir().unwrap();
+        let bytes = ComponentBuilder::default().finish();
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                scope.spawn(|| {
+                    let engine =
+                        super::new_engine(dir.path(), super::StoreMode::Sequential).unwrap();
+                    super::load_component(&engine, &bytes, dir.path()).unwrap();
+                });
+            }
+        });
+        let engine = super::new_engine(dir.path(), super::StoreMode::Sequential).unwrap();
+        super::load_component(&engine, &bytes, dir.path()).unwrap();
     }
 
     #[test]

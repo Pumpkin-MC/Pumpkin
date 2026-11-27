@@ -1,5 +1,5 @@
 use arc_swap::ArcSwap;
-use futures::future::join_all;
+use futures::{StreamExt, future::join_all, stream};
 use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
 use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
 use std::{
@@ -41,6 +41,35 @@ pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub const PLUGIN_API_VERSION: u32 = 8;
 
 const PLUGIN_DIR: &str = "./plugins";
+
+type PreparedPlugin = (
+    Arc<dyn PluginLoader>,
+    Result<(Arc<dyn Plugin>, PluginMetadata, Box<dyn Any + Send + Sync>), LoaderError>,
+    bool,
+);
+
+async fn prepare_plugin(
+    path: PathBuf,
+    loaders: Vec<Arc<dyn PluginLoader>>,
+    needs_signature: impl FnOnce(&PluginMetadata) -> bool + Send + 'static,
+) -> Result<(PathBuf, Option<PreparedPlugin>), tokio::task::JoinError> {
+    let runtime = tokio::runtime::Handle::current();
+    tokio::task::spawn_blocking(move || {
+        let prepared = loaders
+            .into_iter()
+            .find(|loader| loader.can_load(&path))
+            .map(|loader| {
+                let result = runtime.block_on(loader.load(&path));
+                let signed = match &result {
+                    Ok((_, metadata, _)) => !needs_signature(metadata) || loader.is_signed(&path),
+                    Err(_) => true,
+                };
+                (loader, result, signed)
+            });
+        (path, prepared)
+    })
+    .await
+}
 
 /// Access to an event whose handler can continue running after its caller stops waiting.
 pub struct QueuedEvent(QueuedEventInner);
@@ -777,70 +806,84 @@ impl PluginManager {
         let mut prepared_plugins = Vec::new();
         let loaders = self.loaders.read().await.clone();
 
+        let mut paths = Vec::new();
+        let mut scan_error = None;
         for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error) => {
+                    scan_error = Some(error);
+                    break;
+                }
+            };
             let path = entry.path();
-
-            if path.is_dir() {
-                continue;
-            }
-
-            if path
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("deactivated"))
+            if !path.is_dir()
+                && !path
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("deactivated"))
             {
-                continue;
+                paths.push(path);
             }
+        }
 
-            // Find a loader that can handle this file
+        // Bound blocking preparation and consume results in discovery order.
+        let mut preparations = stream::iter(paths.into_iter().map(|path| {
+            let loaders = loaders.clone();
+            let server = Arc::clone(server);
+            prepare_plugin(path, loaders, move |metadata| {
+                let plugin_override = server.advanced_config.plugins.overrides.get(&metadata.name);
+                plugin_override.is_none_or(|o| o.enabled)
+                    && !plugin_override
+                        .and_then(|o| o.allow_unsigned)
+                        .unwrap_or(server.advanced_config.plugins.allow_unsigned)
+            })
+        }))
+        .buffered(rayon::current_num_threads());
+
+        while let Some(preparation) = preparations.next().await {
+            let (path, prepared) =
+                preparation.map_err(|error| ManagerError::IoError(std::io::Error::other(error)))?;
             let mut loader_found = false;
-            for loader in &loaders {
-                if loader.can_load(&path) {
-                    match loader.load(&path).await {
-                        Ok((instance, metadata, loader_data)) => {
-                            let plugin_override =
-                                server.advanced_config.plugins.overrides.get(&metadata.name);
-
-                            if plugin_override.is_some_and(|o| !o.enabled) {
-                                info!(
-                                    "Plugin \"{}\" is disabled in configuration, skipping.",
-                                    metadata.name
-                                );
-                                loader_found = true;
-                                break;
-                            }
-
-                            let allow_unsigned = plugin_override
-                                .and_then(|o| o.allow_unsigned)
-                                .unwrap_or(server.advanced_config.plugins.allow_unsigned);
-
-                            if !allow_unsigned && !loader.is_signed(&path) {
-                                error!(
-                                    "Plugin \"{}\" ({:?}) is unsigned or invalid and allow_unsigned is disabled in configuration, skipping.",
-                                    metadata.name, path
-                                );
-                                loader_found = true;
-                                break;
-                            }
-
+            if let Some((loader, result, signed)) = prepared {
+                match result {
+                    Ok((instance, metadata, loader_data)) => {
+                        if server
+                            .advanced_config
+                            .plugins
+                            .overrides
+                            .get(&metadata.name)
+                            .is_some_and(|o| !o.enabled)
+                        {
+                            info!(
+                                "Plugin \"{}\" is disabled in configuration, skipping.",
+                                metadata.name
+                            );
+                        } else if !signed {
+                            error!(
+                                "Plugin \"{}\" ({:?}) is unsigned or invalid and allow_unsigned is disabled in configuration, skipping.",
+                                metadata.name, path
+                            );
+                        } else {
                             prepared_plugins.push((
                                 instance,
                                 metadata,
                                 loader_data,
-                                loader.clone(),
+                                loader,
                                 path.clone(),
                             ));
-                            loader_found = true;
                         }
-                        Err(err) => error!("Failed to load plugin from {:?}: {}", path, err),
+                        loader_found = true;
                     }
-                    break;
+                    Err(err) => error!("Failed to load plugin from {:?}: {}", path, err),
                 }
             }
-
             if !loader_found {
-                self.unloaded_files.write().await.insert(path.clone());
+                self.unloaded_files.write().await.insert(path);
             }
+        }
+
+        if let Some(error) = scan_error {
+            return Err(error.into());
         }
 
         // Resolve dependencies
@@ -1453,6 +1496,106 @@ impl PluginManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct PreparationTestLoader {
+        ready: Notify,
+        runtime_thread: ThreadId,
+        signature_checks: std::sync::atomic::AtomicUsize,
+    }
+
+    struct PreparationTestPlugin;
+    impl Plugin for PreparationTestPlugin {}
+
+    impl PluginLoader for PreparationTestLoader {
+        fn load<'a>(&'a self, path: &'a Path) -> loader::PluginLoadFuture<'a> {
+            Box::pin(async move {
+                assert_ne!(std::thread::current().id(), self.runtime_thread);
+                let name = path.to_str().unwrap();
+                if name == "slow.test" {
+                    tokio::time::timeout(Duration::from_secs(5), self.ready.notified())
+                        .await
+                        .unwrap();
+                } else if name == "fast.test" {
+                    self.ready.notify_one();
+                } else {
+                    return Err(LoaderError::MetadataMissing);
+                }
+                Ok((
+                    Arc::new(PreparationTestPlugin) as Arc<dyn Plugin>,
+                    PluginMetadata {
+                        name: name.to_owned(),
+                        version: String::new(),
+                        authors: Vec::new(),
+                        description: String::new(),
+                        dependencies: Vec::new(),
+                        permissions: Vec::new(),
+                    },
+                    Box::new(()) as Box<dyn Any + Send + Sync>,
+                ))
+            })
+        }
+
+        fn can_load(&self, path: &Path) -> bool {
+            path.extension().is_some_and(|ext| ext == "test")
+        }
+
+        fn is_signed(&self, path: &Path) -> bool {
+            self.signature_checks
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            path == Path::new("slow.test")
+        }
+
+        fn unload(&self, _data: Box<dyn Any + Send + Sync>) -> loader::PluginUnloadFuture<'_> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn can_unload(&self) -> bool {
+            true
+        }
+    }
+
+    #[tokio::test]
+    async fn parallel_preparation_keeps_order_errors_and_signature_results() {
+        let loader = Arc::new(PreparationTestLoader {
+            ready: Notify::new(),
+            runtime_thread: std::thread::current().id(),
+            signature_checks: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let paths = ["slow.test", "fast.test", "invalid.test", "unknown.other"];
+        let results: Vec<_> = stream::iter(paths.map(|path| {
+            prepare_plugin(
+                PathBuf::from(path),
+                vec![loader.clone() as Arc<dyn PluginLoader>],
+                |_| true,
+            )
+        }))
+        .buffered(2)
+        .collect()
+        .await;
+        let results: Vec<_> = results.into_iter().map(Result::unwrap).collect();
+        assert_eq!(
+            results
+                .iter()
+                .map(|(path, _)| path.to_str().unwrap())
+                .collect::<Vec<_>>(),
+            paths
+        );
+        let (_, slow, signed) = results[0].1.as_ref().unwrap();
+        assert!(slow.is_ok() && *signed);
+        let (_, fast, signed) = results[1].1.as_ref().unwrap();
+        assert!(fast.is_ok() && !signed);
+        assert!(matches!(
+            results[2].1.as_ref().unwrap().1,
+            Err(LoaderError::MetadataMissing)
+        ));
+        assert!(results[3].1.is_none());
+        assert_eq!(
+            loader
+                .signature_checks
+                .load(std::sync::atomic::Ordering::Relaxed),
+            2
+        );
+    }
 
     use crate::plugin::events::server::ServerTickStartEvent;
 

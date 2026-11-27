@@ -4,7 +4,7 @@ use pumpkin_data::material_rule::MaterialRule;
 use pumpkin_data::noise_router::BaseNoiseRouters;
 use pumpkin_data::noise_settings::NoiseSettings;
 
-use super::noise::router::proto_noise_router::ProtoNoiseRouters;
+use super::noise::router::proto_noise_router::{ProtoMultiNoiseRouter, ProtoNoiseRouters};
 use crate::generation::proto_chunk::TerrainCache;
 use crate::generation::{GlobalRandomConfig, Seed};
 
@@ -211,17 +211,42 @@ impl VanillaGenerator {
         })
     }
 
+    /// Finds the initial spawn without constructing terrain and structure generators.
+    #[must_use]
+    pub fn find_spawn_position_for_seed(
+        seed: Seed,
+        dimension: &Dimension,
+    ) -> pumpkin_util::math::position::BlockPos {
+        let settings = NoiseSettings::from_dimension(dimension);
+        if settings.spawn_target.is_empty() {
+            return pumpkin_util::math::position::BlockPos::ZERO;
+        }
+        let random_config = GlobalRandomConfig::new(seed.0, settings.legacy_random_source);
+        let router = ProtoNoiseRouters::generate_multi_noise(
+            BaseNoiseRouters::from_dimension(dimension),
+            &random_config,
+        );
+        Self::find_spawn_position_from_router(settings, &router)
+    }
+
     #[must_use]
     pub fn find_spawn_position(&self) -> pumpkin_util::math::position::BlockPos {
-        if self.settings.spawn_target.is_empty() {
+        Self::find_spawn_position_from_router(self.settings, &self.base_router.multi_noise)
+    }
+
+    fn find_spawn_position_from_router(
+        settings: &NoiseSettings,
+        router: &ProtoMultiNoiseRouter,
+    ) -> pumpkin_util::math::position::BlockPos {
+        if settings.spawn_target.is_empty() {
             return pumpkin_util::math::position::BlockPos::ZERO;
         }
         let mut sampler =
             crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler::generate(
-                &self.base_router.multi_noise,
+                router,
             );
         crate::biome::position_finder::SpawnFinder::find_spawn_position(
-            self.settings.spawn_target,
+            settings.spawn_target,
             &mut sampler,
         )
     }
@@ -347,6 +372,19 @@ impl GeneratorInit for VanillaGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spawn_only_matches_full_generator() {
+        for seed in [Seed(0), Seed(42), Seed(u64::MAX)] {
+            let generator = VanillaGenerator::new(seed, Dimension::OVERWORLD);
+            assert_eq!(
+                VanillaGenerator::find_spawn_position_for_seed(seed, &Dimension::OVERWORLD),
+                generator.find_spawn_position(),
+                "seed {}",
+                seed.0,
+            );
+        }
+    }
 
     #[test]
     fn vanilla_generator_settings() {

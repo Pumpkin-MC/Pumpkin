@@ -18,7 +18,7 @@ use tracing::{debug, info, warn};
 const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[allow(clippy::too_many_lines)]
-pub async fn run(options: DedicatedServerOptions) {
+pub async fn run(options: DedicatedServerOptions, rayon_init: tokio::task::JoinHandle<()>) {
     let time = Instant::now();
 
     let exec_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
@@ -32,6 +32,8 @@ pub async fn run(options: DedicatedServerOptions) {
     let vanilla_data = VanillaData::load();
 
     pumpkin_core::init_logger(&config.advanced);
+
+    crate::await_rayon_init(rayon_init).await;
 
     if let Some(target_arg) = options.convert_world {
         let anvil_default = match &config.advanced.world.chunk {

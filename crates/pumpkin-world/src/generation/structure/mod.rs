@@ -32,6 +32,9 @@ use crate::{
     },
 };
 
+// Registry lookups hold read guards; datapack reload holds the write guard while publishing.
+pub static DYNAMIC_WORLDGEN_RELOAD: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
 pub(crate) mod height_sampler;
 pub mod piece;
 pub mod placement;

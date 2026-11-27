@@ -1642,7 +1642,14 @@ impl GameTestWorld for ServerGameTestWorld {
                     let pos = Vector2::new(chunk_x, chunk_z);
                     self.ensure_chunk_loaded(&BlockPos::new(chunk_x * 16, 0, chunk_z * 16))
                         .await;
-                    let chunk = self.world.level.get_entity_chunk(pos).await;
+                    let chunk = self
+                        .world
+                        .level
+                        .get_entity_chunk(pos)
+                        .await
+                        .ok_or_else(|| {
+                            GameTestError::World(format!("Failed to load entity chunk {pos:?}"))
+                        })?;
                     self.world.activate_entity_chunk(&chunk);
                 }
             }
@@ -2242,7 +2249,11 @@ mod tests {
             .level
             .loaded_chunks
             .insert(pos, ChunkData::empty_sync(0, 0));
-        let chunk = world.level.get_entity_chunk(pos).await;
+        let chunk = world
+            .level
+            .get_entity_chunk(pos)
+            .await
+            .ok_or("Failed to load entity chunk")?;
         assert_eq!(
             chunk
                 .data
@@ -2265,7 +2276,11 @@ mod tests {
         drop(world);
 
         let world = create_world(&folder);
-        let chunk = world.level.get_entity_chunk(pos).await;
+        let chunk = world
+            .level
+            .get_entity_chunk(pos)
+            .await
+            .ok_or("Failed to load entity chunk")?;
         assert!(
             chunk
                 .data

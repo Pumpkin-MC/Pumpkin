@@ -428,7 +428,7 @@ pub trait LoadConfiguration {
                 }
 
                 for (key, overlay_value) in overlay_table {
-                    if let Some(base_value) = base_table.get(&key).cloned() {
+                    if let Some(base_value) = base_table.remove(&key) {
                         let (merged_value, value_changed) =
                             Self::merge_toml_values(base_value, overlay_value);
                         base_table.insert(key, merged_value);
@@ -458,6 +458,52 @@ mod tests {
 
     use super::{BasicConfiguration, LoadConfiguration, PumpkinConfig, fs};
 
+    #[test]
+    fn merge_defaults_preserves_nested_overrides_and_unknown_values() {
+        let defaults: toml::Value = from_str(
+            r#"
+            [server]
+            port = 25565
+            missing = "default"
+            values = [1, 2]
+            [server.proxy]
+            enabled = false
+            secret = "default"
+        "#,
+        )
+        .unwrap();
+        let overlay: toml::Value = from_str(
+            r#"
+            [server]
+            port = 25566
+            values = [3]
+            extension = "preserved"
+            [server.proxy]
+            enabled = true
+        "#,
+        )
+        .unwrap();
+        let expected: toml::Value = from_str(
+            r#"
+            [server]
+            port = 25566
+            missing = "default"
+            values = [3]
+            extension = "preserved"
+            [server.proxy]
+            enabled = true
+            secret = "default"
+        "#,
+        )
+        .unwrap();
+        let (merged, changed) = PumpkinConfig::merge_toml_values(defaults.clone(), overlay);
+        assert!(changed);
+        assert_eq!(merged, expected);
+
+        let (merged, changed) = PumpkinConfig::merge_toml_values(defaults, expected.clone());
+        assert!(!changed);
+        assert_eq!(merged, expected);
+    }
     /// Parses as TOML, but `tps` is an `f32` and this gives it a string.
     const BAD_FIELD_TYPE: &str = r#"
 default_level_name = "my-precious-world"

@@ -1,11 +1,12 @@
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 use pumpkin_data::damage::{DamageEffects, DamageScaling, DamageType, DeathMessageType};
 use pumpkin_data::registry::RegistryEntryData;
 use pumpkin_nbt::{Nbt, NbtCompound};
 use serde::{Deserialize, Serialize};
+
+use super::file_loader::{collect_files, load_files_parallel};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -193,47 +194,21 @@ pub fn load_damage_types_from_dir<S: std::hash::BuildHasher>(
         return 0;
     }
     let before = registry.len();
-    load_damage_types_recursive(namespace, dir, dir, registry);
-    registry.len() - before
-}
+    let files = collect_files(dir, "json");
+    let loaded = load_files_parallel(namespace, dir, &files, "json", |_id, _path, content| {
+        serde_json::from_str::<DamageTypeDefinition>(content).ok()
+    });
 
-fn load_damage_types_recursive<S: std::hash::BuildHasher>(
-    namespace: &str,
-    base_dir: &Path,
-    current_dir: &Path,
-    registry: &mut HashMap<String, DamageTypeDefinition, S>,
-) {
-    let Ok(entries) = fs::read_dir(current_dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            load_damage_types_recursive(namespace, base_dir, &path, registry);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-            && let Ok(rel_path) = path.strip_prefix(base_dir)
-        {
-            let mut stem_path = rel_path.to_string_lossy().to_string();
-            if let Some(stem) = stem_path.strip_suffix(".json") {
-                stem_path = stem.to_string();
-            }
-            let stem_path = stem_path.replace('\\', "/");
-            let damage_type_id = format!("{namespace}:{stem_path}");
-
-            if let Ok(content) = fs::read_to_string(&path)
-                && let Ok(definition) = serde_json::from_str::<DamageTypeDefinition>(&content)
-            {
-                registry.insert(damage_type_id, definition);
-            }
-        }
+    for (entry_id, _rel, definition) in loaded {
+        registry.insert(entry_id, definition);
     }
+    registry.len() - before
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn parse_full_damage_type_json() {

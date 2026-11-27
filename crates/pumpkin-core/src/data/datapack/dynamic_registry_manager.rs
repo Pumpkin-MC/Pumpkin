@@ -1,5 +1,8 @@
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::{Arc, Mutex};
+
+use arc_swap::ArcSwap;
+use indexmap::IndexMap;
 
 use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_data::registry::{Registry, RegistryEntryData};
@@ -92,14 +95,15 @@ impl DynamicRegistry {
     }
 }
 
+pub(crate) type RegistrySnapshot = IndexMap<String, Arc<DynamicRegistry>>;
+
 /// Manages all dynamic registries (vanilla base registries and datapack additions/overrides).
 /// Provides fast bidirectional lookup between resource IDs and raw network IDs.
 #[derive(Debug)]
 pub struct DynamicRegistryManager {
-    registries: RwLock<HashMap<String, DynamicRegistry>>,
-    synced_order: RwLock<Vec<String>>,
-    base_registries: HashMap<String, DynamicRegistry>,
-    base_synced_order: Vec<String>,
+    registries: ArcSwap<RegistrySnapshot>,
+    base_registries: Arc<RegistrySnapshot>,
+    update_lock: Mutex<()>,
 }
 
 impl Default for DynamicRegistryManager {
@@ -111,26 +115,19 @@ impl Default for DynamicRegistryManager {
 impl DynamicRegistryManager {
     #[must_use]
     pub fn new(version: JavaMinecraftVersion) -> Self {
-        let mut registries = HashMap::new();
-        let mut synced_order = Vec::new();
-
-        let base_regs = pumpkin_data::registry::Registry::get_synced(version);
-        for reg in base_regs {
-            let reg_id = if reg.registry_id.contains(':') {
-                reg.registry_id.clone()
-            } else {
-                format!("minecraft:{}", reg.registry_id)
-            };
-            let dyn_reg = DynamicRegistry::new(reg_id.clone(), reg.registry_entries);
-            registries.insert(reg_id.clone(), dyn_reg);
-            synced_order.push(reg_id);
-        }
-
+        let registries: RegistrySnapshot = Registry::get_synced(version)
+            .into_iter()
+            .map(|reg| {
+                let id = reg.registry_id;
+                let registry = DynamicRegistry::new(id.clone(), reg.registry_entries);
+                (id, Arc::new(registry))
+            })
+            .collect();
+        let base_registries = Arc::new(registries);
         Self {
-            base_registries: registries.clone(),
-            base_synced_order: synced_order.clone(),
-            registries: RwLock::new(registries),
-            synced_order: RwLock::new(synced_order),
+            registries: ArcSwap::from(base_registries.clone()),
+            base_registries,
+            update_lock: Mutex::new(()),
         }
     }
 
@@ -141,51 +138,55 @@ impl DynamicRegistryManager {
         &self,
         custom_registries: &HashMap<String, HashMap<String, RegistryEntryData, S1>, S2>,
     ) {
-        let mut reg_guard = self
-            .registries
-            .write()
+        let _update = self
+            .update_lock
+            .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let mut order_guard = self
-            .synced_order
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        (*reg_guard).clone_from(&self.base_registries);
-        (*order_guard).clone_from(&self.base_synced_order);
-
-        for (raw_reg_id, custom_entries) in custom_registries {
+        let live = self.registries.load_full();
+        let mut registries = (*self.base_registries).clone();
+        // Without client reconfiguration, removed entries must retain their network slots.
+        for (id, existing) in live.iter().filter(|(_, registry)| !registry.is_empty()) {
+            let mut entries = existing.entries.clone();
+            if let Some(base) = self.base_registries.get(id) {
+                entries[..base.entries.len()].clone_from_slice(&base.entries);
+            }
+            registries.insert(
+                id.clone(),
+                Arc::new(DynamicRegistry::new(id.clone(), entries)),
+            );
+        }
+        let mut custom: Vec<_> = custom_registries.iter().collect();
+        custom.sort_unstable_by_key(|(id, _)| *id);
+        for (raw_reg_id, custom_entries) in custom {
             let reg_id = if raw_reg_id.contains(':') {
                 raw_reg_id.clone()
             } else {
                 format!("minecraft:{raw_reg_id}")
             };
 
-            if let Some(existing) = reg_guard.get_mut(&reg_id) {
-                let merged = super::dynamic_registry_loader::merge_dynamic_registry_entries(
+            let entries = if let Some(existing) = registries.get(&reg_id) {
+                if custom_entries.is_empty() {
+                    continue;
+                }
+                super::dynamic_registry_loader::merge_dynamic_registry_entries(
                     &existing.entries,
                     custom_entries,
-                );
-                *existing = DynamicRegistry::new(reg_id.clone(), merged);
+                )
             } else {
-                let mut entries: Vec<RegistryEntryData> = custom_entries
-                    .values()
-                    .map(|e| RegistryEntryData {
-                        entry_id: e.entry_id.clone(),
-                        data: e.data.clone(),
-                    })
-                    .collect();
-                entries.sort_by(|a, b| a.entry_id.cmp(&b.entry_id));
-                let dyn_reg = DynamicRegistry::new(reg_id.clone(), entries);
-                reg_guard.insert(reg_id.clone(), dyn_reg);
-                order_guard.push(reg_id);
-            }
+                let mut entries: Vec<_> = custom_entries.values().cloned().collect();
+                entries.sort_unstable_by(|a, b| a.entry_id.cmp(&b.entry_id));
+                entries
+            };
+            let registry = DynamicRegistry::new(reg_id.clone(), entries);
+            registries.insert(reg_id, Arc::new(registry));
         }
+        self.registries.store(Arc::new(registries));
     }
 
     fn find_registry<'a>(
-        reg_guard: &'a HashMap<String, DynamicRegistry>,
+        reg_guard: &'a RegistrySnapshot,
         registry_id: &str,
-    ) -> Option<&'a DynamicRegistry> {
+    ) -> Option<&'a Arc<DynamicRegistry>> {
         if let Some(reg) = reg_guard.get(registry_id) {
             return Some(reg);
         }
@@ -197,30 +198,21 @@ impl DynamicRegistryManager {
 
     #[must_use]
     pub fn get_raw_id(&self, registry_id: &str, entry_id: &str) -> Option<u32> {
-        let reg_guard = self
-            .registries
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let reg_guard = self.registries.load();
         let reg = Self::find_registry(&reg_guard, registry_id)?;
         reg.get_raw_id(entry_id)
     }
 
     #[must_use]
     pub fn get_entry_id(&self, registry_id: &str, raw_id: u32) -> Option<String> {
-        let reg_guard = self
-            .registries
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let reg_guard = self.registries.load();
         let reg = Self::find_registry(&reg_guard, registry_id)?;
         reg.get_entry_id(raw_id).map(str::to_string)
     }
 
     #[must_use]
     pub fn get_entry_data(&self, registry_id: &str, entry_id: &str) -> Option<Box<[u8]>> {
-        let reg_guard = self
-            .registries
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let reg_guard = self.registries.load();
         let reg = Self::find_registry(&reg_guard, registry_id)?;
         reg.get_entry_data(entry_id)
             .map(|b| b.to_vec().into_boxed_slice())
@@ -228,28 +220,19 @@ impl DynamicRegistryManager {
 
     #[must_use]
     pub fn contains_entry(&self, registry_id: &str, entry_id: &str) -> bool {
-        let reg_guard = self
-            .registries
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let reg_guard = self.registries.load();
         Self::find_registry(&reg_guard, registry_id).is_some_and(|r| r.contains(entry_id))
     }
 
     #[must_use]
     pub fn get_registry_entries(&self, registry_id: &str) -> Vec<RegistryEntryData> {
-        let reg_guard = self
-            .registries
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let reg_guard = self.registries.load();
         Self::find_registry(&reg_guard, registry_id).map_or_else(Vec::new, |r| r.entries.clone())
     }
 
     #[must_use]
     pub fn get_all_entry_ids(&self, registry_id: &str) -> Vec<String> {
-        let reg_guard = self
-            .registries
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let reg_guard = self.registries.load();
         Self::find_registry(&reg_guard, registry_id).map_or_else(Vec::new, |r| {
             r.entries.iter().map(|e| e.entry_id.clone()).collect()
         })
@@ -257,25 +240,18 @@ impl DynamicRegistryManager {
 
     #[must_use]
     pub fn get_synced_registries(&self) -> Vec<Registry> {
-        let order_guard = self
-            .synced_order
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let reg_guard = self
-            .registries
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.registries
+            .load()
+            .values()
+            .map(|reg| Registry {
+                registry_id: reg.registry_id.clone(),
+                registry_entries: reg.entries.clone(),
+            })
+            .collect()
+    }
 
-        let mut result = Vec::with_capacity(order_guard.len());
-        for id in order_guard.iter() {
-            if let Some(dyn_reg) = reg_guard.get(id) {
-                result.push(Registry {
-                    registry_id: dyn_reg.registry_id.clone(),
-                    registry_entries: dyn_reg.entries.clone(),
-                });
-            }
-        }
-        result
+    pub(crate) fn synced_snapshot(&self) -> Arc<RegistrySnapshot> {
+        self.registries.load_full()
     }
 }
 
@@ -336,6 +312,102 @@ mod tests {
 
         let custom_data = manager.get_entry_data("minecraft:painting_variant", "custom:mona_lisa");
         assert_eq!(custom_data, Some(vec![1, 2, 3].into_boxed_slice()));
+    }
+
+    #[test]
+    fn login_snapshot_survives_datapack_reload() {
+        let manager = DynamicRegistryManager::default();
+        let mut custom = HashMap::new();
+        for name in ["example:z", "example:a"] {
+            custom.insert(name.to_owned(), HashMap::new());
+        }
+        manager.apply_custom_registries(&custom);
+        let login = manager.synced_snapshot();
+        custom.clear();
+        manager.apply_custom_registries(&custom);
+
+        let mut order = login.keys().rev();
+        assert_eq!(order.next().map(String::as_str), Some("example:z"));
+        assert_eq!(order.next().map(String::as_str), Some("example:a"));
+        assert!(!manager.synced_snapshot().contains_key("example:z"));
+    }
+
+    #[test]
+    fn reload_preserves_live_custom_network_ids() {
+        let manager = DynamicRegistryManager::default();
+        let registry = "minecraft:painting_variant".to_string();
+        let mut entries = HashMap::new();
+        for name in ["custom:b", "custom:c"] {
+            entries.insert(
+                name.to_string(),
+                RegistryEntryData {
+                    entry_id: name.to_string(),
+                    data: None,
+                },
+            );
+        }
+        let mut custom = HashMap::from([(registry.clone(), entries)]);
+        manager.apply_custom_registries(&custom);
+        let b = manager.get_raw_id(&registry, "custom:b");
+        let c = manager.get_raw_id(&registry, "custom:c");
+        let login = manager.synced_snapshot();
+        custom.get_mut(&registry).unwrap().insert(
+            "custom:a".into(),
+            RegistryEntryData {
+                entry_id: "custom:a".into(),
+                data: None,
+            },
+        );
+        manager.apply_custom_registries(&custom);
+        assert_eq!(manager.get_raw_id(&registry, "custom:b"), b);
+        assert_eq!(manager.get_raw_id(&registry, "custom:c"), c);
+        custom.get_mut(&registry).unwrap().remove("custom:b");
+        manager.apply_custom_registries(&custom);
+        assert_eq!(manager.get_raw_id(&registry, "custom:c"), c);
+        manager
+            .apply_custom_registries(&HashMap::<String, HashMap<String, RegistryEntryData>>::new());
+        assert_eq!(manager.get_raw_id(&registry, "custom:c"), c);
+        assert_eq!(
+            manager.get_entry_id(&registry, b.unwrap()).as_deref(),
+            Some("custom:b")
+        );
+        assert_eq!(login[&registry].get_raw_id("custom:c"), c);
+    }
+
+    #[test]
+    fn concurrent_updates_preserve_network_slots() {
+        let manager = DynamicRegistryManager::default();
+        let barrier = std::sync::Barrier::new(8);
+        std::thread::scope(|scope| {
+            for i in 0..8 {
+                let manager = &manager;
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    let id = format!("custom:{i}");
+                    let custom = HashMap::from([(
+                        "custom:registry".to_string(),
+                        HashMap::from([(
+                            id.clone(),
+                            RegistryEntryData {
+                                entry_id: id,
+                                data: None,
+                            },
+                        )]),
+                    )]);
+                    barrier.wait();
+                    manager.apply_custom_registries(&custom);
+                });
+            }
+        });
+        let mut ids: Vec<_> = (0..8)
+            .map(|i| {
+                manager
+                    .get_raw_id("custom:registry", &format!("custom:{i}"))
+                    .unwrap()
+            })
+            .collect();
+        ids.sort_unstable();
+        assert_eq!(ids, (0..8).collect::<Vec<_>>());
     }
 
     #[test]

@@ -27,8 +27,9 @@ pub struct ItemRegistry {
 impl ItemRegistry {
     pub fn register<T: ItemBehaviour + ItemMetadata + 'static>(&mut self, item: T) {
         let val = Arc::new(item);
-        self.items.reserve(T::ids().len());
-        for i in T::ids() {
+        let ids = T::ids();
+        self.items.reserve(ids.len());
+        for i in ids {
             self.items.insert(i, val.clone());
         }
     }

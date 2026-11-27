@@ -6,9 +6,12 @@ impl PendingConnection {
     /// plugin rewrites them in `JavaConnectionPacketSentEvent`.
     pub async fn handle_known_packs(&mut self, server: &Server) {
         let version = CURRENT_MC_VERSION;
-        let synced = server.datapack_manager.get_all_synced_registries();
-        for reg in &synced {
-            self.send_packet_now(&CRegistryData::new(&reg.registry_id, &reg.registry_entries))
+        let synced = server
+            .datapack_manager
+            .dynamic_registry_manager
+            .synced_snapshot();
+        for reg in synced.values() {
+            self.send_packet_now(&CRegistryData::new(&reg.registry_id, &reg.entries))
                 .await;
         }
         let mut tags = Vec::new();

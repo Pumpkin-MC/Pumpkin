@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::Path;
 
 use pumpkin_data::item::Item;
@@ -9,6 +8,8 @@ use pumpkin_data::villager::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::warn;
+
+use super::file_loader::{collect_files, load_files_parallel};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DynamicTradeModifier {
@@ -469,48 +470,26 @@ pub fn load_trades_from_dir<S: std::hash::BuildHasher>(
     registry: &mut HashMap<String, VillagerTradeDefinition, S>,
 ) -> usize {
     let before = registry.len();
-    load_trades_recursive(namespace, dir, dir, registry);
-    registry.len() - before
-}
-
-fn load_trades_recursive<S: std::hash::BuildHasher>(
-    namespace: &str,
-    base_dir: &Path,
-    current_dir: &Path,
-    registry: &mut HashMap<String, VillagerTradeDefinition, S>,
-) {
-    let Ok(entries) = fs::read_dir(current_dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            load_trades_recursive(namespace, base_dir, &path, registry);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-            && let Ok(rel_path) = path.strip_prefix(base_dir)
-        {
-            let mut stem_path = rel_path.to_string_lossy().to_string();
-            if let Some(stem) = stem_path.strip_suffix(".json") {
-                stem_path = stem.to_string();
+    let files = collect_files(dir, "json");
+    let loaded = load_files_parallel(
+        namespace,
+        dir,
+        &files,
+        "json",
+        |entry_id, _path, content| match serde_json::from_str::<VillagerTradeDefinition>(content) {
+            Ok(def) => Some(def),
+            Err(err) => {
+                warn!("Failed to parse villager trade {entry_id}: {err}");
+                None
             }
-            let stem_path = stem_path.replace('\\', "/");
-            let full_id = format!("{namespace}:{stem_path}");
+        },
+    );
 
-            if let Ok(content) = fs::read_to_string(&path) {
-                match serde_json::from_str::<VillagerTradeDefinition>(&content) {
-                    Ok(def) => {
-                        registry.insert(full_id, def.clone());
-                        registry.insert(stem_path, def);
-                    }
-                    Err(err) => {
-                        warn!("Failed to parse villager trade {full_id}: {err}");
-                    }
-                }
-            }
-        }
+    for (entry_id, rel, def) in loaded {
+        registry.insert(entry_id, def.clone());
+        registry.insert(rel, def);
     }
+    registry.len() - before
 }
 
 pub fn load_trade_sets_from_dir<S: std::hash::BuildHasher>(
@@ -519,48 +498,26 @@ pub fn load_trade_sets_from_dir<S: std::hash::BuildHasher>(
     registry: &mut HashMap<String, TradeSetDefinition, S>,
 ) -> usize {
     let before = registry.len();
-    load_trade_sets_recursive(namespace, dir, dir, registry);
-    registry.len() - before
-}
-
-fn load_trade_sets_recursive<S: std::hash::BuildHasher>(
-    namespace: &str,
-    base_dir: &Path,
-    current_dir: &Path,
-    registry: &mut HashMap<String, TradeSetDefinition, S>,
-) {
-    let Ok(entries) = fs::read_dir(current_dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            load_trade_sets_recursive(namespace, base_dir, &path, registry);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-            && let Ok(rel_path) = path.strip_prefix(base_dir)
-        {
-            let mut stem_path = rel_path.to_string_lossy().to_string();
-            if let Some(stem) = stem_path.strip_suffix(".json") {
-                stem_path = stem.to_string();
+    let files = collect_files(dir, "json");
+    let loaded = load_files_parallel(
+        namespace,
+        dir,
+        &files,
+        "json",
+        |entry_id, _path, content| match serde_json::from_str::<TradeSetDefinition>(content) {
+            Ok(def) => Some(def),
+            Err(err) => {
+                warn!("Failed to parse trade set {entry_id}: {err}");
+                None
             }
-            let stem_path = stem_path.replace('\\', "/");
-            let full_id = format!("{namespace}:{stem_path}");
+        },
+    );
 
-            if let Ok(content) = fs::read_to_string(&path) {
-                match serde_json::from_str::<TradeSetDefinition>(&content) {
-                    Ok(def) => {
-                        registry.insert(full_id, def.clone());
-                        registry.insert(stem_path, def);
-                    }
-                    Err(err) => {
-                        warn!("Failed to parse trade set {full_id}: {err}");
-                    }
-                }
-            }
-        }
+    for (entry_id, rel, def) in loaded {
+        registry.insert(entry_id, def.clone());
+        registry.insert(rel, def);
     }
+    registry.len() - before
 }
 
 pub fn load_trade_tags_from_dir<S: std::hash::BuildHasher>(
@@ -569,59 +526,40 @@ pub fn load_trade_tags_from_dir<S: std::hash::BuildHasher>(
     registry: &mut HashMap<String, Vec<String>, S>,
 ) -> usize {
     let before = registry.len();
-    load_trade_tags_recursive(namespace, dir, dir, registry);
-    registry.len() - before
-}
+    let files = collect_files(dir, "json");
+    let loaded = load_files_parallel(
+        namespace,
+        dir,
+        &files,
+        "json",
+        |entry_id, _path, content| {
+            let tag_file = serde_json::from_str::<TradeTagDefinition>(content)
+                .inspect_err(|err| warn!("Failed to parse trade tag {entry_id}: {err}"))
+                .ok()?;
+            let values = tag_file
+                .values
+                .into_iter()
+                .filter_map(|v| match v {
+                    Value::String(s) => Some(s),
+                    Value::Object(obj) => obj.get("id").and_then(Value::as_str).map(String::from),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            Some(values)
+        },
+    );
 
-fn load_trade_tags_recursive<S: std::hash::BuildHasher>(
-    namespace: &str,
-    base_dir: &Path,
-    current_dir: &Path,
-    registry: &mut HashMap<String, Vec<String>, S>,
-) {
-    let Ok(entries) = fs::read_dir(current_dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_dir() {
-            load_trade_tags_recursive(namespace, base_dir, &path, registry);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-            && let Ok(rel_path) = path.strip_prefix(base_dir)
-        {
-            let mut stem_path = rel_path.to_string_lossy().to_string();
-            if let Some(stem) = stem_path.strip_suffix(".json") {
-                stem_path = stem.to_string();
-            }
-            let stem_path = stem_path.replace('\\', "/");
-            let full_id = format!("{namespace}:{stem_path}");
-
-            if let Ok(content) = fs::read_to_string(&path)
-                && let Ok(tag_file) = serde_json::from_str::<TradeTagDefinition>(&content)
-            {
-                let values = tag_file
-                    .values
-                    .into_iter()
-                    .filter_map(|v| match v {
-                        Value::String(s) => Some(s),
-                        Value::Object(obj) => {
-                            obj.get("id").and_then(Value::as_str).map(String::from)
-                        }
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>();
-                registry.insert(full_id, values.clone());
-                registry.insert(stem_path, values);
-            }
-        }
+    for (entry_id, rel, values) in loaded {
+        registry.insert(entry_id, values.clone());
+        registry.insert(rel, values);
     }
+    registry.len() - before
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn parse_trade_json() {

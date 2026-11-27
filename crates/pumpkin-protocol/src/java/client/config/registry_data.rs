@@ -34,11 +34,11 @@ impl ClientPacket for CRegistryData<'_> {
     ) -> Result<(), WritingError> {
         let mut write = write;
 
-        write.write_string(&self.registry_id.clone())?;
+        write.write_string(self.registry_id)?;
 
         write.write_var_int(&VarInt(self.entries.len() as i32))?;
         for entry in self.entries {
-            write.write_string(&entry.entry_id.clone())?;
+            write.write_string(&entry.entry_id)?;
 
             if let Some(data) = &entry.data {
                 write.write_bool(true)?;

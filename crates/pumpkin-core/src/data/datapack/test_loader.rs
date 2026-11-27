@@ -1,10 +1,11 @@
 use std::collections::HashMap;
-use std::fs;
 use std::path::Path;
 
 use pumpkin_data::registry::RegistryEntryData;
 use pumpkin_nbt::{Nbt, NbtCompound, tag::NbtTag};
 use serde_json::Value;
+
+use super::file_loader::{collect_files, load_files_parallel};
 
 pub use pumpkin_gametest::model::{GameTestDefinition as TestInstance, GameTestRotation, TestType};
 use tracing::warn;
@@ -75,54 +76,32 @@ pub fn load_test_instances_from_dir(
     }
 
     let before = registry.len();
-    load_test_instances_recursive(namespace, test_instance_dir, test_instance_dir, registry);
-    registry.len() - before
-}
-
-fn load_test_instances_recursive(
-    namespace: &str,
-    base_dir: &Path,
-    current_dir: &Path,
-    registry: &mut TestInstanceRegistry,
-) {
-    let Ok(entries) = fs::read_dir(current_dir) else {
-        return;
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-
-        if path.is_dir() {
-            load_test_instances_recursive(namespace, base_dir, &path, registry);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
-            && let Ok(rel_path) = path.strip_prefix(base_dir)
-        {
-            let mut stem_path = rel_path.to_string_lossy().to_string();
-
-            if let Some(stem) = stem_path.strip_suffix(".json") {
-                stem_path = stem.to_string();
+    let files = collect_files(test_instance_dir, "json");
+    let loaded = load_files_parallel(
+        namespace,
+        test_instance_dir,
+        &files,
+        "json",
+        |_id, path, content| match serde_json::from_str::<TestInstance>(content) {
+            Ok(instance) if instance.is_valid() => Some(instance),
+            Ok(_) => {
+                warn!("Test instance '{}' failed validation", path.display());
+                None
             }
-
-            let stem_path = stem_path.replace('\\', "/");
-            let test_instance_id = format!("{namespace}:{stem_path}");
-
-            match fs::read_to_string(&path) {
-                Ok(content) => match serde_json::from_str::<TestInstance>(&content) {
-                    Ok(instance) if instance.is_valid() => {
-                        registry.insert(test_instance_id, instance);
-                    }
-                    Ok(_) => warn!("Test instance '{}' failed validation", path.display()),
-                    Err(error) => warn!(
-                        "Failed to parse test instance '{}': {error}",
-                        path.display()
-                    ),
-                },
-                Err(error) => warn!("Failed to read test instance '{}': {error}", path.display()),
+            Err(error) => {
+                warn!(
+                    "Failed to parse test instance '{}': {error}",
+                    path.display()
+                );
+                None
             }
-        }
+        },
+    );
+
+    for (entry_id, _rel, instance) in loaded {
+        registry.insert(entry_id, instance);
     }
+    registry.len() - before
 }
 
 /// Encodes the datapack test definition using the same map shape consumed by
@@ -191,6 +170,7 @@ fn json_value_to_nbt(value: &Value) -> NbtTag {
 #[cfg(test)]
 mod tests {
     use serde_json::Value;
+    use std::fs;
 
     use super::*;
 

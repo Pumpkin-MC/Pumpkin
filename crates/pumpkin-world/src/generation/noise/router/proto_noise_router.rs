@@ -788,13 +788,31 @@ impl ProtoNoiseRouters {
     }
 
     #[must_use]
+    pub(crate) fn generate_multi_noise(
+        base: &BaseNoiseRouters,
+        random_config: &GlobalRandomConfig,
+    ) -> ProtoMultiNoiseRouter {
+        ProtoMultiNoiseRouter {
+            full_component_stack: Self::generate_proto_stack(
+                base.multi_noise.full_component_stack,
+                random_config,
+            ),
+            temperature: base.multi_noise.temperature,
+            vegetation: base.multi_noise.vegetation,
+            continents: base.multi_noise.continents,
+            erosion: base.multi_noise.erosion,
+            depth: base.multi_noise.depth,
+            ridges: base.multi_noise.ridges,
+        }
+    }
+
+    #[must_use]
     pub fn generate(base: &BaseNoiseRouters, random_config: &GlobalRandomConfig) -> Self {
         let noise_stack =
             Self::generate_proto_stack(base.noise.full_component_stack, random_config);
         let surface_stack =
             Self::generate_proto_stack(base.surface_estimator.full_component_stack, random_config);
-        let multi_noise_stack =
-            Self::generate_proto_stack(base.multi_noise.full_component_stack, random_config);
+        let multi_noise = Arc::new(Self::generate_multi_noise(base, random_config));
         let vein_stack = Self::generate_proto_stack(base.vein.full_component_stack, random_config);
 
         Self {
@@ -814,15 +832,7 @@ impl ProtoNoiseRouters {
             surface_estimator: ProtoSurfaceEstimator {
                 full_component_stack: surface_stack,
             },
-            multi_noise: Arc::new(ProtoMultiNoiseRouter {
-                full_component_stack: multi_noise_stack,
-                temperature: base.multi_noise.temperature,
-                vegetation: base.multi_noise.vegetation,
-                continents: base.multi_noise.continents,
-                erosion: base.multi_noise.erosion,
-                depth: base.multi_noise.depth,
-                ridges: base.multi_noise.ridges,
-            }),
+            multi_noise,
             vein: ProtoVeinRouter {
                 full_component_stack: vein_stack,
                 vein_toggle: base.vein.vein_toggle,
