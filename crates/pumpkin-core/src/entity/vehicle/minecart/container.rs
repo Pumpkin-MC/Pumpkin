@@ -61,9 +61,12 @@ impl MinecartInventory {
             *guard = loot_table;
         }
 
-        if !has_loot_table && let Ok(mut items) = self.items.try_write() {
+        // Vanilla `readChestVehicleSaveData` clears the items even when a loot table replaces them.
+        if let Ok(mut items) = self.items.try_write() {
             items.fill_with(|| ItemStack::EMPTY.clone());
-            self.read_data(nbt, &mut items);
+            if !has_loot_table {
+                self.read_data(nbt, &mut items);
+            }
         }
     }
 
@@ -91,7 +94,8 @@ impl MinecartInventory {
     }
 
     /// Vanilla `AbstractContainerMenu.getRedstoneSignalFromContainer`.
-    pub fn redstone_signal(&self) -> u8 {
+    /// Over-stacked slots can push it past 15, as in vanilla.
+    pub fn redstone_signal(&self) -> i32 {
         let items = self.read_items();
         let fill: f32 = items
             .iter()
@@ -101,7 +105,7 @@ impl MinecartInventory {
         if fill <= 0.0 {
             return 0;
         }
-        (fill / self.size as f32 * 14.0).floor() as u8 + 1
+        (fill / self.size as f32 * 14.0).floor() as i32 + 1
     }
 
     pub fn has_loot_table(&self) -> bool {
@@ -255,7 +259,7 @@ pub(super) fn slowdown(
 ) -> Vector3<f64> {
     let mut keep = 0.98f32;
     if !inventory.has_loot_table() {
-        keep += f32::from(15 - inventory.redstone_signal()) * 0.001;
+        keep += (15 - inventory.redstone_signal()) as f32 * 0.001;
     }
     if entity.is_in_water() {
         keep *= 0.95;

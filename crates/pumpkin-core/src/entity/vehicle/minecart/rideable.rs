@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use crate::entity::{Entity, EntityBase, player::Player};
+use crate::entity::{Entity, EntityBase, player::Player, vehicle::minecart::AbstractMinecart};
 
 pub(super) struct RideableMinecart;
 
@@ -25,14 +25,11 @@ impl RideableMinecart {
         }
 
         let world = entity.world.load();
-        let Some(vehicle) = world.get_entity_by_id(entity.entity_id) else {
-            return false;
-        };
         let Some(passenger) = world.get_player_by_id(player.entity_id()) else {
             return false;
         };
 
-        entity.add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
+        AbstractMinecart::start_riding(entity, &world, passenger as Arc<dyn EntityBase>);
         true
     }
 }

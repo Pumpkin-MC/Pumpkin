@@ -300,7 +300,7 @@ impl AbstractMinecart {
     pub fn container_signal(&self) -> Option<u8> {
         let container = self.container()?;
         self.unpack_container_loot(container);
-        Some(container.redstone_signal())
+        Some(u8::try_from(container.redstone_signal()).unwrap_or(u8::MAX))
     }
 
     /// Vanilla `MinecartBehavior.getMaxSpeed`.

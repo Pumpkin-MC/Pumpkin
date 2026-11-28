@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:minecart_carries_chest_boat_to_hopper",
+  "max_ticks": 100,
+  "setup_ticks": 0
+}

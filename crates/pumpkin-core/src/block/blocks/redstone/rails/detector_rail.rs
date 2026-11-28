@@ -36,14 +36,15 @@ use pumpkin_data::block_properties::DetectorRailProperties;
 #[pumpkin_block("minecraft:detector_rail")]
 pub struct DetectorRailBlock;
 
-/// Vanilla `updatePowerToConnected`: only the rails' two connections hear the change.
+/// Vanilla `updatePowerToConnected`: only the rails' two connections hear the change, in
+/// `RailState.updateConnections` order.
 fn update_power_to_connected(world: &Arc<World>, pos: &BlockPos, shape: RailShapeStraight) {
     let (c1, c2) = match shape {
         RailShapeStraight::NorthSouth => (pos.north(), pos.south()),
-        RailShapeStraight::EastWest => (pos.east(), pos.west()),
+        RailShapeStraight::EastWest => (pos.west(), pos.east()),
         RailShapeStraight::AscendingEast => (pos.west(), pos.east().up()),
-        RailShapeStraight::AscendingWest => (pos.east(), pos.west().up()),
-        RailShapeStraight::AscendingNorth => (pos.south(), pos.north().up()),
+        RailShapeStraight::AscendingWest => (pos.west().up(), pos.east()),
+        RailShapeStraight::AscendingNorth => (pos.north().up(), pos.south()),
         RailShapeStraight::AscendingSouth => (pos.north(), pos.south().up()),
     };
     world.update_neighbor(&c1, world.get_block(&c1));

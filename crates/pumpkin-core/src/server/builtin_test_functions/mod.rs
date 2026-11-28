@@ -132,6 +132,9 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:powered_rail_propagation", rails::test_powered_rail_propagation);
         register_test_function("pumpkin:activator_rail_propagation", rails::test_activator_rail_propagation);
         register_test_function("pumpkin:detector_rail_minecart", rails::test_detector_rail_minecart);
+        register_test_function("pumpkin:tnt_minecart_explodes_after_fall", rails::test_tnt_minecart_explodes_after_fall);
+        register_test_function("pumpkin:minecart_dismounts_beside_its_motion", rails::test_minecart_dismounts_beside_its_motion);
+        register_test_function("pumpkin:minecart_carries_chest_boat_to_hopper", rails::test_minecart_carries_chest_boat_to_hopper);
         register_test_function("pumpkin:tripwire_entity_collision", tripwire::test_tripwire_entity_collision);
         register_test_function("pumpkin:snow_golem_pattern_spawns", golems::test_snow_golem_pattern_spawns);
         register_test_function("pumpkin:snow_golem_snow_trail_support", golems::test_snow_golem_snow_trail_support);
