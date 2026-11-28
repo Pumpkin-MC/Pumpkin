@@ -8,7 +8,7 @@ impl JavaClient {
             .store(true, Ordering::Relaxed);
         let entity = player.get_entity();
         let last_pos = entity.pos.load();
-        let pos = Vector3::new(packet.x, packet.y, packet.z);
+        let mut pos = Vector3::new(packet.x, packet.y, packet.z);
         let vehicle = entity.get_vehicle();
         if let Some(vehicle) = &vehicle {
             let vehicle_entity = vehicle.get_entity();
@@ -16,6 +16,40 @@ impl JavaClient {
             let old_y = old_pos.y;
             vehicle_entity.set_pos(pos);
             vehicle_entity.set_rotation(packet.yaw, packet.pitch);
+            if let Some(vehicle) = vehicle.get_vehicle_entity() {
+                let move_result = vehicle.move_vehicle(old_pos, pos);
+                pos = move_result.position;
+                vehicle_entity.set_pos(pos);
+                if move_result.cancelled {
+                    vehicle_entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
+                    vehicle_entity.send_velocity();
+                }
+                if pos != Vector3::new(packet.x, packet.y, packet.z) {
+                    self.try_send_packet(&CMoveVehicle::new(
+                        pos.x,
+                        pos.y,
+                        pos.z,
+                        vehicle_entity.yaw.load(),
+                        vehicle_entity.pitch.load(),
+                    ));
+                }
+            }
+            let passengers = vehicle_entity
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            for passenger in passengers {
+                crate::entity::position_rider(vehicle.as_ref(), passenger.as_ref());
+                if passenger.get_entity().entity_id != entity.entity_id
+                    && let Some(passenger) = player
+                        .world()
+                        .get_player_by_id(passenger.get_entity().entity_id)
+                {
+                    chunker::update_position(&passenger);
+                }
+            }
+
             vehicle_entity
                 .on_ground
                 .store(packet.on_ground, Ordering::Relaxed);

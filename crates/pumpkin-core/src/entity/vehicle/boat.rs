@@ -201,6 +201,10 @@ impl EntityBase for BoatEntity {
         Some(container.clone() as Arc<dyn Inventory>)
     }
 
+    fn get_vehicle_entity(&self) -> Option<&VehicleEntity> {
+        Some(&self.vehicle)
+    }
+
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         self.vehicle.tick();
 

@@ -1271,6 +1271,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         self.get_mob().is_some_and(mob::Mob::is_sensitive_to_water)
     }
 
+    fn get_vehicle_entity(&self) -> Option<&vehicle::vehicle::VehicleEntity> {
+        None
+    }
+
     fn cast_any(&self) -> &dyn std::any::Any;
 
     fn get_item_entity(&self) -> Option<&ItemEntity> {
