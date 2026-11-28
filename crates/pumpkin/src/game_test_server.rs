@@ -136,6 +136,12 @@ pub async fn run(options: GameTestOptions) -> Result<(), String> {
     .await
     .map_err(|error| format!("Failed to start GameTest server: {error}"))?;
 
+    // Packs copied into a new world are usually enabled already by `configure_world_packs`.
+    let level_info = server.level_info.load_full();
+    let packs: Vec<_> = packs
+        .into_iter()
+        .filter(|pack| !level_info.data_packs.enabled.contains(pack))
+        .collect();
     if !packs.is_empty() {
         server.level_info.rcu(|info| {
             let mut updated = (**info).clone();

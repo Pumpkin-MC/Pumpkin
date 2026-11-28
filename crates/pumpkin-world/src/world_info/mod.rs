@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use crate::CURRENT_MC_VERSION;
-use pumpkin_data::game_rules::GameRuleRegistry;
+use pumpkin_data::game_rules::{GameRule, GameRuleRegistry};
 use pumpkin_util::{Difficulty, serde_enum_as_integer, world_seed::Seed};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -52,6 +52,11 @@ pub struct LevelData {
     pub border_warning_time: f64,
     #[serde(default = "default_data_packs")]
     pub data_packs: DataPacks,
+    #[serde(rename = "enabled_features", default = "default_enabled_features")]
+    pub enabled_features: Vec<String>,
+    /// Set when `level.dat` had no `enabled_features` e.g. older  Pumpkin versions
+    #[serde(skip)]
+    pub enabled_features_missing: bool,
     pub data_version: i32,
     #[serde(with = "serde_enum_as_integer", default = "default_difficulty")]
     pub difficulty: Difficulty,
@@ -121,7 +126,8 @@ const DEFAULT_BORDER_WARNING_TIME: f64 = 15.0;
 const DEFAULT_DIFFICULTY: Difficulty = Difficulty::Normal;
 const DEFAULT_LEVEL_NAME: &str = "world";
 const DEFAULT_SPAWN_Y: i32 = 200;
-const DEFAULT_ENABLED_DATA_PACK: &str = "vanilla";
+/// Vanilla `BuiltInPackSource.VANILLA_ID`.
+pub const DEFAULT_ENABLED_DATA_PACK: &str = "vanilla";
 const DEFAULT_WORLD_VERSION_SERIES: &str = "main";
 
 const fn default_border_damage_per_block() -> f64 {
@@ -141,6 +147,25 @@ const fn default_border_warning_time() -> f64 {
 }
 fn default_enabled_data_packs() -> Vec<String> {
     vec![DEFAULT_ENABLED_DATA_PACK.to_string()]
+}
+/// Vanilla `FeatureFlags`.
+pub mod feature_flags {
+    pub const VANILLA: &str = "minecraft:vanilla";
+    pub const TRADE_REBALANCE: &str = "minecraft:trade_rebalance";
+    pub const REDSTONE_EXPERIMENTS: &str = "minecraft:redstone_experiments";
+    pub const MINECART_IMPROVEMENTS: &str = "minecraft:minecart_improvements";
+    /// `REGISTRY.allFlags()`.
+    pub const ALL: [&str; 4] = [
+        VANILLA,
+        TRADE_REBALANCE,
+        REDSTONE_EXPERIMENTS,
+        MINECART_IMPROVEMENTS,
+    ];
+}
+
+/// Vanilla `FeatureFlags.DEFAULT_FLAGS`.
+fn default_enabled_features() -> Vec<String> {
+    vec![feature_flags::VANILLA.to_string()]
 }
 fn default_data_packs() -> DataPacks {
     DataPacks {
@@ -552,6 +577,8 @@ impl LevelData {
             border_warning_blocks: DEFAULT_BORDER_WARNING_BLOCKS,
             border_warning_time: DEFAULT_BORDER_WARNING_TIME,
             data_packs: default_data_packs(),
+            enabled_features: default_enabled_features(),
+            enabled_features_missing: false,
             data_version: MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
             difficulty: DEFAULT_DIFFICULTY,
             difficulty_locked: false,
@@ -599,6 +626,26 @@ impl LevelData {
     pub const fn set_pos(&mut self, x: i32, z: i32) {
         self.spawn_x = x;
         self.spawn_z = z;
+    }
+
+    /// Vanilla `FeatureFlagSet.contains` on `WorldDataConfiguration.enabledFeatures`.
+    #[must_use]
+    pub fn is_feature_enabled(&self, feature: &str) -> bool {
+        self.enabled_features
+            .iter()
+            .any(|enabled| enabled == feature)
+    }
+
+    /// Vanilla `GameRule.isEnabled`: rules whose features are off don't exist in this world.
+    #[must_use]
+    pub fn is_game_rule_enabled(&self, rule: &GameRule) -> bool {
+        // TODO: extract `GameRule.requiredFeatures` instead of naming the one rule that has any.
+        match rule {
+            GameRule::MaxMinecartSpeed => {
+                self.is_feature_enabled(feature_flags::MINECART_IMPROVEMENTS)
+            }
+            _ => true,
+        }
     }
 }
 

@@ -11,6 +11,7 @@ use crate::command::argument_builder::{ArgumentBuilder, argument, command, liter
 use crate::command::argument_types::component::ComponentArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
@@ -31,9 +32,19 @@ static ERROR_ENABLE_FAILED: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_DATAPACK_ENABLE_FAILED,
 );
 
+static ERROR_ENABLE_NO_FLAGS: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_DATAPACK_ENABLE_FAILED_NO_FLAGS,
+    translation::java::COMMANDS_DATAPACK_ENABLE_FAILED_NO_FLAGS,
+);
+
 static ERROR_DISABLE_FAILED: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_DATAPACK_DISABLE_FAILED,
     translation::java::COMMANDS_DATAPACK_DISABLE_FAILED,
+);
+
+static ERROR_DISABLE_FEATURE: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::COMMANDS_DATAPACK_DISABLE_FAILED_FEATURE,
+    translation::java::COMMANDS_DATAPACK_DISABLE_FAILED_FEATURE,
 );
 
 static ERROR_CREATE_ALREADY_EXISTS: CommandErrorType<1> = CommandErrorType::new(
@@ -61,6 +72,34 @@ fn get_available_packs(server: &Server) -> Vec<String> {
 
 fn find_pack_name(server: &Server, input: &str) -> Option<String> {
     crate::data::datapack::DatapackManager::find_pack_name(server, input)
+}
+
+/// Vanilla `DataPackCommand.getPack` after the enabled check: a feature pack can't be disabled,
+/// and no pack whose flags this world doesn't have is accepted.
+fn check_flags(server: &Server, pack: &str, enabling: bool) -> Result<(), CommandSyntaxError> {
+    if !enabling && crate::data::datapack::DatapackManager::is_feature_pack(pack) {
+        return Err(
+            ERROR_DISABLE_FEATURE.create_without_context(TextComponent::text(pack.to_owned()))
+        );
+    }
+    let missing = match crate::data::datapack::DatapackManager::missing_features(server, pack) {
+        Some(missing) => missing,
+        // An enabled pack that became unreadable requests nothing, so it stays removable.
+        None if !enabling => Vec::new(),
+        // Vanilla doesn't know a pack it can't read.
+        None => {
+            return Err(
+                ERROR_UNKNOWN_DATAPACK.create_without_context(TextComponent::text(pack.to_owned()))
+            );
+        }
+    };
+    if missing.is_empty() {
+        return Ok(());
+    }
+    Err(ERROR_ENABLE_NO_FLAGS.create_without_context_args_slice(&[
+        TextComponent::text(pack.to_owned()),
+        TextComponent::text(missing.join(", ")),
+    ]))
 }
 
 fn format_pack(name: &str) -> TextComponent {
@@ -232,6 +271,7 @@ impl CommandExecutor for DatapackEnableExecutor {
                 ERROR_ENABLE_FAILED.create_without_context(TextComponent::text(resolved_name))
             );
         }
+        check_flags(server, &resolved_name, true)?;
 
         let target = resolved_name.clone();
         let pos = self.0;
@@ -288,23 +328,25 @@ impl CommandExecutor for DatapackEnableExistingExecutor {
                 .create_without_context(TextComponent::text(name_str.to_string())));
         };
 
-        let Some(existing_pack) = find_pack_name(server, existing_str) else {
-            return Err(ERROR_UNKNOWN_DATAPACK
-                .create_without_context(TextComponent::text(existing_str.to_string())));
-        };
-
         let enabled = get_enabled_packs(server);
         if enabled.contains(&target_pack) {
             return Err(
                 ERROR_ENABLE_FAILED.create_without_context(TextComponent::text(target_pack))
             );
         }
+        check_flags(server, &target_pack, true)?;
 
+        // Vanilla resolves `existing` like a pack to disable, feature check included.
+        let Some(existing_pack) = find_pack_name(server, existing_str) else {
+            return Err(ERROR_UNKNOWN_DATAPACK
+                .create_without_context(TextComponent::text(existing_str.to_string())));
+        };
         if !enabled.contains(&existing_pack) {
             return Err(
                 ERROR_DISABLE_FAILED.create_without_context(TextComponent::text(existing_pack))
             );
         }
+        check_flags(server, &existing_pack, false)?;
 
         let target = target_pack.clone();
         let existing = existing_pack;
@@ -360,7 +402,9 @@ impl CommandExecutor for DatapackDisableExecutor {
         let name_str = StringArgumentType::get(context, "name")?;
         let server = context.server();
 
-        let Some(target_pack) = find_pack_name(server, name_str) else {
+        let Some(target_pack) =
+            crate::data::datapack::DatapackManager::find_pack_to_disable(server, name_str)
+        else {
             return Err(ERROR_DISABLE_FAILED
                 .create_without_context(TextComponent::text(name_str.to_string())));
         };
@@ -371,10 +415,13 @@ impl CommandExecutor for DatapackDisableExecutor {
                 .create_without_context(TextComponent::text(name_str.to_string())));
         }
 
-        if target_pack == "vanilla" {
-            return Err(ERROR_DISABLE_FAILED
-                .create_without_context(TextComponent::text("vanilla".to_string())));
+        // TODO vanilla lets `vanilla` be disabled; Pumpkin always loads its embedded packs.
+        if crate::data::datapack::DatapackManager::is_embedded_pack(&target_pack) {
+            return Err(
+                ERROR_DISABLE_FAILED.create_without_context(TextComponent::text(target_pack))
+            );
         }
+        check_flags(server, &target_pack, false)?;
 
         let target = target_pack.clone();
         server.level_info.rcu(|level_info| {
@@ -520,6 +567,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             .executes(DatapackDisableExecutor),
     );
 
+    // TODO vanilla requires `LEVEL_OWNERS` for `create`, the rest only `LEVEL_GAMEMASTERS`.
     let create_builder = literal("create").then(
         // `datapack create <id> <description>`: both required, as vanilla.
         argument("id", StringArgumentType::SingleWord)
