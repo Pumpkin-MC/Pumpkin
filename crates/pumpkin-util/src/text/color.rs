@@ -1,5 +1,7 @@
 use colored::{ColoredString, Colorize};
+use serde::de::{Error, IgnoredAny, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt::Formatter;
 
 /// Text color for chat components.
 ///
@@ -249,7 +251,7 @@ impl Serialize for RGBColor {
 /// An ARGB color with alpha, red, green, and blue components.
 ///
 /// Used for advanced color effects like custom text shadows.
-#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
 pub struct ARGBColor {
     /// The alpha (transparency) component (0-255).
     pub alpha: u8,
@@ -320,7 +322,56 @@ impl ARGBColor {
 
 impl Serialize for ARGBColor {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_bytes([self.alpha, self.red, self.green, self.blue].as_ref())
+        // `ExtraCodecs.ARGB_COLOR_CODEC` always encodes with its primary `Codec.INT`.
+        serializer.serialize_i32(self.to_argb_int())
+    }
+}
+
+/// Mirrors `ARGB.as8BitChannel` plus the `& 0xFF` mask of `ARGB.color`: no clamping,
+/// out-of-range values wrap.
+fn as_8bit_channel(value: f32) -> u8 {
+    ((value * 255.0).floor() as i32 & 0xFF) as u8
+}
+
+/// Reads an [`ARGBColor`] like `ExtraCodecs.ARGB_COLOR_CODEC`: an ARGB int, or a list of
+/// four floats in `[r, g, b, a]` order (`ExtraCodecs.VECTOR4F`).
+struct ARGBColorVisitor;
+
+impl<'de> Visitor<'de> for ARGBColorVisitor {
+    type Value = ARGBColor;
+
+    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        formatter.write_str("an ARGB int or a list of four floats")
+    }
+
+    // `Codec.INT` reads through `Number::intValue`, which keeps the low 32 bits.
+    fn visit_i64<E: Error>(self, v: i64) -> Result<Self::Value, E> {
+        Ok(ARGBColor::from_argb_int(v as i32))
+    }
+
+    fn visit_u64<E: Error>(self, v: u64) -> Result<Self::Value, E> {
+        Ok(ARGBColor::from_argb_int(v as i32))
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+        let mut components = [0f32; 4];
+        for (i, component) in components.iter_mut().enumerate() {
+            *component = seq
+                .next_element()?
+                .ok_or_else(|| A::Error::invalid_length(i, &self))?;
+        }
+        if seq.next_element::<IgnoredAny>()?.is_some() {
+            return Err(A::Error::invalid_length(components.len() + 1, &self));
+        }
+        // `ARGB.colorFromFloat(v.w(), v.x(), v.y(), v.z())`
+        let [red, green, blue, alpha] = components.map(as_8bit_channel);
+        Ok(ARGBColor::new(alpha, red, green, blue))
+    }
+}
+
+impl<'de> Deserialize<'de> for ARGBColor {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_any(ARGBColorVisitor)
     }
 }
 
@@ -464,5 +515,140 @@ impl TryFrom<&str> for NamedColor {
             "white" => Ok(Self::White),
             _ => Err(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ARGBColor;
+    use crate::text::TextComponent;
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_nbt::tag::NbtTag;
+
+    fn parse(json: &str) -> Result<ARGBColor, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+
+    #[test]
+    fn argb_int_splits_into_components() {
+        let cases = [
+            ("-2130771968", ARGBColor::new(128, 255, 0, 0)),
+            ("2130771712", ARGBColor::new(127, 0, 255, 0)),
+            ("-1", ARGBColor::new(255, 255, 255, 255)),
+            ("0", ARGBColor::new(0, 0, 0, 0)),
+        ];
+        for (json, expected) in cases {
+            assert_eq!(parse(json).unwrap(), expected, "{json}");
+        }
+    }
+
+    #[test]
+    fn argb_int_outside_i32_keeps_low_32_bits() {
+        let cases = [
+            ("4294967295", ARGBColor::new(255, 255, 255, 255)),
+            ("4294967296", ARGBColor::new(0, 0, 0, 0)),
+            ("-2147483649", ARGBColor::new(127, 255, 255, 255)),
+        ];
+        for (json, expected) in cases {
+            assert_eq!(parse(json).unwrap(), expected, "{json}");
+        }
+    }
+
+    #[test]
+    fn float_list_is_rgba_vector() {
+        let cases = [
+            ("[1.0, 0.0, 0.0, 0.5]", ARGBColor::new(127, 255, 0, 0)),
+            ("[0.5, 0.25, 1.0, 1.0]", ARGBColor::new(255, 127, 63, 255)),
+            ("[1, 0, 0, 1]", ARGBColor::new(255, 255, 0, 0)),
+        ];
+        for (json, expected) in cases {
+            assert_eq!(parse(json).unwrap(), expected, "{json}");
+        }
+    }
+
+    #[test]
+    fn float_list_out_of_range_wraps() {
+        // floor(1.5 * 255) = 382 -> 126, floor(-0.5 * 255) = -128 -> 128, 2.0 * 255 = 510 -> 254
+        assert_eq!(
+            parse("[1.5, -0.5, 2.0, 1.0]").unwrap(),
+            ARGBColor::new(255, 126, 128, 254)
+        );
+    }
+
+    #[test]
+    fn float_list_of_wrong_length_is_an_error() {
+        assert!(parse("[1.0, 0.0, 0.0]").is_err());
+        assert!(parse("[1.0, 0.0, 0.0, 1.0, 0.0]").is_err());
+    }
+
+    #[test]
+    fn argb_int_round_trips() {
+        for color in [
+            ARGBColor::new(128, 255, 0, 0),
+            ARGBColor::new(255, 18, 52, 86),
+            ARGBColor::new(1, 2, 3, 4),
+            ARGBColor::new(200, 0, 0, 255),
+        ] {
+            assert_eq!(parse(&color.to_argb_int().to_string()).unwrap(), color);
+        }
+    }
+
+    #[test]
+    fn serializes_as_argb_int() {
+        let json = serde_json::to_string(&ARGBColor::new(128, 255, 0, 0)).unwrap();
+        assert_eq!(json, "-2130771968");
+    }
+
+    #[test]
+    fn component_with_int_shadow_color_parses_from_json() {
+        let component: TextComponent =
+            serde_json::from_str(r#"{"text":"x","shadow_color":-2130771968}"#).unwrap();
+        assert_eq!(
+            component.0.style.shadow_color,
+            Some(ARGBColor::new(128, 255, 0, 0))
+        );
+    }
+
+    #[test]
+    fn component_with_float_list_shadow_color_parses_from_json() {
+        let component: TextComponent =
+            serde_json::from_str(r#"{"text":"x","shadow_color":[1.0,0.0,0.0,0.5]}"#).unwrap();
+        assert_eq!(
+            component.0.style.shadow_color,
+            Some(ARGBColor::new(127, 255, 0, 0))
+        );
+    }
+
+    #[test]
+    fn component_with_int_shadow_color_parses_from_nbt() {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("text", "x".to_string());
+        nbt.put_int("shadow_color", -2_130_771_968);
+        let component = TextComponent::from_nbt(&NbtTag::Compound(nbt));
+        assert_eq!(
+            component.0.style.shadow_color,
+            Some(ARGBColor::new(128, 255, 0, 0))
+        );
+        assert_eq!(component.get_text(), "x");
+    }
+
+    #[test]
+    fn component_with_float_list_shadow_color_parses_from_nbt() {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("text", "x".to_string());
+        nbt.put(
+            "shadow_color",
+            NbtTag::List(vec![
+                NbtTag::Float(1.0),
+                NbtTag::Float(0.0),
+                NbtTag::Float(0.0),
+                NbtTag::Float(0.5),
+            ]),
+        );
+        let component = TextComponent::from_nbt(&NbtTag::Compound(nbt));
+        assert_eq!(
+            component.0.style.shadow_color,
+            Some(ARGBColor::new(127, 255, 0, 0))
+        );
     }
 }
