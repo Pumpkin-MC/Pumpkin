@@ -97,9 +97,10 @@ fn follow_temptation() -> Box<dyn BehaviorControl> {
 }
 
 fn start_attacking() -> Box<dyn BehaviorControl> {
-    Box::new(start_attacking::create(
+    Box::new(start_attacking::create_with_reason(
         |tick| !utils::is_breeding(tick.state),
         |tick| tick.state.get(types::NEAREST_ATTACKABLE).cloned(),
+        |_| crate::plugin::api::events::entity::entity_target::TargetReason::ClosestEntity,
     ))
 }
 
@@ -314,7 +315,10 @@ fn tongue_activity() -> ActivityData {
         Activity::Tongue,
         0,
         vec![
-            Box::new(stop_attacking_if_target_invalid::create()),
+            Box::new(stop_attacking_if_target_invalid::create_with_target_events(
+                |_, _| false,
+                |_, _| {},
+            )),
             Box::new(Timed::new(ShootTongue::new(
                 Sound::EntityFrogTongue,
                 Sound::EntityFrogEat,
@@ -338,4 +342,54 @@ fn is_acceptable_landing_spot(mob: &dyn Mob, target_pos: BlockPos) -> bool {
     }
     long_jump::lands_on_trapdoor(mob, target_pos)
         || long_jump::default_acceptable_landing_spot(mob, target_pos)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::ai::test_support::world;
+    use crate::entity::passive::cow::CowEntity;
+    use crate::entity::{Entity, EntityBase};
+    use pumpkin_util::math::vector3::Vector3;
+
+    #[tokio::test]
+    async fn frog_target_reads_and_writes_the_brain_memory()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let frog = FrogEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::FROG,
+        ));
+        let target = CowEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(1.0, 64.0, 0.0),
+            &EntityType::COW,
+        ));
+        let id = target.get_entity().entity_id;
+        let body = frog.get_mob_entity();
+        body.set_target(Some(target.clone()));
+        let installed_before_tick = body
+            .get_target()
+            .map(|target| target.get_entity().entity_id);
+        body.set_target(None);
+        body.with_brain(frog.as_ref(), |brain| {
+            brain.set(types::ATTACK_TARGET, target.clone());
+        });
+        // Read before the first AI tick to catch a separate field updated by the tick.
+        let observed = body
+            .get_target()
+            .map(|target| target.get_entity().entity_id);
+        body.set_target(None);
+        let cleared = body.with_brain(frog.as_ref(), |brain| {
+            !brain.has_memory_value(types::ATTACK_TARGET.id())
+        });
+        world.level.shutdown().await;
+
+        assert_eq!(installed_before_tick, Some(id));
+        assert_eq!(observed, Some(id));
+        assert!(cleared);
+        Ok(())
+    }
 }

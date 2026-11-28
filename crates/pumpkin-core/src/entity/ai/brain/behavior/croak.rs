@@ -28,7 +28,7 @@ impl Behavior for Croak {
     }
 
     fn check_extra_start_conditions(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        tick.pose() == EntityPose::Standing
+        tick.mob.get_entity().pose.load() == EntityPose::Standing
     }
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {

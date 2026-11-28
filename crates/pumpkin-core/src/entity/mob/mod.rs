@@ -144,7 +144,7 @@ pub struct MobEntity {
     pending_navigation_updates: crossbeam::queue::SegQueue<(BlockPos, Uuid, u64)>,
     pub target: std::sync::Mutex<Option<Weak<dyn EntityBase>>>,
     // Opt-in species initialize their brain before exposing the mob.
-    use_brain_attack_target: bool,
+    pub(in crate::entity) use_brain_attack_target: bool,
     pub look_control: std::sync::Mutex<Box<dyn LookControlTrait>>,
     pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
@@ -996,6 +996,7 @@ impl MobEntity {
     }
 
     /// The target, checked again on every read so a player who turns creative is dropped.
+    /// Call outside the Brain lock.
     pub fn get_target(&self) -> Option<Arc<dyn EntityBase>> {
         let target = self.stored_target()?;
         (EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity())

@@ -75,6 +75,7 @@ pub struct FrogEntity {
 impl FrogEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mut mob_entity = MobEntity::new(entity);
+        mob_entity.use_brain_attack_target = true;
         let mut navigator = Navigator::frog();
         navigator.set_pathfinding_malus(PathType::Water, 4.0);
         navigator.set_pathfinding_malus(PathType::Trapdoor, -1.0);
@@ -93,12 +94,15 @@ impl FrogEntity {
                 OUTSIDE_WATER_SPEED_MODIFIER,
                 true,
             ));
-        Arc::new(Self {
+        let frog = Arc::new(Self {
             mob_entity,
             ageable_data: AgeableData::default(),
             variant: AtomicI32::new(FrogVariant::Temperate.id() as i32),
             tongue_target_id: AtomicI32::new(NO_TONGUE_TARGET),
-        })
+        });
+        // Target setters can run during spawning, before the first AI tick.
+        frog.mob_entity.with_brain(frog.as_ref(), |_| {});
+        frog
     }
 
     #[must_use]
@@ -201,12 +205,8 @@ impl Mob for FrogEntity {
 
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         self.mob_entity.tick_brain(self);
-        let attack_target = self.mob_entity.with_brain(self, |brain| {
-            ai::update_activity(brain);
-            brain.get(types::ATTACK_TARGET).cloned()
-        });
-        // `getTarget` reads the brain's attack target.
-        self.mob_entity.set_target(attack_target);
+        self.mob_entity
+            .with_brain(self, |brain| ai::update_activity(brain));
     }
 
     fn do_hurt_target(&self, target: &dyn EntityBase) -> bool {

@@ -158,13 +158,50 @@ impl Behavior for AnimalMakeLove {
             .load()
             .squared_distance_to_vec(&partner.get_entity().pos.load());
         if distance < BREED_RANGE * BREED_RANGE && tick.time >= self.spawn_child_at_time {
-            BreedGoal::breed(tick.mob, partner.as_ref(), Some(tick.state));
-            tick.state.erase(types::BREED_TARGET.id());
-            if let Some(partner_mob) = partner.get_mob() {
-                partner_mob
-                    .get_mob_entity()
-                    .with_brain(partner_mob, |brain| brain.erase(types::BREED_TARGET.id()));
-            }
+            let parent_id = tick.mob.get_entity().entity_id;
+            let partner_id = partner.get_entity().entity_id;
+            let partner_brain = partner.get_mob().map(|mate| {
+                mate.get_mob_entity()
+                    .with_brain(mate, super::super::Brain::identity)
+            });
+            tick.defer_with_update(
+                move |mob| {
+                    let mut pregnant = false;
+                    BreedGoal::breed(mob, partner.as_ref(), |animal| {
+                        // Frog's offspring hook writes Brain memory. Run it in the guarded
+                        // update so the event cannot redirect the write to a replacement Brain.
+                        if mob.get_entity().entity_type == &EntityType::FROG {
+                            pregnant = true;
+                        } else {
+                            animal.on_bred_without_offspring(None);
+                        }
+                    });
+                    if let (Some(mate), Some(identity)) = (partner.get_mob(), partner_brain) {
+                        mate.get_mob_entity().with_brain(mate, |brain| {
+                            if brain.has_identity(&identity)
+                                && brain.get(types::BREED_TARGET).is_some_and(|target| {
+                                    target.get_entity().entity_id == parent_id
+                                })
+                            {
+                                brain.erase(types::BREED_TARGET.id());
+                            }
+                        });
+                    }
+                    pregnant
+                },
+                move |tick, pregnant| {
+                    if pregnant && let Some(animal) = tick.mob.as_animal() {
+                        animal.on_bred_without_offspring(Some(tick.state));
+                    }
+                    if tick
+                        .state
+                        .get(types::BREED_TARGET)
+                        .is_some_and(|target| target.get_entity().entity_id == partner_id)
+                    {
+                        tick.state.erase(types::BREED_TARGET.id());
+                    }
+                },
+            );
         }
     }
 
@@ -189,6 +226,187 @@ mod tests {
     use crate::entity::Entity;
     use crate::entity::ai::test_support::world;
     use crate::entity::passive::pig::PigEntity;
+
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Mutex, mpsc};
+    use std::time::Duration;
+
+    use pumpkin_data::{dimension::Dimension, environment_attribute::Activity};
+
+    use crate::entity::ai::brain::{Brain, activity::ActivityData, behavior::OneShot};
+    use crate::entity::ai::test_support::server;
+    use crate::entity::passive::frog::FrogEntity;
+    use crate::plugin::{
+        BoxFuture, EventRwHandler,
+        api::events::{EventPriority, entity::entity_breed::EntityBreedEvent},
+    };
+    use crate::server::Server;
+
+    enum BreedingEdit {
+        None,
+        ReplaceBrain,
+        Redirect(Arc<FrogEntity>),
+    }
+
+    struct FrogBreedListener {
+        frog: Arc<FrogEntity>,
+        partner: Arc<FrogEntity>,
+        edit: Mutex<BreedingEdit>,
+        read_completed: AtomicBool,
+        veto: AtomicBool,
+    }
+
+    impl EventRwHandler<EntityBreedEvent> for FrogBreedListener {
+        fn handle<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut EntityBreedEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                let (send, receive) = mpsc::channel();
+                let frog = self.frog.clone();
+                std::thread::spawn(move || {
+                    let target = frog.mob_entity.get_target();
+                    let _ = send.send(target.is_none());
+                });
+                self.read_completed.store(
+                    receive.recv_timeout(Duration::from_secs(2)) == Ok(true),
+                    Ordering::Relaxed,
+                );
+                match &*self
+                    .edit
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                {
+                    BreedingEdit::None => {}
+                    BreedingEdit::ReplaceBrain => {
+                        let mut replacement = Brain::default();
+                        replacement.register_memory(types::BREED_TARGET.id());
+                        // Even an identical target in the replacement belongs to a different Brain.
+                        replacement.set(types::BREED_TARGET, self.frog.clone());
+                        self.partner.mob_entity.set_brain(replacement);
+                    }
+                    BreedingEdit::Redirect(target) => {
+                        self.partner
+                            .mob_entity
+                            .with_brain(self.partner.as_ref(), |brain| {
+                                brain.set(types::BREED_TARGET, target.clone());
+                            });
+                        self.frog
+                            .mob_entity
+                            .with_brain(self.frog.as_ref(), |brain| {
+                                brain.set(types::BREED_TARGET, target.clone());
+                            });
+                    }
+                }
+                event.cancelled = self.veto.load(Ordering::Relaxed);
+            })
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn frog_breeding_event_can_read_target_and_veto_pregnancy()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let frog = |x| {
+            FrogEntity::new(Entity::new(
+                world.clone(),
+                Vector3::new(x, 64.0, 0.0),
+                &EntityType::FROG,
+            ))
+        };
+        let (parent, partner) = (frog(0.0), frog(1.0));
+        let listener = Arc::new(FrogBreedListener {
+            frog: parent.clone(),
+            partner: partner.clone(),
+            edit: Mutex::new(BreedingEdit::None),
+            read_completed: AtomicBool::new(false),
+            veto: AtomicBool::new(false),
+        });
+        server
+            .plugin_manager
+            .register_blocking(listener.clone(), EventPriority::Normal, None);
+
+        let other = frog(2.0);
+        for (veto, edit, expected_target) in [
+            (true, BreedingEdit::None, None),
+            (false, BreedingEdit::None, None),
+            (
+                false,
+                BreedingEdit::ReplaceBrain,
+                Some(parent.get_entity().entity_id),
+            ),
+            (
+                false,
+                BreedingEdit::Redirect(other.clone()),
+                Some(other.get_entity().entity_id),
+            ),
+        ] {
+            let expected_parent_target = match &edit {
+                BreedingEdit::Redirect(target) => Some(target.get_entity().entity_id),
+                _ => None,
+            };
+            partner.mob_entity.with_brain(partner.as_ref(), |brain| {
+                brain.set(types::BREED_TARGET, parent.clone());
+            });
+            *listener
+                .edit
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = edit;
+            parent.mob_entity.set_love_ticks(600, None);
+            partner.mob_entity.set_love_ticks(600, None);
+            listener.read_completed.store(false, Ordering::Relaxed);
+            listener.veto.store(veto, Ordering::Relaxed);
+
+            let mut brain = Brain::default();
+            brain.register_memory(types::ATTACK_TARGET.id());
+            brain.register_memory(types::IS_PREGNANT.id());
+            let mut breeding = AnimalMakeLove::new(&EntityType::FROG);
+            brain.add_activity(ActivityData::with_priority_start(
+                Activity::Core,
+                0,
+                vec![Box::new(OneShot::new(
+                    "CompleteFrogBreeding",
+                    vec![(types::BREED_TARGET.id(), MemoryStatus::ValuePresent)],
+                    move |tick| {
+                        breeding.spawn_child_at_time = tick.time;
+                        breeding.tick(tick);
+                        true
+                    },
+                ))],
+            ));
+            brain.set(types::BREED_TARGET, partner.clone());
+            assert!(!brain.has_memory_value(types::IS_PREGNANT.id()));
+            parent.mob_entity.set_brain(brain);
+            parent.mob_entity.tick_brain(parent.as_ref());
+
+            assert!(listener.read_completed.load(Ordering::Relaxed));
+            assert_eq!(
+                parent.mob_entity.with_brain(parent.as_ref(), |brain| {
+                    brain.has_memory_value(types::IS_PREGNANT.id())
+                }),
+                !veto,
+            );
+            assert!(!parent.mob_entity.is_in_love());
+            assert!(!partner.mob_entity.is_in_love());
+            let parent_target = parent.mob_entity.with_brain(parent.as_ref(), |brain| {
+                brain
+                    .get(types::BREED_TARGET)
+                    .map(|target| target.get_entity().entity_id)
+            });
+            assert_eq!(parent_target, expected_parent_target);
+            let partner_target = partner.mob_entity.with_brain(partner.as_ref(), |brain| {
+                brain
+                    .get(types::BREED_TARGET)
+                    .map(|target| target.get_entity().entity_id)
+            });
+            assert_eq!(partner_target, expected_target);
+        }
+        server.shutdown().await;
+        Ok(())
+    }
 
     #[tokio::test]
     async fn a_hurt_animal_loses_its_love() -> Result<(), Box<dyn std::error::Error>> {

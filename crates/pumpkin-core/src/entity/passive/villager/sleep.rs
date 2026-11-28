@@ -29,11 +29,15 @@ impl VillagerEntity {
     pub fn start_sleeping(&self, bed_pos: BlockPos) -> bool {
         let world = self.get_entity().world.load();
         let (block, state) = world.get_block_and_state(&bed_pos);
-        let Some(position) = Self::bed_sleep_position(bed_pos, block, state) else {
+        if !block.has_tag(&BlockTag::MINECRAFT_BEDS) {
+            return false;
+        }
+        let Some(height) = get_sleep_height(state) else {
             return false;
         };
 
-        self.get_entity().set_pos(position);
+        self.get_entity()
+            .set_pos(bed_pos.to_f64().add_raw(0.0, height + ADJUST_HEIGHT, 0.0));
         BedBlock::set_occupied(true, &world, block, &bed_pos, state.id);
         self.get_entity().set_pose(EntityPose::Sleeping);
         self.get_entity()
@@ -44,18 +48,6 @@ impl VillagerEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(bed_pos);
         true
-    }
-
-    fn bed_sleep_position(
-        bed_pos: BlockPos,
-        block: &Block,
-        state: &BlockState,
-    ) -> Option<Vector3<f64>> {
-        if !block.has_tag(&BlockTag::MINECRAFT_BEDS) {
-            return None;
-        }
-        let height = get_sleep_height(state)?;
-        Some(bed_pos.to_f64().add_raw(0.0, height + ADJUST_HEIGHT, 0.0))
     }
 
     pub fn stop_sleeping(&self) {

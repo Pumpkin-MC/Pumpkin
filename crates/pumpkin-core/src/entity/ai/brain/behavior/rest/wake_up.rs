@@ -28,9 +28,6 @@ pub(super) fn defer_wake_up(tick: &mut BrainTick<'_>) {
     let time = tick.time;
     tick.defer_with_update(
         |mob| {
-            if !mob.get_mob_entity().living_entity.is_alive() {
-                return false;
-            }
             mob.cast_any()
                 .downcast_ref::<VillagerEntity>()
                 .is_some_and(|villager| {

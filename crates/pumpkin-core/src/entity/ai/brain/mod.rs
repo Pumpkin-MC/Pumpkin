@@ -47,48 +47,8 @@ impl BrainTick<'_> {
         }
     }
 
-    /// Includes pose changes requested within the current callback.
-    #[must_use]
-    pub fn pose(&self) -> EntityPose {
-        self.pending_pose()
-            .unwrap_or_else(|| self.mob.get_entity().pose.load())
-    }
-
-    pub(crate) const fn pending_pose(&self) -> Option<EntityPose> {
-        self.state.pending_pose
-    }
-
     pub fn set_pose(&mut self, pose: EntityPose) {
-        self.set_pose_then(pose, |_| {});
-    }
-
-    /// Runs the action if the pose change is accepted and the mob is still alive.
-    pub fn set_pose_then(
-        &mut self,
-        pose: EntityPose,
-        action: impl FnOnce(&dyn Mob) + Send + 'static,
-    ) {
-        self.defer_pose_change(pose, move |mob| {
-            let entity = mob.get_entity();
-            entity.set_pose(pose);
-            if mob.get_mob_entity().living_entity.is_alive() && entity.pose.load() == pose {
-                action(mob);
-            }
-        });
-    }
-
-    /// Records a pose for the current callback and defers the complete transition.
-    pub(crate) fn defer_pose_change(
-        &mut self,
-        pose: EntityPose,
-        action: impl FnOnce(&dyn Mob) + Send + 'static,
-    ) {
-        self.state.pending_pose = Some(pose);
-        self.defer(move |mob| {
-            if mob.get_mob_entity().living_entity.is_alive() {
-                action(mob);
-            }
-        });
+        self.defer(move |mob| mob.get_entity().set_pose(pose));
     }
 
     /// Runs the action outside the brain lock before the next Brain callback.
@@ -178,6 +138,7 @@ pub(crate) fn run_brain_effects(
 
 #[derive(Default)]
 pub struct Brain {
+    identity: Option<Arc<()>>,
     state: BrainState,
     sensors: Vec<SensorEntry>,
     behaviors: BTreeMap<i32, Vec<ActivityBehaviors>>,
@@ -193,7 +154,6 @@ pub enum Schedule {
 pub struct BrainState {
     memories: MemoryStore,
     effects: Vec<BrainEffect>,
-    pending_pose: Option<EntityPose>,
     activity_requirements: Vec<Option<ActivityConditions>>,
     activity_memories_to_erase: Vec<Option<Box<[MemoryModuleId]>>>,
     core_activities: ActivitySet,
@@ -208,7 +168,6 @@ impl Default for BrainState {
         let mut state = Self {
             memories: MemoryStore::default(),
             effects: Vec::new(),
-            pending_pose: None,
             activity_requirements: Vec::new(),
             activity_memories_to_erase: Vec::new(),
             core_activities: ActivitySet::single(Activity::Core),
@@ -481,6 +440,17 @@ impl Brain {
         }
     }
 
+    /// Identity used when a deferred effect depends on another mob's installed Brain.
+    pub(crate) fn identity(&mut self) -> Arc<()> {
+        self.identity.get_or_insert_with(|| Arc::new(())).clone()
+    }
+
+    pub(crate) fn has_identity(&self, identity: &Arc<()>) -> bool {
+        self.identity
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, identity))
+    }
+
     /// Identity of the suspended callback that owns the current effect batch.
     pub(crate) fn effect_owner(&self) -> Option<&Arc<()>> {
         self.next_callback.as_ref().map(|(_, owner)| owner)
@@ -545,7 +515,6 @@ impl Brain {
 
     fn take_effects_at(&mut self, cursor: BrainCursor) -> Vec<BrainEffect> {
         self.next_callback = Some((cursor, Arc::new(())));
-        self.state.pending_pose = None;
         std::mem::take(&mut self.state.effects)
     }
 
@@ -740,6 +709,7 @@ impl BrainProvider {
 
     fn empty_brain() -> Brain {
         Brain {
+            identity: None,
             state: BrainState {
                 core_activities: ActivitySet::default(),
                 active_activities: ActivitySet::default(),

@@ -105,7 +105,7 @@ impl Behavior for LongJumpMidJump {
                 }
                 let living = &mob.get_mob_entity().living_entity;
                 living.discard_friction.store(false, Relaxed);
-                if living.is_alive() && Arc::ptr_eq(&entity.world.load(), &world) {
+                if !entity.is_removed() && Arc::ptr_eq(&entity.world.load(), &world) {
                     entity.set_pose(EntityPose::Standing);
                 }
             },

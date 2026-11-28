@@ -38,6 +38,7 @@ pub struct ShootTongue {
     eat_animation_timer: i32,
     calculate_path_counter: i32,
     state: State,
+    target_id: Option<i32>,
 }
 
 impl ShootTongue {
@@ -48,6 +49,7 @@ impl ShootTongue {
             eat_animation_timer: 0,
             calculate_path_counter: 0,
             state: State::Done,
+            target_id: None,
         }
     }
 
@@ -89,7 +91,7 @@ impl ShootTongue {
         let Some(frog) = mob.cast_any().downcast_ref::<FrogEntity>() else {
             return;
         };
-        if !tongue_target_is_current(frog, target, world) {
+        if !is_alive(target.as_ref()) || !tongue_target_is_current(frog, target, world) {
             return;
         }
         mob.do_hurt_target(target.as_ref());
@@ -111,10 +113,13 @@ fn tongue_target_is_current(
     target: &Arc<dyn EntityBase>,
     world: &Arc<World>,
 ) -> bool {
-    is_alive(frog)
-        && Arc::ptr_eq(&frog.get_entity().world.load(), world)
-        && is_alive(target.as_ref())
+    // The effect runner checks the frog. A listener can still move or remove the prey.
+    !target.get_entity().is_removed()
         && Arc::ptr_eq(&target.get_entity().world.load(), world)
+        && frog
+            .get_mob_entity()
+            .stored_target()
+            .is_some_and(|current| Arc::ptr_eq(&current, target))
         && frog
             .get_tongue_target()
             .is_some_and(|current| Arc::ptr_eq(&current, target))
@@ -163,11 +168,14 @@ impl Behavior for ShootTongue {
             tick.state.erase(types::ATTACK_TARGET.id());
             Self::add_unreachable_target_to_memory(tick, target.as_ref());
         }
-        reachable && tick.pose() != EntityPose::Croaking && super::can_eat(target.as_ref())
+        reachable
+            && tick.mob.get_entity().pose.load() != EntityPose::Croaking
+            && super::can_eat(target.as_ref())
     }
 
     fn can_still_use(&mut self, tick: &mut BrainTick<'_>) -> bool {
-        tick.state.has_memory_value(types::ATTACK_TARGET.id())
+        attack_target(tick)
+            .is_some_and(|target| self.target_id == Some(target.get_entity().entity_id))
             && self.state != State::Done
             && !tick.state.has_memory_value(types::IS_PANICKING.id())
     }
@@ -179,6 +187,7 @@ impl Behavior for ShootTongue {
         utils::look_at_entity(tick.state, target.clone());
         frog.set_tongue_target(target.as_ref());
         Self::set_walk_target(tick, target.as_ref());
+        self.target_id = Some(target.get_entity().entity_id);
         self.calculate_path_counter = REPATH_INTERVAL;
         self.state = State::MoveToTarget;
     }
@@ -187,6 +196,9 @@ impl Behavior for ShootTongue {
         let (Some(target), Some(frog)) = (attack_target(tick), frog(tick)) else {
             return;
         };
+        if self.target_id != Some(target.get_entity().entity_id) {
+            return;
+        }
         frog.set_tongue_target(target.as_ref());
         match self.state {
             State::MoveToTarget => {
@@ -258,7 +270,11 @@ impl Behavior for ShootTongue {
     }
 
     fn stop(&mut self, tick: &mut BrainTick<'_>, _timed_out: bool) {
-        tick.state.erase(types::ATTACK_TARGET.id());
+        let previous = self.target_id.take();
+        if attack_target(tick).is_some_and(|target| previous == Some(target.get_entity().entity_id))
+        {
+            tick.state.erase(types::ATTACK_TARGET.id());
+        }
         if let Some(frog) = frog(tick) {
             frog.erase_tongue_target();
             tick.set_pose(EntityPose::Standing);
@@ -296,6 +312,7 @@ mod tests {
     struct TongueSoundListener {
         frog: Arc<FrogEntity>,
         replace_brain: AtomicBool,
+        clear_target: AtomicBool,
         prey: Arc<CowEntity>,
         observations: Mutex<Vec<(EntityPose, f32)>>,
     }
@@ -322,10 +339,65 @@ mod tests {
                     drop(observations);
                     if self.replace_brain.load(Relaxed) {
                         self.frog.get_mob_entity().set_brain(Brain::default());
+                    } else if self.clear_target.load(Relaxed) {
+                        self.frog.get_mob_entity().set_target(None);
                     }
                 }
             })
         }
+    }
+
+    #[tokio::test]
+    async fn tongue_interrupt_preserves_a_redirected_target()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let origin = Vector3::new(0.0, 64.0, 0.0);
+        let frog = FrogEntity::new(Entity::new(world.clone(), origin, &EntityType::FROG));
+        let prey = CowEntity::new(Entity::new(
+            world.clone(),
+            origin + Vector3::new(1.0, 0.0, 0.0),
+            &EntityType::COW,
+        ));
+        let replacement = CowEntity::new(Entity::new(
+            world.clone(),
+            origin + Vector3::new(12.0, 0.0, 0.0),
+            &EntityType::COW,
+        ));
+        let old_id = prey.get_entity().entity_id;
+        let next_id = replacement.get_entity().entity_id;
+        let mut brain = Brain::default();
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Core,
+            0,
+            vec![Box::new(OneShot::new(
+                "InterruptTongue",
+                vec![(types::ATTACK_TARGET.id(), MemoryStatus::ValuePresent)],
+                move |tick| {
+                    let mut tongue =
+                        ShootTongue::new(Sound::EntityFrogTongue, Sound::EntityFrogEat);
+                    tongue.state = State::CatchAnimation;
+                    tongue.target_id = Some(old_id);
+                    assert!(!tongue.can_still_use(tick));
+                    tongue.stop(tick, false);
+                    true
+                },
+            ))],
+        ));
+        brain.set(types::ATTACK_TARGET, replacement);
+        frog.get_entity().set_pose(EntityPose::UsingTongue);
+        frog.set_tongue_target(prey.as_ref());
+        let body = frog.get_mob_entity();
+        body.set_brain(brain);
+        body.tick_brain(frog.as_ref());
+        assert_eq!(
+            body.stored_target()
+                .map(|target| target.get_entity().entity_id),
+            Some(next_id)
+        );
+        assert_eq!(frog.get_entity().pose.load(), EntityPose::Standing);
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -347,6 +419,7 @@ mod tests {
         let listener = Arc::new(TongueSoundListener {
             frog: frog.clone(),
             replace_brain: AtomicBool::new(false),
+            clear_target: AtomicBool::new(false),
             prey: prey.clone(),
             observations: Mutex::new(Vec::new()),
         });
@@ -356,16 +429,19 @@ mod tests {
         let body = frog.get_mob_entity();
         let health = &prey.mob_entity.living_entity.health;
         let full_health = health.load();
-        for (state, replace, initial_health) in [
-            (State::MoveToTarget, false, full_health),
-            (State::MoveToTarget, true, full_health),
-            (State::CatchAnimation, true, full_health),
-            (State::CatchAnimation, false, 0.0),
-            (State::CatchAnimation, false, full_health),
+        for (state, replace, clear, initial_health) in [
+            (State::MoveToTarget, false, false, full_health),
+            (State::MoveToTarget, true, false, full_health),
+            (State::MoveToTarget, false, true, full_health),
+            (State::CatchAnimation, true, false, full_health),
+            (State::CatchAnimation, false, true, full_health),
+            (State::CatchAnimation, false, false, 0.0),
+            (State::CatchAnimation, false, false, full_health),
         ] {
             let mut tongue = ShootTongue::new(Sound::EntityFrogTongue, Sound::EntityFrogEat);
             // Enter the relevant tick directly so this fixture need not pathfind.
             tongue.state = state;
+            tongue.target_id = Some(prey.get_entity().entity_id);
             tongue.eat_animation_timer = CATCH_ANIMATION_DURATION;
             let mut brain = Brain::default();
             brain.add_activity(ActivityData::with_priority_start(
@@ -390,6 +466,7 @@ mod tests {
             health.store(initial_health);
             prey.get_entity().velocity.store(Vector3::default());
             listener.replace_brain.store(replace, Relaxed);
+            listener.clear_target.store(clear, Relaxed);
             body.set_brain(brain);
             body.tick_brain(frog.as_ref());
 
@@ -401,17 +478,19 @@ mod tests {
             );
             assert_eq!(observations, [(initial_pose, initial_health)]);
 
-            let pulled = state == State::MoveToTarget && !replace;
-            let (pose, velocity) = if pulled {
-                (
-                    EntityPose::UsingTongue,
-                    Vector3::new(-EATING_MOVEMENT_FACTOR, 0.0, 0.0),
-                )
+            let attempted_catch = state == State::MoveToTarget && !replace;
+            let pose = if attempted_catch {
+                EntityPose::UsingTongue
             } else {
-                (initial_pose, Vector3::default())
+                initial_pose
+            };
+            let velocity = if attempted_catch && !clear {
+                Vector3::new(-EATING_MOVEMENT_FACTOR, 0.0, 0.0)
+            } else {
+                Vector3::default()
             };
             assert_eq!(frog.get_entity().pose.load(), pose);
-            if state == State::CatchAnimation && !replace && initial_health > 0.0 {
+            if state == State::CatchAnimation && !replace && !clear && initial_health > 0.0 {
                 assert!(health.load() < initial_health);
             } else {
                 assert_eq!(prey.get_entity().velocity.load(), velocity);
