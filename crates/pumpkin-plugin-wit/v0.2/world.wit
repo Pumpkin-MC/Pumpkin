@@ -1097,6 +1097,10 @@ interface %world {
 
         /// Spawns one or more experience orbs totaling `amount` XP at the given position.
         spawn-experience-orb: async func(pos: position, amount: u32);
+        /// Spawns a falling block with the given block state.
+        /// Obtain a state ID with `resolve-block-state`; resolving
+        /// `minecraft:glass` with no properties produces a falling glass block.
+        spawn-falling-block: async func(pos: position, block-state: u16) -> entity;
 
         /// Returns a list of all entities in this world.
         get-entities: func() -> list<entity>;
