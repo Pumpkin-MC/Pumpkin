@@ -646,11 +646,13 @@ impl Mob for StriderEntity {
         if is_baby {
             entity.set_synced_data(pumpkin_data::tracked_data::strider::DATA_BABY_ID, true);
         }
-        entity.set_synced_data(
-            pumpkin_data::tracked_data::strider::DATA_SUFFOCATING,
-            self.is_suffocating(),
-        );
-        entity.set_synced_data(
+        entity
+            .synched_data
+            .define(pumpkin_data::tracked_data::strider::DATA_SUFFOCATING, false);
+        if self.is_suffocating() {
+            entity.set_synced_data(pumpkin_data::tracked_data::strider::DATA_SUFFOCATING, true);
+        }
+        entity.synched_data.define(
             pumpkin_data::tracked_data::strider::DATA_BOOST_TIME,
             VarInt(0),
         );

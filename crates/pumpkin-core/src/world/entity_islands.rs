@@ -22,6 +22,7 @@ use crate::plugin::api::events::block::entity_block_form::EntityBlockFormEvent;
 use crate::plugin::api::events::entity::{
     entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
     entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
+    strider_temperature_change::StriderTemperatureChangeEvent,
 };
 use crate::plugin::{
     api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
@@ -137,6 +138,7 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<PigZombieAngerEvent>()
         || plugins.has_handlers::<EntityToggleSitEvent>()
         || plugins.has_handlers::<EntityBlockFormEvent>()
+        || plugins.has_handlers::<StriderTemperatureChangeEvent>()
 }
 
 /// What one entity can read or change next tick.
