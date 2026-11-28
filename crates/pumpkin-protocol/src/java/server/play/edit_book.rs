@@ -7,6 +7,13 @@ use crate::{
     ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 
+/// `WritableBookContent.MAX_PAGES`
+const MAX_PAGES: usize = 100;
+/// `WritableBookContent.PAGE_EDIT_LENGTH`
+const PAGE_EDIT_LENGTH: usize = 1024;
+/// `WrittenBookContent.TITLE_MAX_LENGTH`
+const TITLE_MAX_LENGTH: usize = 32;
+
 #[derive(Debug)]
 #[java_packet(EDIT_BOOK)]
 pub struct SEditBook<'a> {
@@ -19,15 +26,23 @@ impl<'a> ServerPacket<'a> for SEditBook<'a> {
     fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         if *version >= JavaMinecraftVersion::V_1_17_1 {
             let slot = read.get_var_int()?;
-            let count = read.get_var_int()?.0 as usize;
+            let count = read.get_var_int()?.0;
             let max_pages = if *version >= JavaMinecraftVersion::V_1_21_2 {
-                100
+                MAX_PAGES
             } else {
                 200
             };
-            let count = count.min(max_pages);
+            // Vanilla's list codec rejects the packet instead of truncating it.
+            let count = usize::try_from(count)
+                .ok()
+                .filter(|&count| count <= max_pages)
+                .ok_or_else(|| {
+                    ReadingError::TooLarge(format!(
+                        "{count} book pages exceeded max size of {max_pages}"
+                    ))
+                })?;
             let char_limit = if *version >= JavaMinecraftVersion::V_1_21_2 {
-                1024
+                PAGE_EDIT_LENGTH
             } else {
                 8192
             };
@@ -37,7 +52,7 @@ impl<'a> ServerPacket<'a> for SEditBook<'a> {
             }
             let has_title = read.get_bool()?;
             let title_limit = if *version >= JavaMinecraftVersion::V_1_21_2 {
-                32
+                TITLE_MAX_LENGTH
             } else {
                 128
             };
@@ -81,5 +96,68 @@ impl crate::ClientPacket for SEditBook<'_> {
             write.write_bool(false)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Slot 0, `declared` page count, `sent` one-byte pages, no title.
+    fn payload(declared: u8, sent: usize) -> Vec<u8> {
+        let mut bytes = vec![0x00, declared];
+        for _ in 0..sent {
+            bytes.extend_from_slice(&[0x01, b'a']);
+        }
+        bytes.push(0x00);
+        bytes
+    }
+
+    #[test]
+    fn accepts_the_maximum_page_count() -> Result<(), ReadingError> {
+        let bytes = payload(100, 100);
+        let packet = SEditBook::read(&mut bytes.as_slice(), &JavaMinecraftVersion::V_26_3)?;
+        assert_eq!(packet.pages.len(), 100);
+        assert_eq!(packet.title, None);
+        Ok(())
+    }
+
+    #[test]
+    fn round_trips_a_signed_book_at_the_limits() -> Result<(), Box<dyn std::error::Error>> {
+        let page = "a".repeat(PAGE_EDIT_LENGTH);
+        let title = "t".repeat(TITLE_MAX_LENGTH);
+        let packet = SEditBook {
+            slot: VarInt(40),
+            pages: vec![page.as_str(); MAX_PAGES],
+            title: Some(&title),
+        };
+        let mut encoded = Vec::new();
+        crate::ClientPacket::write_packet_data(
+            &packet,
+            &mut encoded,
+            &JavaMinecraftVersion::V_26_3,
+        )?;
+
+        let mut payload = encoded.as_slice();
+        let decoded = SEditBook::read(&mut payload, &JavaMinecraftVersion::V_26_3)?;
+        assert_eq!(decoded.slot.0, 40);
+        assert_eq!(decoded.pages, packet.pages);
+        assert_eq!(decoded.title, Some(title.as_str()));
+        assert!(payload.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_too_many_pages_instead_of_truncating() {
+        let bytes = payload(101, 100);
+        let result = SEditBook::read(&mut bytes.as_slice(), &JavaMinecraftVersion::V_26_3);
+        assert!(matches!(result, Err(ReadingError::TooLarge(_))));
+    }
+
+    #[test]
+    fn rejects_a_negative_page_count() {
+        let bytes = [0x00, 0xff, 0xff, 0xff, 0xff, 0x0f, 0x00];
+        let result = SEditBook::read(&mut bytes.as_slice(), &JavaMinecraftVersion::V_26_3);
+        assert!(matches!(result, Err(ReadingError::TooLarge(_))));
     }
 }
