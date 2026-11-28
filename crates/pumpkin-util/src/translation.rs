@@ -230,7 +230,7 @@ pub fn reorder_substitutions(
             Placeholder::Escape => literal("%"),
             Placeholder::Next => {
                 let taken = with.get(next_idx).cloned().unwrap_or_else(|| literal(""));
-                next_idx = (next_idx + 1).min(with.len().saturating_sub(1));
+                next_idx += 1;
                 taken
             }
             Placeholder::Indexed(index) => with
@@ -905,6 +905,17 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A `%s` with no argument left for it resolves to empty, the same as a
+    /// missing `%1$s`. It used to reuse the last argument, so `%s %s` with one
+    /// argument rendered it twice.
+    #[test]
+    fn extra_sequential_placeholders_resolve_to_empty() {
+        assert_eq!(
+            get_translation_text("%s %s", Locale::EnUs, vec![arg("A")]),
+            "A "
+        );
     }
 
     /// Shipped as `translation.test.invalid`.
