@@ -154,9 +154,10 @@ fn search_structure_starts(
     first_in_each_placement: bool,
 ) -> Option<(BlockPos, pumpkin_data::structures::StructureKeys)> {
     use crate::{
-        biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
+        biome::BiomeSupplier,
         generation::{
             noise::router::multi_noise_sampler::MultiNoiseSampler,
+            proto_chunk::ProtoChunk,
             structure::{
                 height_sampler::NoiseHeightSampler,
                 lazily_generate_structure,
@@ -207,65 +208,75 @@ fn search_structure_starts(
                         continue;
                     }
 
-                    for &key in target_structures {
-                        let start = global_cache.get_or_compute_structure_start(
-                            key,
-                            chunk_x,
-                            chunk_z,
-                            || {
-                                let settings = noise_generator.settings;
-                                let mut height_sampler = NoiseHeightSampler::new(noise_generator);
-                                let mut biome_sampler = MultiNoiseSampler::generate(
-                                    &noise_generator.base_router.multi_noise,
-                                );
-                                let biome_supplier: &dyn BiomeSupplier =
-                                    &MultiNoiseBiomeSupplier::OVERWORLD;
-                                let context = StructureGeneratorContext {
-                                    seed: world_seed,
-                                    chunk_x,
-                                    chunk_z,
-                                    random: create_chunk_random(world_seed, chunk_x, chunk_z),
-                                    sea_level: settings.sea_level,
-                                    min_y: (settings.shape.min_y as i32)
-                                        .max(noise_generator.dimension.min_y),
-                                    height: settings
-                                        .shape
-                                        .height
-                                        .min(noise_generator.dimension.height as u16),
-                                    height_sampler: Some(&mut height_sampler),
-                                    structure_key: Some(key),
-                                };
-                                lazily_generate_structure(
-                                    &key,
-                                    Structure::get(&key),
-                                    context,
-                                    biome_supplier,
-                                    &mut biome_sampler,
-                                )
-                            },
-                        );
-                        let Some(_start) = start else {
-                            continue;
-                        };
-                        // Vanilla getLocatePos: chunkPos.getMinBlockX(), 0, chunkPos.getMinBlockZ()
-                        let locate_x = chunk_x << 4;
-                        let locate_z = chunk_z << 4;
-                        let position = BlockPos::new(locate_x, 0, locate_z);
-                        let dx = f64::from(position.0.x - origin.0.x);
-                        let dz = f64::from(position.0.z - origin.0.z);
-                        let found = FoundStructure {
-                            pos: position,
-                            distance_sq: dx * dx + dz * dz,
-                        };
-                        if nearest
-                            .as_ref()
-                            .is_none_or(|(current, _)| found.distance_sq < current.distance_sq)
-                        {
-                            nearest = Some((found, key));
-                        }
-                        if first_in_each_placement {
-                            continue 'placement;
-                        }
+                    let start_at = |key| {
+                        global_cache.get_or_compute_structure_start(key, chunk_x, chunk_z, || {
+                            let settings = noise_generator.settings;
+                            let mut height_sampler = NoiseHeightSampler::new(noise_generator);
+                            let mut biome_sampler = MultiNoiseSampler::generate(
+                                &noise_generator.base_router.multi_noise,
+                            );
+                            let biome_supplier: &dyn BiomeSupplier =
+                                &noise_generator.biome_supplier;
+                            let context = StructureGeneratorContext {
+                                seed: world_seed,
+                                chunk_x,
+                                chunk_z,
+                                random: create_chunk_random(world_seed, chunk_x, chunk_z),
+                                sea_level: settings.sea_level,
+                                min_y: (settings.shape.min_y as i32)
+                                    .max(noise_generator.dimension.min_y),
+                                height: settings
+                                    .shape
+                                    .height
+                                    .min(noise_generator.dimension.height as u16),
+                                height_sampler: Some(&mut height_sampler),
+                                structure_key: Some(key),
+                            };
+                            lazily_generate_structure(
+                                &key,
+                                Structure::get(&key),
+                                context,
+                                biome_supplier,
+                                &mut biome_sampler,
+                            )
+                        })
+                    };
+                    // Like vanilla's `StructureCheck`, look further only where a target can
+                    // start at all, so most candidates cost one build as before.
+                    if !target_structures.iter().any(|&key| start_at(key).is_some()) {
+                        continue;
+                    }
+                    // Chunk generation tries the set's structures in this seeded weighted
+                    // order and keeps the first that can start, so that is the only one
+                    // here. Fortresses and bastions share `nether_complexes`.
+                    let Some(key) = ProtoChunk::weighted_structure_order(
+                        structure_set.structures,
+                        noise_generator.random_config.seed,
+                        chunk_x,
+                        chunk_z,
+                    )
+                    .into_iter()
+                    .map(|entry| entry.structure)
+                    .find(|&key| start_at(key).is_some())
+                    .filter(|key| target_structures.contains(key)) else {
+                        continue;
+                    };
+                    // Vanilla getLocatePos: chunkPos.getMinBlockX(), 0, chunkPos.getMinBlockZ()
+                    let position = BlockPos::new(chunk_x << 4, 0, chunk_z << 4);
+                    let dx = f64::from(position.0.x - origin.0.x);
+                    let dz = f64::from(position.0.z - origin.0.z);
+                    let found = FoundStructure {
+                        pos: position,
+                        distance_sq: dx * dx + dz * dz,
+                    };
+                    if nearest
+                        .as_ref()
+                        .is_none_or(|(current, _)| found.distance_sq < current.distance_sq)
+                    {
+                        nearest = Some((found, key));
+                    }
+                    if first_in_each_placement {
+                        continue 'placement;
                     }
                 }
             }
@@ -362,4 +373,54 @@ fn find_nearest_random_spread_at_radius(
     }
 
     best
+}
+
+#[cfg(test)]
+mod test {
+    use pumpkin_data::dimension::Dimension;
+    use pumpkin_data::structures::{StructureKeys, StructureSet};
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::world_seed::Seed;
+
+    use super::super::{GeneratorInit, VanillaGenerator, WorldGenerator};
+    use super::find_nearest_structure_start;
+    use crate::generation::proto_chunk::ProtoChunk;
+
+    /// Fortresses share `nether_complexes` with bastions, so a hit has to be a
+    /// chunk where chunk generation really starts a fortress. The search starts
+    /// on a bastion (chunk 11, -14 with seed 0) that a fortress could also have
+    /// claimed. The chunk is built with a second generator so locate's cached
+    /// starts can't answer for it.
+    #[test]
+    fn nether_fortress_is_where_chunk_generation_starts_one() {
+        let nether = || {
+            WorldGenerator::Noise(Box::new(VanillaGenerator::new(
+                Seed(0),
+                Dimension::THE_NETHER,
+            )))
+        };
+        let locate_gen = nether();
+        let chunk_gen = nether();
+        let WorldGenerator::Noise(generator) = &chunk_gen else {
+            unreachable!()
+        };
+
+        let (pos, key) = find_nearest_structure_start(
+            BlockPos::new(11 * 16, 64, -14 * 16),
+            &StructureSet::NETHER_COMPLEXES,
+            &[StructureKeys::Fortress],
+            100,
+            &locate_gen,
+        )
+        .expect("a fortress should be within range");
+        assert_eq!(key, StructureKeys::Fortress);
+
+        let mut chunk = ProtoChunk::new(pos.0.x >> 4, pos.0.z >> 4, &chunk_gen);
+        chunk.step_to_biomes(generator);
+        chunk.set_structure_starts(generator);
+        assert!(
+            chunk.has_structure(StructureKeys::Fortress),
+            "no fortress starts in the chunk at {pos:?}"
+        );
+    }
 }
