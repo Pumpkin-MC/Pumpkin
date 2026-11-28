@@ -344,6 +344,26 @@ impl CleanupEvent for wit_event::ServerTickEndEvent {
     fn cleanup_event(&self, _state: &mut PluginHostState) {}
 }
 
+impl CleanupEvent for wit_event::TabCompleteEvent {
+    fn cleanup_event(&self, _state: &mut PluginHostState) {}
+}
+
+impl CleanupEvent for wit_event::PluginEnableEvent {
+    fn cleanup_event(&self, _state: &mut PluginHostState) {}
+}
+
+impl CleanupEvent for wit_event::PluginDisableEvent {
+    fn cleanup_event(&self, _state: &mut PluginHostState) {}
+}
+
+impl CleanupEvent for wit_event::ServiceRegisterEvent {
+    fn cleanup_event(&self, _state: &mut PluginHostState) {}
+}
+
+impl CleanupEvent for wit_event::ServiceUnregisterEvent {
+    fn cleanup_event(&self, _state: &mut PluginHostState) {}
+}
+
 impl CleanupEvent for wit_event::PacketReceivedEvent {
     fn cleanup_event(&self, state: &mut PluginHostState) {
         cleanup_player(state, &self.player);

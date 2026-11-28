@@ -146,6 +146,23 @@ interface server {
         pumpkin-version: string,
     }
 
+    /// Snapshot of server tick timing and tick-rate state.
+    record server-tick-info {
+        tick-rate: f32,
+        is-frozen: bool,
+        is-sprinting: bool,
+        is-stepping: bool,
+        average-tick-time: f64,
+        tick-count: s32,
+        tick-times-nanos: list<s64>,
+    }
+
+    /// A vanilla sound registry entry with its numerical ID and resource name.
+    record sound-entry {
+        id: u32,
+        name: string,
+    }
+
     variant command-sender {
         console,
         player(player),
@@ -217,8 +234,8 @@ interface server {
         /// Returns the number of online players in a specific world.
         get-player-count-in-world: func(world-ref: %world) -> u32;
 
-        /// Broadcasts a system chat message to all players.
-        broadcast: async func(message: string);
+        /// Broadcasts a formatted chat message to all players.
+        broadcast-message: async func(message: text-component, sender: text-component);
 
         /// Deletes a signed chat message from all players' chat windows using its 256-byte signature.
         delete-message-by-signature: func(signature: list<u8>);
@@ -303,5 +320,45 @@ interface server {
 
         /// Returns every permission node registered on the server, by Pumpkin and by plugins.
         get-all-permissions: func() -> list<permission>;
+
+        /// Returns the IP address the Java Edition server is bound to.
+        get-java-ip: func() -> string;
+
+        /// Returns the IP address the Bedrock Edition server is bound to, if Bedrock networking is enabled.
+        get-bedrock-ip: func() -> option<string>;
+
+        /// Returns whether PvP is enabled in the server configuration.
+        is-pvp-enabled: func() -> bool;
+
+        /// Returns whether whitelist enforcement kicks non-whitelisted players on enable.
+        is-whitelist-enforced: func() -> bool;
+
+        /// Returns the configured operator permission level.
+        get-op-permission-level: func() -> permission-level;
+
+        /// Returns the player idle timeout in minutes (0 if disabled).
+        get-idle-timeout: func() -> s32;
+
+        /// Sets the player idle timeout in minutes (0 to disable).
+        set-idle-timeout: func(minutes: s32);
+
+        /// Sets the server's default gamemode.
+        set-default-gamemode: func(mode: game-mode);
+
+        /// Returns detailed tick timing and tick-rate manager state.
+        get-tick-info: func() -> server-tick-info;
+
+        /// Updates the server tick rate in ticks per second.
+        set-tick-rate: func(tick-rate: f32);
+
+        /// Sets whether the server tick loop is frozen.
+        set-tick-frozen: func(frozen: bool);
+
+        /// Initiates a graceful server shutdown, optionally saving all worlds first.
+        /// Requires the `server.shutdown` plugin permission.
+        shutdown: async func(save: bool) -> result<_, string>;
+
+        /// Returns all vanilla sound registry entries.
+        list-sounds: func() -> list<sound-entry>;
     }
 }

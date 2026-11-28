@@ -893,8 +893,8 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(())
     }
 
-    fn get_world_age(&mut self, world: Resource<World>) -> wasmtime::Result<u64> {
-        Ok(self.get(&world)?.get_world_age() as u64)
+    fn get_world_age(&mut self, world: Resource<World>) -> wasmtime::Result<i64> {
+        Ok(self.get(&world)?.get_world_age())
     }
 
     fn get_dimension(&mut self, world: Resource<World>) -> wasmtime::Result<String> {
@@ -1008,12 +1008,8 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         pitch: f32,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get(&world)?;
-        let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
-
+        let sound_data = from_wit_sound(sound)?;
         let internal_category = from_wit_sound_category(category);
-
         world_ref.play_sound_raw(
             sound_data as u16,
             internal_category,
@@ -1059,7 +1055,6 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             pumpkin_data::particle::Particle::from_id(particle as u16).ok_or_else(|| {
                 wasmtime::Error::msg(format!("Unknown particle ID: {}", particle as u16))
             })?;
-
         world_ref.spawn_particle(
             pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
             pumpkin_util::math::vector3::Vector3::new(
@@ -1071,6 +1066,65 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             count,
             particle_data,
         );
+        Ok(())
+    }
+
+    fn play_sound_with_seed(
+        &mut self,
+        world: Resource<World>,
+        sound: pumpkin::plugin::sounds::Sound,
+        category: pumpkin::plugin::sounds::SoundCategory,
+        pos: pumpkin::plugin::common::Position,
+        volume: f32,
+        pitch: f32,
+        seed: i64,
+    ) -> wasmtime::Result<()> {
+        let world_ref = self.get(&world)?;
+        let sound_data = from_wit_sound(sound)?;
+        let internal_category = from_wit_sound_category(category);
+        let vec = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
+        world_ref.play_sound_raw_with_seed(
+            sound_data as u16,
+            internal_category,
+            &vec,
+            volume,
+            pitch,
+            seed,
+        );
+        Ok(())
+    }
+
+    fn spawn_particle_raw(
+        &mut self,
+        world: Resource<World>,
+        particle: pumpkin::plugin::particles::Particle,
+        force: bool,
+        pos: pumpkin::plugin::common::Position,
+        offset: pumpkin::plugin::common::Position,
+        max_speed: f32,
+        count: i32,
+        data: Vec<u8>,
+    ) -> wasmtime::Result<()> {
+        let world_ref = self.get(&world)?;
+        let particle_data =
+            pumpkin_data::particle::Particle::from_id(particle as u16).ok_or_else(|| {
+                wasmtime::Error::msg(format!("Unknown particle ID: {}", particle as u16))
+            })?;
+        let packet = pumpkin_protocol::java::client::play::CParticle::new(
+            force,
+            false,
+            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+            pumpkin_util::math::vector3::Vector3::new(
+                offset.0 as f32,
+                offset.1 as f32,
+                offset.2 as f32,
+            ),
+            max_speed,
+            count,
+            pumpkin_protocol::codec::var_int::VarInt(particle_data as i32),
+            &data,
+        );
+        world_ref.broadcast_packet_all(&packet);
         Ok(())
     }
 
@@ -1364,12 +1418,35 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let world_ref = self.get(&world)?.clone();
         let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
 
-        let Some(entity) = world_ref.get_block_entity(&internal_pos) else {
+        let mut nbt = if let Some(entity) = world_ref.get_block_entity(&internal_pos) {
+            let mut nbt = pumpkin_nbt::NbtCompound::new();
+            entity.write_internal(&mut nbt);
+            nbt
+        } else if let Some(pending) = world_ref
+            .level
+            .read_chunk_sync(&internal_pos.chunk_position(), |chunk| {
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get(&internal_pos)
+                    .cloned()
+            })
+            .flatten()
+        {
+            pending
+        } else {
             return Ok(None);
         };
 
-        let mut nbt = pumpkin_nbt::NbtCompound::new();
-        entity.write_internal(&mut nbt);
+        if !nbt.child_tags.contains_key("PumpkinCustomData")
+            && let Some(custom_data) = world_ref.custom_block_entity_data.get(&internal_pos)
+        {
+            nbt.put(
+                "PumpkinCustomData",
+                pumpkin_nbt::tag::NbtTag::Compound(custom_data.clone()),
+            );
+        }
 
         let bytes = pumpkin_nbt::Nbt::from(nbt).write_unnamed();
         Ok(Some(bytes.to_vec()))
@@ -1398,8 +1475,22 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         nbt.put_int("y", pos.y);
         nbt.put_int("z", pos.z);
 
-        // Use add_block_entity_nbt for lazy loading — avoids broadcasting
-        // a packet per tile entity during bulk operations.
+        // Preserve custom persistent data (e.g. Bukkit PDC) on both live and pending paths.
+        if let Some(custom_data) = nbt
+            .get_compound("PumpkinCustomData")
+            .or_else(|| nbt.get_compound("BukkitValues"))
+        {
+            world_ref
+                .custom_block_entity_data
+                .insert(internal_pos, custom_data.clone());
+        } else {
+            world_ref.custom_block_entity_data.remove(&internal_pos);
+        }
+
+        if let Some(block_entity) = pumpkin_core::block::entities::block_entity_from_nbt(&nbt) {
+            world_ref.add_block_entity(block_entity);
+            world_ref.close_container_screens_at(&internal_pos);
+        }
         world_ref.add_block_entity_nbt(internal_pos, &nbt);
         Ok(Ok(()))
     }
@@ -1507,9 +1598,96 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(())
     }
 
+    fn set_world_age(&mut self, world: Resource<World>, age: i64) -> wasmtime::Result<()> {
+        let world_res = self.get(&world)?;
+        let level_time = {
+            let mut lt = world_res.level_time.lock_ignore_poison();
+            lt.world_age = age;
+            lt.clone()
+        };
+        level_time.send_time(world_res);
+        Ok(())
+    }
+
+    fn get_difficulty(
+        &mut self,
+        world: Resource<World>,
+    ) -> wasmtime::Result<pumpkin::plugin::world::WorldDifficulty> {
+        let world_res = self.get(&world)?;
+        Ok(match world_res.level_info.load().difficulty {
+            pumpkin_util::Difficulty::Peaceful => pumpkin::plugin::world::WorldDifficulty::Peaceful,
+            pumpkin_util::Difficulty::Easy => pumpkin::plugin::world::WorldDifficulty::Easy,
+            pumpkin_util::Difficulty::Normal => pumpkin::plugin::world::WorldDifficulty::Normal,
+            pumpkin_util::Difficulty::Hard => pumpkin::plugin::world::WorldDifficulty::Hard,
+        })
+    }
+
+    fn set_difficulty(
+        &mut self,
+        world: Resource<World>,
+        difficulty: pumpkin::plugin::world::WorldDifficulty,
+    ) -> wasmtime::Result<()> {
+        let world_res = self.get(&world)?;
+        let diff = match difficulty {
+            pumpkin::plugin::world::WorldDifficulty::Peaceful => pumpkin_util::Difficulty::Peaceful,
+            pumpkin::plugin::world::WorldDifficulty::Easy => pumpkin_util::Difficulty::Easy,
+            pumpkin::plugin::world::WorldDifficulty::Normal => pumpkin_util::Difficulty::Normal,
+            pumpkin::plugin::world::WorldDifficulty::Hard => pumpkin_util::Difficulty::Hard,
+        };
+        world_res.set_difficulty(diff);
+        Ok(())
+    }
+
+    fn get_heightmap_height(
+        &mut self,
+        world: Resource<World>,
+        heightmap: pumpkin::plugin::world::HeightmapType,
+        x: i32,
+        z: i32,
+    ) -> wasmtime::Result<i32> {
+        let world_res = self.get(&world)?;
+        let heightmap_type = match heightmap {
+            pumpkin::plugin::world::HeightmapType::WorldSurface => ChunkHeightmapType::WorldSurface,
+            pumpkin::plugin::world::HeightmapType::MotionBlocking => {
+                ChunkHeightmapType::MotionBlocking
+            }
+            pumpkin::plugin::world::HeightmapType::MotionBlockingNoLeaves => {
+                ChunkHeightmapType::MotionBlockingNoLeaves
+            }
+        };
+        Ok(world_res.get_heightmap_height(heightmap_type, x, z))
+    }
+
+    fn remove_block_entity(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+    ) -> wasmtime::Result<()> {
+        let world_res = self.get(&world)?;
+        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+        world_res.remove_block_entity(&internal_pos);
+        Ok(())
+    }
+
     fn drop(&mut self, rep: Resource<World>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
+}
+
+async fn spawn_entity_with_rotation(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+    world: Arc<pumpkin_core::world::World>,
+    entity: Arc<dyn pumpkin_core::entity::EntityBase>,
+    yaw: f32,
+    pitch: f32,
+) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::Entity>>> {
+    entity.get_entity().set_rotation(yaw, pitch);
+    let spawned = Arc::clone(&entity);
+    let registered = run_blocking(accessor, move || world.spawn_entity(spawned)).await?;
+    if !registered {
+        return Ok(None);
+    }
+    accessor.add_res(entity).map(Some)
 }
 
 impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<PluginHostState> {
@@ -1902,6 +2080,68 @@ impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<Plu
             );
         })
         .await
+    }
+
+    async fn spawn_entity_with_uuid(
+        accessor: &Accessor<PluginHostState, Self>,
+        world: Resource<World>,
+        entity_type: pumpkin::plugin::entity_types::EntityType,
+        pos: pumpkin::plugin::common::Position,
+        id: pumpkin::plugin::uuid::Uuid,
+        yaw: f32,
+        pitch: f32,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::Entity>>> {
+        let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
+        let internal_type = super::entity::from_wit_entity_type(entity_type)?;
+        let pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
+        let uuid = <pumpkin::plugin::uuid::Uuid as crate::uuid::UuidExt>::from_wit(&id);
+        let entity = pumpkin_core::entity::r#type::from_type(internal_type, pos, &world, uuid);
+        spawn_entity_with_rotation(accessor, world, entity, yaw, pitch).await
+    }
+
+    async fn spawn_item_with_uuid(
+        accessor: &Accessor<PluginHostState, Self>,
+        world: Resource<World>,
+        pos: WitPosition,
+        item: Resource<crate::pumpkin::plugin::item_stack::ItemStack>,
+        id: pumpkin::plugin::uuid::Uuid,
+        yaw: f32,
+        pitch: f32,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::Entity>>> {
+        let stack = accessor.take_res(item)?.lock().await.clone();
+        let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
+        let pos_vec = super::events::from_wasm_position(pos);
+        let base = pumpkin_core::entity::Entity::from_uuid(
+            <pumpkin::plugin::uuid::Uuid as crate::uuid::UuidExt>::from_wit(&id),
+            Arc::clone(&world),
+            pos_vec,
+            &pumpkin_data::entity::EntityType::ITEM,
+        );
+        let entity: Arc<dyn pumpkin_core::entity::EntityBase> =
+            Arc::new(pumpkin_core::entity::item::ItemEntity::new(base, stack));
+        spawn_entity_with_rotation(accessor, world, entity, yaw, pitch).await
+    }
+
+    async fn spawn_experience_orb_with_uuid(
+        accessor: &Accessor<PluginHostState, Self>,
+        world: Resource<World>,
+        pos: WitPosition,
+        amount: u32,
+        id: pumpkin::plugin::uuid::Uuid,
+        yaw: f32,
+        pitch: f32,
+    ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::world::Entity>>> {
+        let world = accessor.with(|mut host| world_from_state(host.get(), &world))?;
+        let pos_vec = super::events::from_wasm_position(pos);
+        let base = pumpkin_core::entity::Entity::from_uuid(
+            <pumpkin::plugin::uuid::Uuid as crate::uuid::UuidExt>::from_wit(&id),
+            Arc::clone(&world),
+            pos_vec,
+            &pumpkin_data::entity::EntityType::EXPERIENCE_ORB,
+        );
+        let entity: Arc<dyn pumpkin_core::entity::EntityBase> =
+            Arc::new(pumpkin_core::entity::experience_orb::ExperienceOrbEntity::new(base, amount));
+        spawn_entity_with_rotation(accessor, world, entity, yaw, pitch).await
     }
 }
 
@@ -2453,6 +2693,30 @@ impl pumpkin::plugin::world::HostWorldBorder for PluginHostState {
             .contains(pos.0, pos.2))
     }
 
+    fn get_max_center_coordinate(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+    ) -> wasmtime::Result<i32> {
+        let border_res = self.get(&border)?;
+        Ok(border_res
+            .worldborder
+            .lock_ignore_poison()
+            .portal_teleport_boundary)
+    }
+
+    fn set_max_center_coordinate(
+        &mut self,
+        border: Resource<WitWorldBorder>,
+        max: i32,
+    ) -> wasmtime::Result<()> {
+        let border_res = self.get(&border)?;
+        border_res
+            .worldborder
+            .lock_ignore_poison()
+            .portal_teleport_boundary = max;
+        Ok(())
+    }
+
     fn reset(&mut self, border: Resource<WitWorldBorder>) -> wasmtime::Result<()> {
         let border_res = self.get(&border)?;
         let world = border_res.clone();
@@ -2795,6 +3059,15 @@ impl pumpkin_world::generation::generator::CustomChunkGenerator for WasmChunkGen
         self.invoke_phase(pumpkin::plugin::world::GenerationPhase::Features, chunk);
         chunk.stage = pumpkin_world::chunk_system::StagedChunkEnum::Features;
     }
+}
+
+pub fn from_wit_sound(
+    sound: pumpkin::plugin::sounds::Sound,
+) -> wasmtime::Result<pumpkin_data::sound::Sound> {
+    pumpkin_data::sound::Sound::slice()
+        .get(sound as usize)
+        .copied()
+        .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound ID: {}", sound as usize)))
 }
 
 #[must_use]

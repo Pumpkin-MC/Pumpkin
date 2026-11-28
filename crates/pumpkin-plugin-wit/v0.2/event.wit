@@ -367,6 +367,32 @@ interface event {
         duration-nanos: s64
     }
 
+    record tab-complete-event {
+        buffer: string,
+        completions: list<string>,
+        cancelled: bool
+    }
+
+    record plugin-enable-event {
+        plugin-name: string,
+        cancelled: bool
+    }
+
+    record plugin-disable-event {
+        plugin-name: string,
+        cancelled: bool
+    }
+
+    record service-register-event {
+        service-name: string,
+        cancelled: bool
+    }
+
+    record service-unregister-event {
+        service-name: string,
+        cancelled: bool
+    }
+
     record packet-received-event {
         player: player,
         packet: serverbound-packet,
@@ -2018,6 +2044,11 @@ interface event {
         server-broadcast,
         server-tick-start,
         server-tick-end,
+        tab-complete,
+        plugin-enable,
+        plugin-disable,
+        service-register,
+        service-unregister,
         packet-received,
         packet-sent,
         java-connection-packet-received,
@@ -2385,6 +2416,21 @@ interface event {
 
         get-server-tick-end: func() -> result<server-tick-end-event>;
         set-server-tick-end: func(data: server-tick-end-event) -> result;
+
+        get-tab-complete: func() -> result<tab-complete-event>;
+        set-tab-complete: func(data: tab-complete-event) -> result;
+
+        get-plugin-enable: func() -> result<plugin-enable-event>;
+        set-plugin-enable: func(data: plugin-enable-event) -> result;
+
+        get-plugin-disable: func() -> result<plugin-disable-event>;
+        set-plugin-disable: func(data: plugin-disable-event) -> result;
+
+        get-service-register: func() -> result<service-register-event>;
+        set-service-register: func(data: service-register-event) -> result;
+
+        get-service-unregister: func() -> result<service-unregister-event>;
+        set-service-unregister: func(data: service-unregister-event) -> result;
 
         get-packet-received: func() -> result<packet-received-event>;
         set-packet-received: func(data: packet-received-event) -> result;

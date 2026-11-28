@@ -173,7 +173,7 @@ impl Command {
     ///
     /// ```rust,ignore
     /// let ping = Command::new(&["ping".to_string()], "replies when allowed").execute(Ping);
-    /// context.register_command(ping, "example.ping");
+    /// context.register_command(ping, "example.ping".to_string()).await;
     /// ```
     #[must_use]
     pub fn execute<H: CommandHandler>(self, handler: H) -> Self {

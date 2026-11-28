@@ -259,6 +259,11 @@ event_kinds! {
         BedrockConnectionPacketReceivedEvent => BedrockConnectionPacketReceived, get_bedrock_connection_packet_received, set_bedrock_connection_packet_received;
         BedrockConnectionPacketSentEvent => BedrockConnectionPacketSent, get_bedrock_connection_packet_sent, set_bedrock_connection_packet_sent;
         ServerCommandEvent => ServerCommand, get_server_command, set_server_command;
+        TabCompleteEvent => TabComplete, get_tab_complete, set_tab_complete;
+        PluginEnableEvent => PluginEnable, get_plugin_enable, set_plugin_enable;
+        PluginDisableEvent => PluginDisable, get_plugin_disable, set_plugin_disable;
+        ServiceRegisterEvent => ServiceRegister, get_service_register, set_service_register;
+        ServiceUnregisterEvent => ServiceUnregister, get_service_unregister, set_service_unregister;
         EntityPickupItemEvent => EntityPickupItem, get_entity_pickup_item, set_entity_pickup_item;
         EntityShootBowEvent => EntityShootBow, get_entity_shoot_bow, set_entity_shoot_bow;
         EntityTransformEvent => EntityTransform, get_entity_transform, set_entity_transform;

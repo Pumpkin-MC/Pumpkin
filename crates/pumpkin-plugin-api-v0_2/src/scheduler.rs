@@ -101,7 +101,12 @@ pub(crate) async fn dispatch(handler_id: u32, server: Server) {
 ///
 /// ```rust,ignore
 /// scheduler::schedule_delayed_task(20, |server| async move {
-///     server.broadcast("one second later".to_string()).await;
+///     server
+///         .broadcast_message(
+///             TextComponent::text("one second later"),
+///             TextComponent::text("Server"),
+///         )
+///         .await;
 /// });
 /// ```
 pub fn schedule_delayed_task<F, Fut>(delay_ticks: u64, handler: F) -> u32
@@ -130,7 +135,12 @@ where
 ///
 /// ```rust,ignore
 /// let task = scheduler::schedule_repeating_task(20, 20 * 60, |server| async move {
-///     server.broadcast("another minute".to_string()).await;
+///     server
+///         .broadcast_message(
+///             TextComponent::text("another minute"),
+///             TextComponent::text("Server"),
+///         )
+///         .await;
 /// });
 /// ```
 pub fn schedule_repeating_task<F, Fut>(delay_ticks: u64, period_ticks: u64, handler: F) -> u32

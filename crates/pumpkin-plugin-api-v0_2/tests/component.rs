@@ -185,6 +185,7 @@ fn component_declares_the_mixed_v0_2_world() {
 struct State {
     ids: std::sync::Mutex<std::collections::BTreeMap<&'static str, u32>>,
     calls: std::sync::Mutex<Vec<String>>,
+    texts: std::sync::Mutex<Vec<String>>,
     custom_data: std::sync::Mutex<Option<Val>>,
     cancelled_tasks: AtomicU32,
     ender_chest_slots: std::sync::Mutex<Vec<(u8, bool)>>,
@@ -392,16 +393,22 @@ fn install_sdk_host(linker: &mut Linker<Arc<State>>) {
     }
     use wasmtime::component::Resource;
     let mut context = interface!("context", "context" => ContextResource);
-    for name in [
-        "[method]context.register-event",
-        "[method]context.register-command",
-    ] {
-        context
-            .func_new(name, |mut store, _, params, _| {
-                release_values(&mut store, params)
-            })
-            .expect("context registration");
-    }
+    context
+        .func_new(
+            "[method]context.register-event",
+            |mut store, _, params, _| release_values(&mut store, params),
+        )
+        .expect("context event registration");
+    context
+        .func_new_concurrent(
+            "[method]context.register-command",
+            |accessor, _, params, _| {
+                Box::pin(
+                    async move { accessor.with(|mut store| release_values(&mut store, params)) },
+                )
+            },
+        )
+        .expect("context command registration");
     context
         .func_wrap(
             "[method]context.get-server",
@@ -490,12 +497,25 @@ fn install_sdk_host(linker: &mut Linker<Arc<State>>) {
         .expect("fixture player");
     server
         .func_wrap_concurrent(
-            "[method]server.broadcast",
+            "[method]server.broadcast-message",
             |accessor: &Accessor<Arc<State>>,
-             (_server, text): (Resource<ServerResource>, String)| {
+             (_server, message, _sender): (
+                Resource<ServerResource>,
+                Resource<TextResource>,
+                Resource<TextResource>,
+            )| {
                 Box::pin(async move {
-                    accessor
-                        .with(|mut store| store.data_mut().calls.lock().expect("calls").push(text));
+                    accessor.with(|mut store| {
+                        let text = store
+                            .data_mut()
+                            .texts
+                            .lock()
+                            .expect("texts")
+                            .get(message.rep() as usize)
+                            .cloned()
+                            .unwrap_or_default();
+                        store.data_mut().calls.lock().expect("calls").push(text);
+                    });
                     Ok(())
                 })
             },
@@ -640,9 +660,15 @@ fn install_sdk_host(linker: &mut Linker<Arc<State>>) {
             .expect("display cast");
     }
     let mut text = interface!("text", "text-component" => TextResource);
-    text.func_wrap("[static]text-component.text", |_, (_text,): (String,)| {
-        Ok((Resource::<TextResource>::new_own(0),))
-    })
+    text.func_wrap(
+        "[static]text-component.text",
+        |store: wasmtime::StoreContextMut<'_, Arc<State>>, (value,): (String,)| {
+            let mut texts = store.data().texts.lock().expect("texts");
+            let id = texts.len() as u32;
+            texts.push(value);
+            Ok((Resource::<TextResource>::new_own(id),))
+        },
+    )
     .expect("text constructor");
     let mut items = interface!("item-stack", "item-stack" => ItemResource);
     items

@@ -9,11 +9,15 @@ use crate::{
         JavaConnectionPacketSentEvent as JavaConnectionPacketSentEventData, JavaConnectionState,
         MapInitializeEvent as MapInitializeEventData,
         PacketReceivedEvent as PacketReceivedEventData, PacketSentEvent as PacketSentEventData,
+        PluginDisableEvent as PluginDisableEventData, PluginEnableEvent as PluginEnableEventData,
         RawPacket, ServerBroadcastEvent as ServerBroadcastEventData,
         ServerCommandEvent as ServerCommandEventData, ServerListPingAddress,
         ServerListPingEvent as ServerListPingEventData, ServerLoadEvent as ServerLoadEventData,
         ServerLoadType, ServerTickEndEvent as ServerTickEndEventData,
         ServerTickStartEvent as ServerTickStartEventData, ServerboundPacket,
+        ServiceRegisterEvent as ServiceRegisterEventData,
+        ServiceUnregisterEvent as ServiceUnregisterEventData,
+        TabCompleteEvent as TabCompleteEventData,
     },
 };
 use pumpkin_core::net::ClientPlatform;
@@ -25,11 +29,16 @@ use pumpkin_core::plugin::server::{
         JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent, PacketReceivedEvent,
         PacketSentEvent,
     },
+    plugin_disable::PluginDisableEvent,
+    plugin_enable::PluginEnableEvent,
     server_broadcast::ServerBroadcastEvent,
     server_command::ServerCommandEvent,
     server_load::{LoadType, ServerLoadEvent},
     server_tick_end::ServerTickEndEvent,
     server_tick_start::ServerTickStartEvent,
+    service_register::ServiceRegisterEvent,
+    service_unregister::ServiceUnregisterEvent,
+    tab_complete::TabCompleteEvent,
 };
 use pumpkin_protocol::ConnectionState as ProtoConnectionState;
 use pumpkin_wasm_host_common::state::PluginHostState;
@@ -407,6 +416,98 @@ impl ToFromWasmEvent for ServerTickEndEvent {
         Self {
             tick: data.tick,
             duration_nanos: data.duration_nanos,
+        }
+    }
+}
+
+impl ToFromWasmEvent for TabCompleteEvent {
+    type Wit = TabCompleteEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
+            buffer: self.buffer.clone(),
+            completions: self.completions.clone(),
+            cancelled: self.cancelled,
+        }
+    }
+
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            buffer: data.buffer,
+            completions: data.completions,
+            cancelled: data.cancelled,
+        }
+    }
+}
+
+impl ToFromWasmEvent for PluginEnableEvent {
+    type Wit = PluginEnableEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
+            plugin_name: self.plugin_name.clone(),
+            cancelled: self.cancelled,
+        }
+    }
+
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            plugin_name: data.plugin_name,
+            cancelled: data.cancelled,
+        }
+    }
+}
+
+impl ToFromWasmEvent for PluginDisableEvent {
+    type Wit = PluginDisableEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
+            plugin_name: self.plugin_name.clone(),
+            cancelled: self.cancelled,
+        }
+    }
+
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            plugin_name: data.plugin_name,
+            cancelled: data.cancelled,
+        }
+    }
+}
+
+impl ToFromWasmEvent for ServiceRegisterEvent {
+    type Wit = ServiceRegisterEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
+            service_name: self.service_name.clone(),
+            cancelled: self.cancelled,
+        }
+    }
+
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            service_name: data.service_name,
+            cancelled: data.cancelled,
+        }
+    }
+}
+
+impl ToFromWasmEvent for ServiceUnregisterEvent {
+    type Wit = ServiceUnregisterEventData;
+
+    fn to_wasm_event(&self, _state: &mut PluginHostState) -> Self::Wit {
+        Self::Wit {
+            service_name: self.service_name.clone(),
+            cancelled: self.cancelled,
+        }
+    }
+
+    fn from_wasm_event(data: Self::Wit, _state: &mut PluginHostState) -> Self {
+        Self {
+            service_name: data.service_name,
+            cancelled: data.cancelled,
         }
     }
 }
