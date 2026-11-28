@@ -206,9 +206,8 @@ impl SnifferEntity {
     pub fn get_head_position(&self) -> Vector3<f64> {
         let entity = self.get_entity();
         let pos = entity.pos.load();
-        let yaw = f64::from(entity.yaw.load());
-        let yaw_rad = yaw.to_radians();
-        let forward = Vector3::new(-yaw_rad.sin(), 0.0, yaw_rad.cos());
+        let forward =
+            Vector3::rotation_vector(f64::from(entity.pitch.load()), f64::from(entity.yaw.load()));
         pos + forward * 2.25
     }
 

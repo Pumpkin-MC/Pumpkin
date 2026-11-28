@@ -1052,17 +1052,29 @@ impl World {
         }
     }
 
-    pub fn set_game_rule(&self, rule: &GameRule, value: GameRuleValue<i64, bool>) {
+    /// Vanilla `GameRules.set`. Returns whether `value` was applied.
+    pub fn set_game_rule(&self, rule: &GameRule, value: GameRuleValue<i64, bool>) -> bool {
         let current_info = self.level_info.load();
+        if !current_info.is_game_rule_enabled(rule) {
+            warn!("Tried to set invalid game rule '{rule}' to value '{value}'");
+            return false;
+        }
         let mut new_info = (**current_info).clone();
         match (new_info.game_rules.get_mut(rule), value) {
             (GameRuleValue::Int(target), GameRuleValue::Int(val)) => {
+                if rule
+                    .int_bounds()
+                    .is_some_and(|(min, max)| !(i64::from(min)..=i64::from(max)).contains(&val))
+                {
+                    warn!("Game rule {rule} value {val} is out of range");
+                    return false;
+                }
                 *target = val;
             }
             (GameRuleValue::Bool(target), GameRuleValue::Bool(val)) => {
                 *target = val;
             }
-            _ => {}
+            _ => return false,
         }
         self.level_info.store(Arc::new(new_info));
         if *rule == GameRule::AdvanceTime {
@@ -1073,6 +1085,7 @@ impl World {
                 .clone();
             level_time.send_time(self);
         }
+        true
     }
 
     pub fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {

@@ -140,6 +140,8 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:wither_pattern_spawns", golems::test_wither_pattern_spawns);
         register_test_function("pumpkin:item_entities_merge", entities_and_ai::test_item_entities_merge);
         register_test_function("pumpkin:zombie_pathfinds_to_villager", entities_and_ai::test_zombie_pathfinds_to_villager);
+        register_test_function("pumpkin:villager_stays_when_player_is_far", entities_and_ai::test_villager_stays_when_player_is_far);
+        register_test_function("pumpkin:wandering_trader_stays_when_player_is_far", entities_and_ai::test_wandering_trader_stays_when_player_is_far);
 
         // redstone_wire_and_power
         register_test_function("pumpkin:redstone_wire_attenuation_1_to_4", redstone_wire_and_power::test_redstone_wire_attenuation_1_to_4);

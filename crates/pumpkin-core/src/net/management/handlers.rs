@@ -1259,7 +1259,11 @@ async fn execute_method(
         }
         "minecraft:gamerules/update" => {
             let update: UntypedGameRule = parse_param(params, "gamerule")?;
-            let Some(rule) = GameRule::all().iter().find(|r| r.to_string() == update.key) else {
+            let level_data = server.level_info.load();
+            let Some(rule) = GameRule::all()
+                .iter()
+                .find(|r| r.to_string() == update.key && level_data.is_game_rule_enabled(r))
+            else {
                 return Err(RpcError::invalid_params(Some(format!(
                     "Unknown gamerule: {}",
                     update.key
@@ -1369,6 +1373,9 @@ fn get_gamerules(server: &Server) -> Vec<TypedGameRule> {
     let level_data = server.level_info.load();
     let mut rules = Vec::new();
     for rule in GameRule::all() {
+        if !level_data.is_game_rule_enabled(rule) {
+            continue;
+        }
         match level_data.game_rules.get(rule) {
             GameRuleValue::Int(v) => {
                 rules.push(TypedGameRule {
@@ -1405,8 +1412,15 @@ fn update_gamerule(
                         "Stated type mismatches with actual type of gamerule \"{rule}\""
                     )))
                 })?;
-            for world in server.worlds.load().iter() {
-                world.set_game_rule(rule, GameRuleValue::Int(int_val));
+            let applied = server
+                .worlds
+                .load()
+                .iter()
+                .all(|world| world.set_game_rule(rule, GameRuleValue::Int(int_val)));
+            if !applied {
+                return Err(RpcError::invalid_params(Some(format!(
+                    "Value {int_val} is out of range for gamerule \"{rule}\""
+                ))));
             }
             Ok(TypedGameRule {
                 key: rule.to_string(),

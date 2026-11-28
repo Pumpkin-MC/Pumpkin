@@ -632,6 +632,10 @@ impl AgeableMob for WanderingTraderEntity {
 }
 
 impl Mob for WanderingTraderEntity {
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        false
+    }
+
     fn can_be_leashed(&self) -> bool {
         false
     }

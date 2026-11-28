@@ -2,6 +2,7 @@ use crate::block::registry::BlockRegistry;
 use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::VanillaData;
+use crate::data::datapack::DatapackManager;
 use crate::data::player_server::ServerPlayerData;
 use crate::entity::NBTStorage;
 use crate::entity::player::simulated_player::SimulatedPlayer;
@@ -41,7 +42,9 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
-use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
+use pumpkin_world::world_info::{
+    DataPacks, LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter,
+};
 use rand::seq::IndexedRandom;
 use rayon::prelude::*;
 use rsa::PublicKey as RsaPublicKey;
@@ -208,7 +211,8 @@ impl Server {
         let block_registry = super::block::registry::default_registry();
 
         let level_info = match AnvilLevelInfo.read_world_info(&world_path) {
-            Ok(level_info) => {
+            Ok(mut level_info) => {
+                DatapackManager::configure_world_packs(&world_path, &mut level_info, false);
                 let dat_path = world_path.join(LEVEL_DAT_FILE_NAME);
                 if dat_path.exists() {
                     let backup_path = world_path.join(LEVEL_DAT_BACKUP_FILE_NAME);
@@ -234,6 +238,11 @@ impl Server {
                     default_data.difficulty = Difficulty::Hard;
                     default_data.difficulty_locked = true;
                 }
+                default_data.data_packs = DataPacks {
+                    enabled: basic_config.initial_enabled_packs.clone(),
+                    disabled: basic_config.initial_disabled_packs.clone(),
+                };
+                DatapackManager::configure_world_packs(&world_path, &mut default_data, true);
                 AnvilLevelInfo.write_world_info(&default_data, &world_path)?;
                 default_data
             }
@@ -644,12 +653,12 @@ impl Server {
 
     #[must_use]
     pub fn get_enabled_features(&self) -> Vec<&'static str> {
-        self.datapack_manager.get_enabled_features(self)
+        DatapackManager::get_enabled_features(self)
     }
 
     #[must_use]
     pub fn is_feature_enabled(&self, feature: &str) -> bool {
-        self.datapack_manager.is_feature_enabled(self, feature)
+        DatapackManager::is_feature_enabled(self, feature)
     }
 
     pub async fn save_all(&self) -> Result<(), String> {
