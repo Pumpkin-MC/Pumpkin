@@ -153,6 +153,15 @@ impl TrackedEntity {
             .is_empty()
     }
 
+    /// Test helper: records `player` as a viewer without going through chunk readiness.
+    #[cfg(test)]
+    pub(crate) fn mark_seen_for_test(&self, player: &Arc<Player>) {
+        self.seen_by
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(player.gameprofile.id, player.clone());
+    }
+
     #[must_use]
     pub fn is_seen_by(&self, uuid: &Uuid) -> bool {
         self.seen_by
@@ -420,8 +429,9 @@ impl TrackedEntity {
 
     fn broadcast_to_player(&self, player: &Player) -> bool {
         self.entity.get_player().is_none_or(|target_player| {
-            player.gamemode.load() == GameMode::Spectator
-                || target_player.gamemode.load() != GameMode::Spectator
+            player.can_see(&target_player.gameprofile.id)
+                && (player.gamemode.load() == GameMode::Spectator
+                    || target_player.gamemode.load() != GameMode::Spectator)
         })
     }
 
@@ -503,6 +513,12 @@ impl TrackedEntity {
                     .insert(player.gameprofile.id, player.clone())
                     .is_none();
                 if inserted {
+                    // `hide_player` may have run between the visibility check above and the
+                    // insertion (its `remove_player` found nobody to remove), so check again.
+                    if !self.broadcast_to_player(player) {
+                        self.forget_player(player);
+                        return;
+                    }
                     if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
                         self.bedrock_watchers.fetch_add(1, Relaxed);
                     }

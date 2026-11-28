@@ -4756,18 +4756,51 @@ impl Player {
         self.respawn_location.load()
     }
 
-    pub fn hide_player(&self, other_id: uuid::Uuid) {
+    /// Hides `other` from this player (Bukkit `hidePlayer`).
+    ///
+    /// The tracker skips hidden pairs from now on, and `other` is removed from this player's
+    /// client right away. The tab list entry is left untouched.
+    pub fn hide_player(self: &Arc<Self>, other: &Arc<Self>) {
+        if Arc::ptr_eq(self, other) {
+            return;
+        }
         self.hidden_players
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(other_id);
+            .insert(other.gameprofile.id);
+        let world = other.world();
+        if let Some(tracked) = world
+            .entity_tracker
+            .get_tracked_entity(other.get_entity().entity_id)
+        {
+            tracked.remove_player(self);
+        }
     }
 
-    pub fn show_player(&self, other_id: uuid::Uuid) {
-        self.hidden_players
+    /// Reverts [`Self::hide_player`]: `other` is spawned again for this player when in range.
+    pub fn show_player(self: &Arc<Self>, other: &Arc<Self>) {
+        if Arc::ptr_eq(self, other) {
+            return;
+        }
+        let was_hidden = self
+            .hidden_players
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&other_id);
+            .remove(&other.gameprofile.id);
+        if !was_hidden {
+            return;
+        }
+        let world = other.world();
+        // Only re-pair within one world; the tracker does not check world identity itself.
+        if !Arc::ptr_eq(&world, &self.world()) {
+            return;
+        }
+        if let Some(tracked) = world
+            .entity_tracker
+            .get_tracked_entity(other.get_entity().entity_id)
+        {
+            tracked.update_player(self, &world);
+        }
     }
 
     pub fn can_see(&self, other_id: &uuid::Uuid) -> bool {
@@ -9971,6 +10004,119 @@ mod tests {
         // Java transfer payload: UTF-8 host preceded by its length, followed by VarInt port.
         assert_eq!(packet.payload.as_ref(), b"\x09localhost\xde\xc7\x01");
         assert_eq!(player.transfer("closed.example", 25565), None);
+        client.await_tasks().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[allow(clippy::too_many_lines)]
+    async fn hide_player_removes_the_entity_from_the_viewer_until_shown()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use super::Player;
+        use crate::{
+            data::VanillaData,
+            entity::EntityBase,
+            net::{
+                ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig,
+                java::{JavaClient, pending::PendingConnection},
+            },
+        };
+        use arc_swap::ArcSwap;
+        use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+        use pumpkin_data::packet::CURRENT_MC_VERSION;
+        use pumpkin_protocol::java::packet_decoder::TCPNetworkDecoder;
+        use pumpkin_protocol::{
+            ConnectionState, codec::var_int::VarInt, java::client::play::CRemoveEntities,
+            packet::MultiVersionJavaPacket, ser::NetworkReadExt,
+        };
+        use pumpkin_util::GameMode;
+        use std::time::Duration;
+
+        let directory = tempfile::tempdir()?;
+        let basic = BasicConfiguration {
+            default_level_name: directory
+                .path()
+                .join("world")
+                .to_string_lossy()
+                .into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            ..Default::default()
+        };
+        let mut advanced = AdvancedConfiguration::default();
+        advanced.networking.bedrock.online_mode = false;
+        let server = Server::new(
+            basic,
+            advanced,
+            TelemetryConfig::default(),
+            VanillaData::default(),
+            vec![],
+        )
+        .await?;
+        let world = server.worlds.load().first().cloned().ok_or("No world")?;
+
+        let make_player = |name: &str| {
+            let (transport, peer) = tokio::io::duplex(65536);
+            let (read, write) = tokio::io::split(transport);
+            let pending = PendingConnection::from_transport(
+                Box::new(read),
+                Box::new(write),
+                "127.0.0.1:25565".parse().unwrap(),
+                0,
+                PacketRateLimiter::new(false, 0.0, 0.0),
+                Arc::downgrade(&server),
+            );
+            let profile = GameProfile {
+                id: Uuid::new_v4(),
+                name: name.into(),
+                properties: ArcSwap::from_pointee(vec![]),
+                profile_actions: None,
+            };
+            let mut client =
+                JavaClient::from_pending(pending, profile.clone(), PlayerConfig::default());
+            client.connection_state.store(ConnectionState::Play);
+            client.start_outgoing_packet_task();
+            let player = Arc::new(Player::new(
+                Arc::new(ClientPlatform::Java(client)),
+                profile,
+                PlayerConfig::default(),
+                &world,
+                GameMode::Survival,
+            ));
+            (player, peer)
+        };
+        let (viewer, viewer_peer) = make_player("Viewer");
+        let (target, _target_peer) = make_player("Target");
+
+        let target_entity: Arc<dyn EntityBase> = target.clone();
+        world.entity_tracker.add_entity(&target_entity, &world);
+        let tracked = world
+            .entity_tracker
+            .get_tracked_entity(target.get_entity().entity_id)
+            .ok_or("target is not tracked")?;
+        tracked.mark_seen_for_test(&viewer);
+        assert!(tracked.is_seen_by(&viewer.gameprofile.id));
+        assert!(viewer.can_see(&target.gameprofile.id));
+
+        viewer.hide_player(&target);
+        assert!(!viewer.can_see(&target.gameprofile.id));
+        assert!(!tracked.is_seen_by(&viewer.gameprofile.id));
+
+        let client = viewer.client.java().ok_or("No Java client")?;
+        let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(viewer_peer));
+        let packet =
+            tokio::time::timeout(Duration::from_secs(10), decoder.get_raw_packet()).await??;
+        assert_eq!(packet.id, CRemoveEntities::to_id(CURRENT_MC_VERSION));
+        let mut payload = std::io::Cursor::new(packet.payload.as_ref());
+        assert_eq!(payload.get_var_int()?, VarInt(1));
+        assert_eq!(
+            payload.get_var_int()?,
+            VarInt(target.get_entity().entity_id)
+        );
+
+        viewer.show_player(&target);
+        assert!(viewer.can_see(&target.gameprofile.id));
+        client.close();
         client.await_tasks().await;
         Ok(())
     }
