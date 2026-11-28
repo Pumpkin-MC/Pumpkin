@@ -596,7 +596,13 @@ impl GenerationSchedule {
         let Some(new_level) = new_data.0 else {
             return false;
         };
-        self.last_level = new_level.1;
+        for (pos, level) in new_level.1 {
+            if level >= ChunkLoading::MAX_LEVEL {
+                self.last_level.remove(&pos);
+            } else {
+                self.last_level.insert(pos, level);
+            }
+        }
         let mut worklist: std::collections::VecDeque<(ChunkPos, StagedChunkEnum, NodeKey)> =
             std::collections::VecDeque::new();
 

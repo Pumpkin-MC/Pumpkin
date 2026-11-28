@@ -1,4 +1,4 @@
-use super::{ChunkLevel, ChunkPos, HashMapType};
+use super::{ChunkPos, HashMapType};
 use crate::chunk_system::chunk_state::StagedChunkEnum;
 use crate::level::Level;
 use std::collections::hash_map::Entry;
@@ -6,9 +6,11 @@ use std::mem::swap;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Condvar, Mutex};
 
+/// Stage changes per chunk, and the levels written since the previous send in order, with
+/// `ChunkLoading::MAX_LEVEL` for chunks that no longer have a level.
 pub type LevelChange = (
     HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
-    ChunkLevel,
+    Vec<(ChunkPos, i8)>,
 );
 
 pub struct LevelChannel {
@@ -30,14 +32,7 @@ impl LevelChannel {
             notify: Condvar::new(),
         }
     }
-    pub fn set_both(
-        &self,
-        new_value: (
-            HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
-            ChunkLevel,
-        ),
-        pos: Vec<ChunkPos>,
-    ) {
+    pub fn set_both(&self, new_value: LevelChange, pos: Vec<ChunkPos>) {
         // debug!("set new level and priority");
         let mut value = self
             .value
@@ -62,19 +57,13 @@ impl LevelChannel {
                     }
                 }
             }
-            old.1 = new_value.1;
+            old.1.extend(new_value.1);
         } else {
             value.0 = Some(new_value);
         }
         self.notify.notify_one();
     }
-    pub fn set_level(
-        &self,
-        new_value: (
-            HashMapType<ChunkPos, (StagedChunkEnum, StagedChunkEnum)>,
-            ChunkLevel,
-        ),
-    ) {
+    pub fn set_level(&self, new_value: LevelChange) {
         // debug!("set new level");
         let mut value = self
             .value
@@ -98,7 +87,7 @@ impl LevelChannel {
                     }
                 }
             }
-            old.1 = new_value.1;
+            old.1.extend(new_value.1);
         } else {
             value.0 = Some(new_value);
         }
