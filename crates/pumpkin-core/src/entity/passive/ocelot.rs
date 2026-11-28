@@ -30,6 +30,7 @@ use crate::world::World;
 const AMBIENT_SOUND_INTERVAL: i32 = 900;
 /// How far away a player can be and still feed it.
 const FEED_DISTANCE_SQ: f64 = 9.0;
+const DESPAWN_MIN_AGE_TICKS: i32 = 2400;
 
 const OCELOT_FLEES: &[Flee] = &[feline::flee_players(4, is_wary)];
 
@@ -150,7 +151,7 @@ impl Mob for OcelotEntity {
     }
 
     fn get_ambient_sound(&self) -> Option<Sound> {
-        Some(Sound::EntityOcelotAmbient)
+        self.get_entity().entity_type.ambient_sound
     }
 
     fn get_ambient_sound_interval(&self) -> i32 {
@@ -179,7 +180,8 @@ impl Mob for OcelotEntity {
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
-        !self.is_trusting() && self.get_entity().tick_count.load(Ordering::Relaxed) > 2400
+        !self.is_trusting()
+            && self.get_entity().tick_count.load(Ordering::Relaxed) > DESPAWN_MIN_AGE_TICKS
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
