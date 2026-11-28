@@ -698,9 +698,13 @@ impl ChunkData {
 
     /// Marks a legacy chunk checked after any recovered records have been stored.
     pub fn finish_block_entity_recovery(&self) {
-        self.section
+        if !self
+            .section
             .block_entity_records_checked
-            .store(true, Ordering::Release);
+            .swap(true, Ordering::AcqRel)
+        {
+            self.dirty.store(true, Ordering::Relaxed);
+        }
     }
 
     #[must_use]

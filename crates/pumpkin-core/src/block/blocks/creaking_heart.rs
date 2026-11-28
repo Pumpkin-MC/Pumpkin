@@ -44,14 +44,29 @@ impl CreakingHeartBlock {
             && PaleOakWoodLikeProperties::from_state_id(state_id).axis == axis
     }
 
-    pub fn has_required_logs(world: &World, pos: &BlockPos, axis: Axis) -> bool {
+    pub fn has_required_logs(world: &World, pos: &BlockPos, axis: Axis) -> Option<bool> {
         let (first, second) = match axis {
             Axis::X => (pos.west(), pos.east()),
             Axis::Y => (pos.down(), pos.up()),
             Axis::Z => (pos.north(), pos.south()),
         };
-        Self::is_aligned_pale_oak_log(world.get_block_state_id(&first), axis)
-            && Self::is_aligned_pale_oak_log(world.get_block_state_id(&second), axis)
+        let aligned = |position: &BlockPos| {
+            if axis == Axis::Y {
+                Some(Self::is_aligned_pale_oak_log(
+                    world.get_block_state_id(position),
+                    axis,
+                ))
+            } else {
+                world
+                    .get_block_state_id_if_loaded(position)
+                    .map(|state| Self::is_aligned_pale_oak_log(state, axis))
+            }
+        };
+        match (aligned(&first), aligned(&second)) {
+            (Some(false), _) | (_, Some(false)) => Some(false),
+            (Some(true), Some(true)) => Some(true),
+            _ => None,
+        }
     }
 
     fn update_state(
@@ -60,7 +75,7 @@ impl CreakingHeartBlock {
         mut props: CreakingHeartLikeProperties,
     ) -> BlockStateId {
         if props.creaking_heart_state == CreakingHeartState::Uprooted
-            && Self::has_required_logs(world, pos, props.axis)
+            && Self::has_required_logs(world, pos, props.axis) == Some(true)
         {
             props.creaking_heart_state = Self::active_state(world, pos);
         }
@@ -70,8 +85,8 @@ impl CreakingHeartBlock {
     pub fn player_will_destroy(
         world: &Arc<World>,
         pos: &BlockPos,
-        state: BlockStateId,
         player: &Player,
+        experience: u32,
     ) {
         let Some(entity) = world.get_block_entity(pos) else {
             return;
@@ -83,8 +98,9 @@ impl CreakingHeartBlock {
                 Some(player),
                 Some(player),
             )
+            && experience > 0
         {
-            Self::try_award_experience(world, pos, state, player);
+            ExperienceOrbEntity::spawn(world, pos.to_centered_f64(), experience);
         }
     }
 
@@ -117,17 +133,22 @@ impl CreakingHeartBlock {
         state: BlockStateId,
         player: &Player,
     ) {
+        let experience = Self::break_experience(world, state, player);
+        if experience > 0 {
+            ExperienceOrbEntity::spawn(world, pos.to_centered_f64(), experience);
+        }
+    }
+
+    pub(crate) fn break_experience(world: &World, state: BlockStateId, player: &Player) -> u32 {
         if !matches!(
             player.gamemode.load(),
             GameMode::Creative | GameMode::Spectator
         ) && CreakingHeartLikeProperties::from_state_id(state).natural
             && world.level_info.load().game_rules.block_drops
         {
-            ExperienceOrbEntity::spawn(
-                world,
-                pos.to_centered_f64(),
-                rand::rng().random_range(20..=24),
-            );
+            rand::rng().random_range(20..=24)
+        } else {
+            0
         }
     }
 }

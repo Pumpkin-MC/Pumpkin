@@ -193,12 +193,14 @@ impl BlockEntity for CreakingHeartBlockEntity {
             state.protector.is_some()
         };
         let active = CreakingHeartBlock::active_state(world, &self.position);
-        props.creaking_heart_state = if has_protector
-            || CreakingHeartBlock::has_required_logs(world, &self.position, props.axis)
-        {
+        props.creaking_heart_state = if has_protector {
             active
         } else {
-            CreakingHeartState::Uprooted
+            match CreakingHeartBlock::has_required_logs(world, &self.position, props.axis) {
+                Some(true) => active,
+                Some(false) => CreakingHeartState::Uprooted,
+                None => return,
+            }
         };
         let updated = props.to_state_id(&Block::CREAKING_HEART);
         if updated != state_id
@@ -879,6 +881,193 @@ mod tests {
         heart.creaking_hurt(&world, &protector);
         assert_eq!(resin_calls.load(Relaxed), 1);
         assert!(protector.get_entity().is_removed());
+        server.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn heart_retries_when_a_required_log_chunk_is_unloaded()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_data::block_properties::{Axis, PaleOakWoodLikeProperties};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let position = BlockPos::new(15, 64, 8);
+        let chunk = position.chunk_position();
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk, ChunkData::empty_sync(chunk.x, chunk.y));
+        let mut props =
+            CreakingHeartLikeProperties::from_state_id(Block::CREAKING_HEART.default_state.id);
+        props.axis = Axis::X;
+        props.creaking_heart_state = CreakingHeartState::Dormant;
+        let state = props.to_state_id(&Block::CREAKING_HEART);
+        let mut log =
+            PaleOakWoodLikeProperties::from_state_id(Block::PALE_OAK_LOG.default_state.id);
+        log.axis = Axis::X;
+        world.set_block_state(
+            &position.west(),
+            log.to_state_id(&Block::PALE_OAK_LOG),
+            BlockFlags::empty(),
+        );
+        world.set_block_state(&position, state, BlockFlags::empty());
+        let heart = Arc::new(CreakingHeartBlockEntity::new(position));
+        world.add_block_entity(heart.clone());
+        heart.lock_state().ticker = -1;
+
+        assert_eq!(world.get_block_state_id_if_loaded(&position.east()), None);
+        assert_eq!(world.get_block_state_id(&position), state);
+        heart.tick(&world);
+        assert_eq!(world.get_block_state_id(&position), state);
+
+        world.set_block_state(
+            &position.west(),
+            Block::AIR.default_state.id,
+            BlockFlags::empty(),
+        );
+        assert_eq!(world.get_block_state_id_if_loaded(&position.east()), None);
+        heart.lock_state().ticker = -1;
+        heart.tick(&world);
+        assert_eq!(
+            CreakingHeartLikeProperties::from_state_id(world.get_block_state_id(&position))
+                .creaking_heart_state,
+            CreakingHeartState::Uprooted
+        );
+
+        world.set_block_state(
+            &position.west(),
+            log.to_state_id(&Block::PALE_OAK_LOG),
+            BlockFlags::empty(),
+        );
+        world.set_block_state(&position, state, BlockFlags::empty());
+        let heart = world
+            .get_block_entity(&position)
+            .ok_or("missing restored heart")?;
+        let heart = heart
+            .as_any()
+            .downcast_ref::<CreakingHeartBlockEntity>()
+            .ok_or("wrong heart type")?;
+
+        let neighbor = position.east().chunk_position();
+        world
+            .level
+            .loaded_chunks
+            .insert(neighbor, ChunkData::empty_sync(neighbor.x, neighbor.y));
+        heart.lock_state().ticker = -1;
+        heart.tick(&world);
+        assert_eq!(
+            CreakingHeartLikeProperties::from_state_id(world.get_block_state_id(&position))
+                .creaking_heart_state,
+            CreakingHeartState::Uprooted
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn heart_break_event_can_suppress_experience_without_preserving_the_protector()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::plugin::api::events::block::block_break::BlockBreakEvent;
+        use pumpkin_util::GameMode;
+        use std::sync::atomic::AtomicU32;
+
+        struct OverrideExperience {
+            original: AtomicU32,
+            award: AtomicU32,
+        }
+        impl EventRwHandler<BlockBreakEvent> for OverrideExperience {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<Server>,
+                event: &'a mut BlockBreakEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    if event.block == &Block::CREAKING_HEART {
+                        self.original.store(event.exp, Relaxed);
+                        event.exp = self.award.load(Relaxed);
+                    }
+                })
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let server = server(&folder).await?;
+        let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+        let position = BlockPos::new(104, 64, 104);
+        let chunk = position.chunk_position();
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk, ChunkData::empty_sync(chunk.x, chunk.y));
+        let state = CreakingHeartLikeProperties {
+            natural: true,
+            ..CreakingHeartLikeProperties::from_state_id(Block::CREAKING_HEART.default_state.id)
+        }
+        .to_state_id(&Block::CREAKING_HEART);
+        world.set_block_state(&position, state, BlockFlags::NOTIFY_ALL);
+        let player = server
+            .spawn_simulated_player(
+                &world,
+                "Notch",
+                position.east().to_centered_f64(),
+                GameMode::Survival,
+            )
+            .await?;
+        let block_entity = world.get_block_entity(&position).ok_or("missing heart")?;
+        let heart: &CreakingHeartBlockEntity = block_entity
+            .as_any()
+            .downcast_ref()
+            .ok_or("wrong heart type")?;
+        let protector = CreakingEntity::new(Entity::new(
+            world.clone(),
+            position.south().to_centered_f64(),
+            &EntityType::CREAKING,
+        ));
+        protector.set_transient(position);
+        world.add_entity_silent(protector.clone());
+        assert!(heart.try_adopt_legacy_protector(&world, &protector));
+
+        let listener = Arc::new(OverrideExperience {
+            original: AtomicU32::new(u32::MAX),
+            award: AtomicU32::new(0),
+        });
+        server
+            .plugin_manager
+            .register_blocking::<BlockBreakEvent, _>(listener.clone(), EventPriority::Normal, None);
+        assert!(
+            world
+                .break_block(&position, Some(player.player()), BlockFlags::NOTIFY_ALL)
+                .is_some()
+        );
+        assert!((20..=24).contains(&listener.original.load(Relaxed)));
+        assert!(protector.is_tearing_down());
+        assert!(
+            world
+                .get_entities_of_type_at_box(&BoundingBox::from_block(&position), |entity_type| {
+                    entity_type == &EntityType::EXPERIENCE_ORB
+                })
+                .is_empty()
+        );
+        world.set_block_state(&position, state, BlockFlags::NOTIFY_ALL);
+        listener.award.store(37, Relaxed);
+        assert!(
+            world
+                .break_block(&position, Some(player.player()), BlockFlags::NOTIFY_ALL)
+                .is_some()
+        );
+        let orbs = world.get_entities_of_type_at_box(&BoundingBox::from_block(&position), |kind| {
+            kind == &EntityType::EXPERIENCE_ORB
+        });
+        let mut experience = 0;
+        for orb in orbs {
+            let orb = orb
+                .cast_any()
+                .downcast_ref::<crate::entity::experience_orb::ExperienceOrbEntity>()
+                .ok_or("wrong experience orb type")?;
+            experience += orb.experience_amount();
+        }
+        assert_eq!(experience, 37);
         server.shutdown().await;
         Ok(())
     }

@@ -192,6 +192,8 @@ pub(crate) fn resolve_target_change<M: Mob + ?Sized>(
     reason: TargetReason,
 ) -> Result<Option<Arc<dyn EntityBase>>, ()> {
     let mob = caller.get_mob_entity();
+    // Normalize the caller's proposal as the setter always has. A listener supplying
+    // a different ID must name an eligible target; only an explicit None can clear it.
     let mut target = caller.as_valid_target(target);
     let target_id = target.as_ref().map(|t| t.get_entity().entity_id);
     // Unchanged: refresh the handle, no event.
@@ -206,10 +208,14 @@ pub(crate) fn resolve_target_change<M: Mob + ?Sized>(
             return Err(());
         }
         if event.target_id != target_id {
-            target = event
-                .target_id
-                .and_then(|id| world.get_entity_by_id(id))
-                .filter(|entity| entity.get_living_entity().is_some());
+            target = match event.target_id {
+                Some(id) => Some(
+                    caller
+                        .as_valid_target(world.get_entity_by_id(id))
+                        .ok_or(())?,
+                ),
+                None => None,
+            };
         }
     }
     Ok(target)
@@ -2815,7 +2821,7 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     /// Set or clear the mob's target through `EntityTargetEvent`.
-    /// Returns `false` when a plugin cancelled the change.
+    /// Returns `false` when a plugin vetoes the change or redirects to an invalid target.
     fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>, reason: TargetReason) -> bool {
         let mob = self.get_mob_entity();
         let previous = if mob.use_brain_attack_target {

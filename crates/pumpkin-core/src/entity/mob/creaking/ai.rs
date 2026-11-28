@@ -224,14 +224,37 @@ mod tests {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 match calls.len() {
-                    0 | 2 => event.cancelled = true,
-                    1 => event.target_id = Some(self.replacement),
-                    3 => event.target_id = Some(self.candidate),
+                    0 | 3 => event.cancelled = true,
+                    1 | 2 => event.target_id = Some(self.replacement),
+                    4 => event.target_id = Some(self.candidate),
+                    5 => event.target_id = Some(i32::MAX),
+                    6 => event.target_id = None,
                     _ => {}
                 }
                 calls.push((event.reason, target));
             })
         }
+    }
+
+    fn plugin_target_test_brain(candidate: Arc<dyn EntityBase>, forget: Arc<AtomicBool>) -> Brain {
+        let mut brain = Brain::default();
+        brain.add_activity(ActivityData::with_priority_start(
+            Activity::Core,
+            0,
+            vec![
+                Box::new(start_attacking::create_with_reason(
+                    |_| true,
+                    move |_| Some(candidate.clone()),
+                    |_| TargetReason::ClosestEntity,
+                )),
+                Box::new(stop_attacking_if_target_invalid::create_with_target_events(
+                    move |_, _| forget.load(Relaxed),
+                    |_, _| {},
+                )),
+            ],
+        ));
+        brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 123);
+        brain
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -260,26 +283,7 @@ mod tests {
             .register_blocking::<EntityTargetEvent, _>(review.clone(), EventPriority::Normal, None);
 
         let forget = Arc::new(AtomicBool::new(false));
-        let mut brain = Brain::default();
-        brain.add_activity(ActivityData::with_priority_start(
-            Activity::Core,
-            0,
-            vec![
-                Box::new(start_attacking::create_with_reason(
-                    |_| true,
-                    move |_| Some(candidate.clone()),
-                    |_| TargetReason::ClosestEntity,
-                )),
-                Box::new(stop_attacking_if_target_invalid::create_with_target_events(
-                    {
-                        let forget = forget.clone();
-                        move |_, _| forget.load(Relaxed)
-                    },
-                    |_, _| {},
-                )),
-            ],
-        ));
-        brain.set(types::CANT_REACH_WALK_TARGET_SINCE, 123);
+        let brain = plugin_target_test_brain(candidate, forget.clone());
         let mob = &creaking.mob_entity;
         mob.set_brain(brain);
         let visible_target = || mob.get_target().map(|target| target.get_entity().entity_id);
@@ -292,6 +296,17 @@ mod tests {
         mob.tick_brain(creaking.as_ref());
         assert_eq!(visible_target(), None);
         assert_eq!(unreachable_since(), Some(123));
+        replacement.get_entity().invulnerable.store(true, Relaxed);
+        assert!(
+            creaking
+                .as_valid_target(Some(replacement.clone()))
+                .is_none()
+        );
+        mob.tick_brain(creaking.as_ref());
+        assert!(mob.stored_target().is_none());
+        assert_eq!(unreachable_since(), Some(123));
+
+        replacement.get_entity().invulnerable.store(false, Relaxed);
         mob.tick_brain(creaking.as_ref());
         assert_eq!(visible_target(), Some(replacement_id));
         assert_eq!(unreachable_since(), None);
@@ -312,6 +327,19 @@ mod tests {
         mob.tick_brain(creaking.as_ref());
         assert_eq!(visible_target(), Some(candidate_id));
         assert_eq!(unreachable_since(), Some(456));
+
+        assert!(world.get_entity_by_id(i32::MAX).is_none());
+        mob.tick_brain(creaking.as_ref());
+        assert_eq!(
+            mob.stored_target()
+                .map(|target| target.get_entity().entity_id),
+            Some(candidate_id)
+        );
+        assert_eq!(unreachable_since(), Some(456));
+
+        mob.tick_brain(creaking.as_ref());
+        assert!(mob.stored_target().is_none());
+        assert_eq!(unreachable_since(), Some(456));
         server.shutdown().await;
 
         assert!(review.read_completed.load(Relaxed));
@@ -324,8 +352,11 @@ mod tests {
             [
                 (TargetReason::ClosestEntity, None),
                 (TargetReason::ClosestEntity, None),
+                (TargetReason::ClosestEntity, None),
                 (TargetReason::ForgotTarget, None),
                 (TargetReason::ForgotTarget, None),
+                (TargetReason::ForgotTarget, Some(candidate_id)),
+                (TargetReason::ForgotTarget, Some(candidate_id)),
             ],
         );
         Ok(())

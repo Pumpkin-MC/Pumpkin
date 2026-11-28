@@ -1656,6 +1656,31 @@ mod tests {
     }
 
     #[test]
+    fn empty_legacy_recovery_marks_chunk_dirty_for_save() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use std::sync::atomic::Ordering;
+
+        let pos = Vector2::new(2, -3);
+        let original = ChunkData::empty(pos.x, pos.y);
+        original
+            .section
+            .block_entity_records_checked
+            .store(false, Ordering::Relaxed);
+        let decoded = ChunkData::from_bytes(&original.to_pump_bytes()?, pos)?;
+        assert_eq!(decoded.legacy_block_entity_positions(), Some(Vec::new()));
+        assert!(!decoded.dirty.load(Ordering::Relaxed));
+
+        decoded.finish_block_entity_recovery();
+        assert!(decoded.dirty.swap(false, Ordering::Relaxed));
+        let reloaded = ChunkData::from_bytes(&decoded.to_pump_bytes()?, pos)?;
+        assert_eq!(reloaded.legacy_block_entity_positions(), None);
+
+        reloaded.finish_block_entity_recovery();
+        assert!(!reloaded.dirty.load(Ordering::Relaxed));
+        Ok(())
+    }
+
+    #[test]
     fn chunk_without_y_pos_uses_the_lowest_biome_section() {
         use crate::chunk::ChunkData;
         use pumpkin_util::math::vector2::Vector2;
