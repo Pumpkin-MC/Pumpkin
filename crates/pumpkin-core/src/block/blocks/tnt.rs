@@ -192,7 +192,9 @@ impl BlockBehaviour for TNTBlock {
 
     fn explode(&self, args: ExplodeArgs<'_>) {
         // Vanilla `TntBlock.wasExploded`: gated on `GameRules.TNT_EXPLODES`, no sound.
-        if !args.world.level_info.load().game_rules.tnt_explodes {
+        if !args.explosion.destroys_blocks()
+            || !args.world.level_info.load().game_rules.tnt_explodes
+        {
             return;
         }
         let fuse = TNTEntity::random_short_fuse(TNTEntity::DEFAULT_FUSE);

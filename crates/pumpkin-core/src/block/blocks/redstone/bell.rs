@@ -4,9 +4,9 @@ use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::entities::bell::BellBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockHitResult, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-    NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs, OnProjectileHitArgs, PathComputationType,
-    PlacedArgs,
+    BlockBehaviour, BlockHitResult, BrokenArgs, CanPlaceAtArgs, ExplodeArgs,
+    GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
+    OnProjectileHitArgs, OnSyncedBlockEventArgs, PathComputationType, PlacedArgs,
 };
 use crate::entity::EntityBase;
 use crate::world::World;
@@ -19,6 +19,8 @@ use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
+
+const RING_BELL_EVENT: u8 = 1;
 
 pub(crate) fn ring_bell(
     position: BlockPos,
@@ -40,16 +42,25 @@ pub(crate) fn ring_bell(
         return false;
     }
 
-    let (_block, state_id) = world.get_block_and_state_id(&position);
+    let (block, state_id) = world.get_block_and_state_id(&position);
+    if block != &Block::BELL {
+        return false;
+    }
+    let Some(block_entity) = world.get_block_entity(&position) else {
+        return false;
+    };
+    let Some(bell) = block_entity.as_any().downcast_ref::<BellBlockEntity>() else {
+        return false;
+    };
 
     let props = BellLikeProperties::from_state_id(state_id);
     let direction = hit_direction.unwrap_or(props.facing);
-
-    if let Some(block_entity) = world.get_block_entity(&position)
-        && let Some(be) = block_entity.as_any().downcast_ref::<BellBlockEntity>()
-    {
-        be.activate(direction);
-    }
+    bell.activate(direction);
+    world.add_synced_block_event(
+        position,
+        RING_BELL_EVENT,
+        direction.to_block_direction().to_index(),
+    );
 
     world.play_sound_fine(
         Sound::BlockBellUse,
@@ -118,6 +129,20 @@ impl WallMountedBlock for BellBlock {
 }
 
 impl BlockBehaviour for BellBlock {
+    fn explode(&self, args: ExplodeArgs<'_>) {
+        if args.explosion.can_trigger_blocks(args.world) {
+            ring_bell(*args.position, args.world, None, None);
+        }
+    }
+
+    fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
+        args.r#type == RING_BELL_EVENT
+            && args
+                .world
+                .get_block_entity(args.position)
+                .is_some_and(|entity| entity.as_any().is::<BellBlockEntity>())
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         let direction = args
             .direction

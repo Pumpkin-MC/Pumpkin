@@ -5,6 +5,7 @@ use pumpkin_data::block_properties::{TrialSpawnerLikeProperties, TrialSpawnerSta
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Effect;
@@ -21,7 +22,7 @@ use uuid::Uuid;
 
 use super::BlockEntity;
 use crate::entity::EntityBase;
-use crate::world::World;
+use crate::world::{World, game_event::GameEventContext};
 
 /// Flame particle type used by trial spawners for world events.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,8 +58,21 @@ pub enum PlayerDetector {
 impl PlayerDetector {
     #[must_use]
     pub fn detect(&self, world: &World, spawner_pos: BlockPos, range: i32) -> Vec<Uuid> {
+        self.detect_players(world, spawner_pos, range, false)
+    }
+
+    fn detect_players(
+        self,
+        world: &World,
+        spawner_pos: BlockPos,
+        range: i32,
+        require_line_of_sight: bool,
+    ) -> Vec<Uuid> {
         let center = spawner_pos.to_centered_f64();
-        let max_dist_sq = f64::from(range * range);
+        let max_dist_sq = f64::from(range).powi(2);
+        let can_see_spawner = |eye_pos| {
+            !require_line_of_sight || TrialSpawner::in_line_of_sight(world, center, eye_pos)
+        };
 
         match self {
             Self::NoCreativePlayers => {
@@ -76,9 +90,10 @@ impl PlayerDetector {
                         if !ent.is_alive() {
                             return None;
                         }
-                        let pos = ent.pos.load();
-                        (pos.squared_distance_to_vec(&center) <= max_dist_sq)
-                            .then_some(player.gameprofile.id)
+                        let pos = ent.block_pos.load().to_f64();
+                        (pos.squared_distance_to_vec(&spawner_pos.to_f64()) < max_dist_sq
+                            && can_see_spawner(player.eye_position()))
+                        .then_some(player.gameprofile.id)
                     })
                     .collect()
             }
@@ -90,8 +105,9 @@ impl PlayerDetector {
                         let ent = e.get_entity();
                         (ent.entity_type.id == EntityType::SHEEP.id
                             && ent.is_alive()
-                            && ent.pos.load().squared_distance_to_vec(&center) <= max_dist_sq)
-                            .then_some(ent.entity_uuid)
+                            && ent.pos.load().squared_distance_to_vec(&center) <= max_dist_sq
+                            && can_see_spawner(e.get_eye_pos()))
+                        .then_some(ent.entity_uuid)
                     })
                     .collect()
             }
@@ -817,6 +833,11 @@ pub struct TrialSpawner {
     pub is_ominous: bool,
 }
 
+struct TrialSpawnerSpawn {
+    entity: Arc<dyn EntityBase>,
+    position: BlockPos,
+}
+
 impl TrialSpawner {
     pub const DETECT_PLAYER_SPAWN_BUFFER: i64 = 40;
     pub const DEFAULT_TARGET_COOLDOWN_LENGTH: i64 = 36000;
@@ -902,14 +923,28 @@ impl TrialSpawner {
             game_time + i64::from(self.active_config().ticks_between_spawn);
     }
 
-    pub fn try_detect_players(&mut self, world: &Arc<World>, spawner_pos: BlockPos) -> bool {
-        let detected =
-            self.player_detector
-                .detect(world, spawner_pos, self.config.required_player_range);
+    fn try_detect_players(
+        &mut self,
+        world: &Arc<World>,
+        spawner_pos: BlockPos,
+        state: TrialSpawnerState,
+        game_time: i64,
+    ) {
+        if spawner_pos.as_long().wrapping_add(game_time) % 20 != 0
+            || (state == TrialSpawnerState::Cooldown && self.is_ominous)
+        {
+            return;
+        }
+
+        let range = self.config.required_player_range;
+        let visible_players = self
+            .player_detector
+            .detect_players(world, spawner_pos, range, true);
+        let mut became_ominous = false;
 
         if !self.is_ominous {
             let mut ominous_player = None;
-            for &uuid in &detected {
+            for &uuid in &visible_players {
                 if let Some(player) = world.get_player_by_uuid(uuid) {
                     if player.has_effect(&StatusEffect::TRIAL_OMEN) {
                         ominous_player = Some((player, false));
@@ -944,16 +979,38 @@ impl TrialSpawner {
                     0,
                 );
                 self.apply_ominous(world, spawner_pos);
+                became_ominous = true;
             }
         }
 
-        let mut newly_detected = false;
+        if state == TrialSpawnerState::Cooldown && !became_ominous {
+            return;
+        }
+
+        let detected = if self.data.registered_players.is_empty() {
+            visible_players
+        } else {
+            self.player_detector.detect(world, spawner_pos, range)
+        };
+        let previous_count = self.data.registered_players.len();
         for uuid in detected {
-            if self.data.registered_players.insert(uuid) {
-                newly_detected = true;
+            self.data.registered_players.insert(uuid);
+        }
+        let player_count = self.data.registered_players.len();
+        if player_count > previous_count {
+            self.data.next_mob_spawns_at = self
+                .data
+                .next_mob_spawns_at
+                .max(game_time + Self::DETECT_PLAYER_SPAWN_BUFFER);
+            if !became_ominous {
+                let event = if self.is_ominous {
+                    WorldEvent::ParticlesTrialSpawnerDetectPlayerOminous
+                } else {
+                    WorldEvent::ParticlesTrialSpawnerDetectPlayer
+                };
+                world.sync_world_event(event, spawner_pos, player_count as i32);
             }
         }
-        newly_detected
     }
 
     pub fn remove_ominous(&mut self, world: &Arc<World>, spawner_pos: BlockPos) {
@@ -1034,7 +1091,11 @@ impl TrialSpawner {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub fn spawn_mob(&mut self, world: &Arc<World>, spawner_pos: BlockPos) -> Option<Uuid> {
+    fn spawn_mob(
+        &mut self,
+        world: &Arc<World>,
+        spawner_pos: BlockPos,
+    ) -> Option<TrialSpawnerSpawn> {
         let (entity_type, spawn_range, equipment_loot_table, is_baby, slime_size, only_id) = {
             let active_cfg = if self.is_ominous {
                 &self.config.ominous
@@ -1067,46 +1128,33 @@ impl TrialSpawner {
         };
 
         let mut rng = rand::rng();
+        let spawn_pos = Vector3::new(
+            f64::from(spawner_pos.0.x)
+                + (rng.random::<f64>() - rng.random::<f64>()) * f64::from(spawn_range)
+                + 0.5,
+            f64::from(spawner_pos.0.y + rng.random_range(0..3) - 1),
+            f64::from(spawner_pos.0.z)
+                + (rng.random::<f64>() - rng.random::<f64>()) * f64::from(spawn_range)
+                + 0.5,
+        );
 
-        let mut chosen_pos = None;
-        for _ in 0..20 {
-            let spawn_pos = Vector3::new(
-                f64::from(spawner_pos.0.x)
-                    + (rng.random::<f64>() - rng.random::<f64>()) * f64::from(spawn_range)
-                    + 0.5,
-                f64::from(spawner_pos.0.y + rng.random_range(0..3) - 1),
-                f64::from(spawner_pos.0.z)
-                    + (rng.random::<f64>() - rng.random::<f64>()) * f64::from(spawn_range)
-                    + 0.5,
-            );
-
-            let bb = entity_type.get_spawn_bounding_box(spawn_pos.x, spawn_pos.y, spawn_pos.z);
-            if !world.is_space_empty(bb) {
-                continue;
-            }
-
-            let center = spawner_pos.to_centered_f64();
-            if !Self::in_line_of_sight(world, center, spawn_pos) {
-                continue;
-            }
-
-            if !crate::entity::r#type::check_spawn_rules(
+        let spawn_block_pos = BlockPos::floored_v(spawn_pos);
+        let spawn_box = entity_type.get_spawn_bounding_box(spawn_pos.x, spawn_pos.y, spawn_pos.z);
+        if !world.is_space_empty(spawn_box)
+            || !Self::in_line_of_sight(world, spawner_pos.to_centered_f64(), spawn_pos)
+            || !crate::entity::r#type::check_spawn_rules(
                 entity_type,
                 world,
-                &BlockPos::floored_v(spawn_pos),
+                &spawn_block_pos,
                 world.is_thundering(),
                 crate::entity::mob::spawn::EntitySpawnReason::TrialSpawner,
-            ) {
-                continue;
-            }
-
-            chosen_pos = Some(spawn_pos);
-            break;
+            )
+        {
+            return None;
         }
 
-        let spawn_pos = chosen_pos?;
-        let entity_uuid = Uuid::new_v4();
-        let entity = crate::entity::r#type::from_type(entity_type, spawn_pos, world, entity_uuid);
+        let entity =
+            crate::entity::r#type::from_type(entity_type, spawn_pos, world, Uuid::new_v4());
 
         let yaw = rng.random::<f32>() * 360.0;
         entity.get_entity().set_rotation(yaw, 0.0);
@@ -1121,6 +1169,36 @@ impl TrialSpawner {
             entity
                 .get_entity()
                 .set_synced_data(pumpkin_data::tracked_data::slime::ID_SIZE, i32::from(size));
+        }
+
+        if !world.no_entity_collision(Some(entity.as_ref()), spawn_box)
+            || entity
+                .get_mob()
+                .is_some_and(|mob| !mob.check_spawn_obstruction(world))
+        {
+            return None;
+        }
+
+        if world.cancelled_by_plugin(|| {
+            crate::plugin::api::events::entity::trial_spawner_spawn::TrialSpawnerSpawnEvent::new(
+                entity.get_entity().entity_id,
+                spawner_pos,
+            )
+        }) {
+            return None;
+        }
+
+        // TODO: load the spawn data entity NBT into the mob instead of the baby/slime-size special cases.
+        if only_id {
+            crate::entity::mob::spawn::finalize_spawn(
+                &entity,
+                world,
+                crate::entity::mob::spawn::EntitySpawnReason::TrialSpawner,
+                None,
+            );
+        }
+        if let Some(mob) = entity.get_mob() {
+            mob.get_mob_entity().set_persistence_required();
         }
 
         if let Some(equip) = equipment_loot_table
@@ -1151,28 +1229,9 @@ impl TrialSpawner {
             living.send_equipment_changes(&equipment_changes);
         }
 
-        let mut event =
-            crate::plugin::api::events::entity::trial_spawner_spawn::TrialSpawnerSpawnEvent::new(
-                entity.get_entity().entity_id,
-                spawner_pos,
-            );
-        if let Some(server) = world.server.upgrade() {
-            event = server.plugin_manager.fire_blocking(&server, event);
-        }
-        if event.cancelled {
+        if !world.spawn_entity(entity.clone()) {
             return None;
         }
-
-        // TODO: load the spawn data entity NBT into the mob instead of the baby/slime-size special cases.
-        if only_id {
-            crate::entity::mob::spawn::finalize_spawn(
-                &entity,
-                world,
-                crate::entity::mob::spawn::EntitySpawnReason::TrialSpawner,
-                None,
-            );
-        }
-        world.spawn_entity(entity);
 
         let flame_data = i32::from(self.is_ominous);
         world.sync_world_event(
@@ -1180,17 +1239,18 @@ impl TrialSpawner {
             spawner_pos,
             flame_data,
         );
-        let spawn_block_pos = BlockPos::floored(spawn_pos.x, spawn_pos.y, spawn_pos.z);
         world.sync_world_event(
             WorldEvent::ParticlesTrialSpawnerSpawnMobAt,
             spawn_block_pos,
             flame_data,
         );
-
-        Some(entity_uuid)
+        Some(TrialSpawnerSpawn {
+            entity,
+            position: spawn_block_pos,
+        })
     }
 
-    fn in_line_of_sight(world: &Arc<World>, origin: Vector3<f64>, dest: Vector3<f64>) -> bool {
+    fn in_line_of_sight(world: &World, origin: Vector3<f64>, dest: Vector3<f64>) -> bool {
         let hit = world.clip(&pumpkin_world::clip::ClipContext::new(
             dest,
             origin,
@@ -1372,7 +1432,12 @@ impl TrialSpawner {
         world.sync_world_event(WorldEvent::AnimationTrialSpawnerEjectItem, spawner_pos, 0);
     }
 
-    pub fn tick_server(&mut self, world: &Arc<World>, spawner_pos: BlockPos, is_ominous: bool) {
+    fn tick_server(
+        &mut self,
+        world: &Arc<World>,
+        spawner_pos: BlockPos,
+        is_ominous: bool,
+    ) -> Option<TrialSpawnerSpawn> {
         self.is_ominous = is_ominous;
         let current_state = self.get_state(world, spawner_pos);
 
@@ -1401,10 +1466,12 @@ impl TrialSpawner {
                 game_time + i64::from(self.active_config().ticks_between_spawn);
         }
 
-        let next_state = self.tick_and_get_next(world, spawner_pos, current_state);
+        let mut spawned = None;
+        let next_state = self.tick_and_get_next(world, spawner_pos, current_state, &mut spawned);
         if next_state != current_state {
             self.set_state(world, spawner_pos, next_state);
         }
+        spawned
     }
 
     #[allow(clippy::too_many_lines)]
@@ -1413,6 +1480,7 @@ impl TrialSpawner {
         world: &Arc<World>,
         spawner_pos: BlockPos,
         current_state: TrialSpawnerState,
+        spawned: &mut Option<TrialSpawnerSpawn>,
     ) -> TrialSpawnerState {
         let game_time = world
             .level_time
@@ -1435,31 +1503,11 @@ impl TrialSpawner {
                     return TrialSpawnerState::Inactive;
                 }
 
-                let newly_detected = self.try_detect_players(world, spawner_pos);
+                self.try_detect_players(world, spawner_pos, current_state, game_time);
 
                 if self.data.registered_players.is_empty() {
                     TrialSpawnerState::WaitingForPlayers
                 } else {
-                    if newly_detected {
-                        let player_count = self.data.registered_players.len() as i32;
-                        let event = if self.is_ominous {
-                            WorldEvent::ParticlesTrialSpawnerDetectPlayerOminous
-                        } else {
-                            WorldEvent::ParticlesTrialSpawnerDetectPlayer
-                        };
-                        world.sync_world_event(event, spawner_pos, player_count);
-                        world.play_sound(
-                            Sound::BlockTrialSpawnerDetectPlayer,
-                            SoundCategory::Blocks,
-                            &spawner_pos.to_f64(),
-                        );
-                        world.play_sound(
-                            Sound::BlockTrialSpawnerOpenShutter,
-                            SoundCategory::Blocks,
-                            &spawner_pos.to_f64(),
-                        );
-                        self.data.next_mob_spawns_at = game_time + Self::DETECT_PLAYER_SPAWN_BUFFER;
-                    }
                     TrialSpawnerState::Active
                 }
             }
@@ -1468,7 +1516,7 @@ impl TrialSpawner {
                     return TrialSpawnerState::Inactive;
                 }
 
-                self.try_detect_players(world, spawner_pos);
+                self.try_detect_players(world, spawner_pos, current_state, game_time);
                 if self.is_ominous {
                     self.spawn_ominous_item_spawner(world, spawner_pos, game_time);
                 }
@@ -1496,11 +1544,14 @@ impl TrialSpawner {
                     if self.data.total_mobs_spawned < total_mobs_needed
                         && (self.data.current_mobs.len() as i32) < max_simultaneous
                         && game_time >= self.data.next_mob_spawns_at
-                        && let Some(uuid) = self.spawn_mob(world, spawner_pos)
+                        && let Some(new_spawn) = self.spawn_mob(world, spawner_pos)
                     {
-                        self.data.current_mobs.insert(uuid);
+                        self.data
+                            .current_mobs
+                            .insert(new_spawn.entity.get_entity().entity_uuid);
                         self.data.total_mobs_spawned += 1;
                         self.data.next_mob_spawns_at = game_time + i64::from(ticks_between_spawn);
+                        *spawned = Some(new_spawn);
                     }
                     TrialSpawnerState::Active
                 }
@@ -1546,7 +1597,7 @@ impl TrialSpawner {
             }
             TrialSpawnerState::Cooldown => {
                 if !self.is_ominous {
-                    self.try_detect_players(world, spawner_pos);
+                    self.try_detect_players(world, spawner_pos, current_state, game_time);
                     if self.is_ominous {
                         self.data.total_mobs_spawned = 0;
                         self.data.next_mob_spawns_at = 0;
@@ -1610,8 +1661,19 @@ impl BlockEntity for TrialSpawnerBlockEntity {
             false
         };
 
-        if let Ok(mut spawner) = self.trial_spawner.lock() {
-            spawner.tick_server(world, self.position, is_ominous);
+        let spawned = self
+            .trial_spawner
+            .lock()
+            .ok()
+            .and_then(|mut spawner| spawner.tick_server(world, self.position, is_ominous));
+        if let Some(spawned) = spawned {
+            world.emit_game_event_with_context(
+                GameEvent::EntityPlace.name(),
+                spawned.position.to_centered_f64(),
+                &GameEventContext {
+                    source_entity: Some(spawned.entity.as_ref()),
+                },
+            );
         }
     }
 

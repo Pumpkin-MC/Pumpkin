@@ -606,6 +606,14 @@ impl ItemEntity {
 }
 
 impl EntityBase for ItemEntity {
+    fn ignore_explosion(
+        &self,
+        explosion: &crate::world::Explosion<'_>,
+        world: &crate::world::World,
+    ) -> bool {
+        !explosion.should_affect_blocklike_entities(world)
+    }
+
     fn dampens_vibrations(&self) -> bool {
         self.item_stack
             .lock()

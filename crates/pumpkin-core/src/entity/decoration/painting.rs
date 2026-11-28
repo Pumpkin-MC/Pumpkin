@@ -211,6 +211,14 @@ impl PaintingEntity {
 }
 
 impl EntityBase for PaintingEntity {
+    fn ignore_explosion(
+        &self,
+        explosion: &crate::world::Explosion<'_>,
+        world: &crate::world::World,
+    ) -> bool {
+        super::attachment_ignores_explosion(explosion, world)
+    }
+
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         let index = self.entity.data.load(Ordering::Relaxed) as u8;
         let direction = BlockDirection::from_index(index).unwrap_or(BlockDirection::South);

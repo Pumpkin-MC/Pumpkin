@@ -318,6 +318,10 @@ impl PartialEq for World {
 
 impl Eq for World {}
 
+fn sound_audible_chunks(volume: f32) -> i32 {
+    f64::from(volume.max(1.0)).ceil() as i32
+}
+
 impl World {
     const TAB_LIST_ADD_FLAGS: u8 = PlayerInfoFlags::ADD_PLAYER.bits()
         | PlayerInfoFlags::UPDATE_LISTED.bits()
@@ -1515,7 +1519,7 @@ impl World {
     }
 
     pub fn play_sound(&self, sound: Sound, category: SoundCategory, position: &Vector3<f64>) {
-        self.play_sound_raw(sound as u16, category, position, 1.0, 1.0);
+        self.play_sound_fine(sound, category, position, 1.0, 1.0);
     }
 
     pub fn play_sound_event(
@@ -1581,6 +1585,18 @@ impl World {
         pitch: f32,
     ) {
         self.play_sound_raw(sound as u16, category, position, volume, pitch);
+        let bedrock_event = match sound {
+            Sound::EntityBreezeCharge => "charge",
+            Sound::EntityBreezeDeflect => "reflect",
+            _ => return,
+        };
+        self.broadcast_bedrock_level_sound(
+            bedrock_event,
+            position,
+            -1,
+            "minecraft:breeze",
+            sound_audible_chunks(volume),
+        );
     }
 
     /// Plays a custom sound event by identifier for all players in range.
@@ -1636,11 +1652,22 @@ impl World {
         position: &Vector3<f64>,
         extra_data: i32,
     ) {
+        self.broadcast_bedrock_level_sound(sound_id, position, extra_data, "", 1);
+    }
+
+    fn broadcast_bedrock_level_sound(
+        &self,
+        sound_id: &str,
+        position: &Vector3<f64>,
+        extra_data: i32,
+        actor_identifier: &str,
+        audible_chunks: i32,
+    ) {
         let packet = CLevelSoundEvent {
             sound_event: sound_id.to_string(),
             position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
             data: VarInt(extra_data),
-            actor_identifier: String::new(),
+            actor_identifier: actor_identifier.to_string(),
             is_baby: false,
             is_global: false,
             actor_unique_id: 0,
@@ -1649,8 +1676,11 @@ impl World {
         let chunk_pos = BlockPos::floored_v(*position).chunk_position();
 
         for player in self.players.load().iter() {
-            if is_within_chebyshev_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
-                && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+            if is_within_chebyshev_distance(
+                chunk_pos,
+                player.get_entity().chunk_pos.load(),
+                audible_chunks,
+            ) && let ClientPlatform::Bedrock(client) = player.client.as_ref()
                 && let Ok(data) = client.serialize_packet(&packet)
             {
                 client.try_enqueue_packet(data);
@@ -1679,8 +1709,7 @@ impl World {
         let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
-        // Calculate the number of chunks the sound can be heard from based on its volume.
-        let audible_chunks = f64::from(volume.max(1.0)).ceil() as i32;
+        let audible_chunks = sound_audible_chunks(volume);
         let chunk_pos = BlockPos::floored_v(*position).chunk_position();
 
         let players = self.players.load();
@@ -4955,8 +4984,7 @@ impl World {
                     None => entity.init_data_tracker(),
                 }
 
-                // Residual velocity from a saved item drop is stale on the client.
-                entity.get_entity().velocity.store(Vector3::default());
+                entity.clear_motion_on_chunk_load();
                 self.add_entity_silent(entity.clone());
                 entities.push(entity);
             }

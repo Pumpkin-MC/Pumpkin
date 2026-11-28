@@ -178,6 +178,10 @@ impl ExplosionDamageCalculator for SimpleExplosionDamageCalculator {
     }
 }
 
+fn is_wind_charge(entity_type: &EntityType) -> bool {
+    entity_type == &EntityType::WIND_CHARGE || entity_type == &EntityType::BREEZE_WIND_CHARGE
+}
+
 pub struct Explosion<'a> {
     power: f32,
     pos: Vector3<f64>,
@@ -326,6 +330,29 @@ impl<'a> Explosion<'a> {
     #[must_use]
     pub const fn is_small(&self) -> bool {
         self.power < 2.0 || matches!(self.block_interaction, BlockInteraction::Keep)
+    }
+
+    #[must_use]
+    pub fn can_trigger_blocks(&self, world: &World) -> bool {
+        self.block_interaction == BlockInteraction::TriggerBlock
+            && (self.source.is_none_or(|source| {
+                source.get_entity().entity_type != &EntityType::BREEZE_WIND_CHARGE
+            }) || world.level_info.load().game_rules.mob_griefing)
+    }
+
+    #[must_use]
+    pub const fn destroys_blocks(&self) -> bool {
+        matches!(
+            self.block_interaction,
+            BlockInteraction::Destroy | BlockInteraction::DestroyWithDecay
+        )
+    }
+
+    pub(crate) fn should_affect_blocklike_entities(&self, world: &World) -> bool {
+        !self
+            .source
+            .is_some_and(|source| is_wind_charge(source.get_entity().entity_type))
+            && (world.level_info.load().game_rules.mob_griefing || self.destroys_blocks())
     }
 
     #[must_use]
@@ -502,7 +529,8 @@ impl<'a> Explosion<'a> {
         // TODO vanilla also skips the source entity, checks `doTeamsAllowDamage`, gives redirectable projectiles
         // the damage source's owner and calls `onExplosionHit`. `Explosion` has no source yet.
         for entity_base in entities {
-            if entity_base.is_immune_to_explosion() {
+            let entity = entity_base.get_entity();
+            if entity_base.ignore_explosion(self, world) {
                 continue;
             }
 
@@ -511,7 +539,6 @@ impl<'a> Explosion<'a> {
                 continue;
             }
 
-            let entity = entity_base.get_entity();
             if self
                 .source
                 .is_some_and(|source| source.get_entity().entity_id == entity.entity_id)
@@ -582,7 +609,7 @@ impl<'a> Explosion<'a> {
                 if let Some(knockback) = knockback {
                     // TODO vanilla sends a player's knockback in `ClientboundExplodePacket`, added to the client's
                     // motion. Setting the motion here starts from the server's stale copy of a player's velocity.
-                    entity.add_velocity(knockback);
+                    entity_base.push_from_explosion(knockback);
                 }
             }
 
@@ -590,7 +617,7 @@ impl<'a> Explosion<'a> {
         }
     }
 
-    /// A pushed redirectable projectile now belongs to whoever caused the explosion, and a player remembers the
+    /// A redirectable projectile now belongs to whoever caused the explosion, and a player remembers the
     /// impulse for fall damage.
     fn on_explosion_hit(&self, entity_base: &dyn EntityBase) {
         if is_redirectable(entity_base.get_entity())
@@ -673,10 +700,12 @@ impl<'a> Explosion<'a> {
 
     /// Vanilla `ServerExplosion.explode`: returns the count of affected positions, also for `Keep`.
     pub fn explode(&self, world: &Arc<World>) -> u32 {
-        // TODO vanilla passes the source entity with the event. `Explosion` has no source yet.
-        world.emit_game_event(
+        world.emit_game_event_with_context(
             pumpkin_data::game_event::GameEvent::Explode.name(),
             self.pos,
+            &crate::world::game_event::GameEventContext {
+                source_entity: self.source,
+            },
         );
         // Vanilla collects the positions before `hurtEntities`: a crystal set off by the damage
         // must not change which blocks this explosion breaks. `Keep` counts them too, for the packet.

@@ -218,24 +218,42 @@ pub fn intersects_aabb_with_hit(
 
 fn clip_block_shapes(
     shapes: impl Iterator<Item = BoundingBox>,
-    _state: &BlockState,
     block_pos: &BlockPos,
     from: Vector3<f64>,
     to: Vector3<f64>,
 ) -> Option<(f64, BlockDirection, Vector3<f64>, bool)> {
+    let delta = to - from;
+    if delta.length_squared() < 1.0e-7 {
+        return None;
+    }
+
+    // VoxelShape.clip tests just inside the ray to distinguish entering a face from leaving it.
+    let probe_fraction = 0.001;
+    let probe = from + delta * probe_fraction;
+    let origin = block_pos.0.to_f64();
     let mut closest_hit: Option<(f64, BlockDirection, Vector3<f64>, bool)> = None;
-
     for shape in shapes {
-        let world_min = shape.min.add(&block_pos.0.to_f64());
-        let world_max = shape.max.add(&block_pos.0.to_f64());
+        let world_min = shape.min + origin;
+        let world_max = shape.max + origin;
+        if world_min.x <= probe.x
+            && probe.x < world_max.x
+            && world_min.y <= probe.y
+            && probe.y < world_max.y
+            && world_min.z <= probe.z
+            && probe.z < world_max.z
+        {
+            let face = BlockDirection::get_nearest(-delta.x, -delta.y, -delta.z);
+            return Some((probe_fraction, face, probe, true));
+        }
 
-        if let Some((t, dir, hit_pos, is_inside)) =
-            intersects_aabb_with_hit(from, to, world_min, world_max)
+        if let Some((t, dir, hit_pos, _)) = intersects_aabb_with_hit(from, to, world_min, world_max)
+            && t > 0.0
+            && t < 1.0
             && closest_hit
                 .as_ref()
                 .is_none_or(|(closest_t, _, _, _)| t < *closest_t)
         {
-            closest_hit = Some((t, dir, hit_pos, is_inside));
+            closest_hit = Some((t, dir, hit_pos, false));
         }
     }
 
@@ -287,14 +305,12 @@ fn check_block(
     let block_hit = match context.block {
         ClipBlock::Collider | ClipBlock::Visual => clip_block_shapes(
             state.get_block_collision_shapes_at(block_pos),
-            state,
             block_pos,
             from,
             to,
         ),
         ClipBlock::Outline => clip_block_shapes(
             state.get_block_outline_shapes_at(block_pos),
-            state,
             block_pos,
             from,
             to,
@@ -578,6 +594,31 @@ mod tests {
         assert!(hit.is_hit());
         assert!(hit.is_inside);
         assert_eq!(hit.block_pos, BlockPos::new(0, 0, 0));
+    }
+
+    #[test]
+    fn ray_starting_on_a_block_face_only_hits_when_entering_the_block() {
+        let mut world = TestWorld::new();
+        let floor = BlockPos::new(0, 0, 0);
+        world.set_block(floor, &Block::STONE);
+        let from = Vector3::new(0.5, 1.0, 0.5);
+        let away = world.clip(&ClipContext::new(
+            from,
+            from.add_raw(2.0, 1.0, 0.0),
+            ClipBlock::Collider,
+            ClipFluid::None,
+        ));
+        assert!(away.is_miss());
+
+        let toward = world.clip(&ClipContext::new(
+            from,
+            from.add_raw(0.0, -2.0, 0.0),
+            ClipBlock::Collider,
+            ClipFluid::None,
+        ));
+        assert!(toward.is_inside);
+        assert_eq!(toward.block_pos, floor);
+        assert_eq!(BlockPos::floored_v(toward.location), floor);
     }
 
     #[test]

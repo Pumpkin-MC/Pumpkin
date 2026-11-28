@@ -81,7 +81,7 @@ pub struct TrackedEntity {
     pub tracking_range: u32,
     pub update_interval: u32,
     pub track_deltas: bool,
-    seen_by: RwLock<FxHashMap<Uuid, Arc<Player>>>,
+    seen_by: RwLock<Arc<FxHashMap<Uuid, Arc<Player>>>>,
     /// Bedrock players in `seen_by`.
     bedrock_watchers: AtomicU32,
     pub last_section_pos: AtomicCell<Vector3<i32>>,
@@ -496,12 +496,15 @@ impl TrackedEntity {
                 {
                     return;
                 }
-                let inserted = self
-                    .seen_by
-                    .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(player.gameprofile.id, player.clone())
-                    .is_none();
+                let inserted = {
+                    let mut viewers = self
+                        .seen_by
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    Arc::make_mut(&mut viewers)
+                        .insert(player.gameprofile.id, player.clone())
+                        .is_none()
+                };
                 if inserted {
                     if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
                         self.bedrock_watchers.fetch_add(1, Relaxed);
@@ -968,12 +971,7 @@ impl TrackedEntity {
         {
             return;
         }
-        let removed = self
-            .seen_by
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&player.gameprofile.id)
-            .is_some();
+        let removed = self.remove_viewer(player);
         if removed {
             if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
                 self.bedrock_watchers.fetch_sub(1, Relaxed);
@@ -992,22 +990,32 @@ impl TrackedEntity {
         {
             return;
         }
-        let removed = self
-            .seen_by
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&player.gameprofile.id)
-            .is_some();
+        let removed = self.remove_viewer(player);
         if removed && matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
             self.bedrock_watchers.fetch_sub(1, Relaxed);
         }
     }
 
-    pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, packet: &P, _world: &World) {
-        let seen_by = self
+    fn remove_viewer(&self, player: &Player) -> bool {
+        let mut viewers = self
             .seen_by
-            .read()
+            .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Arc::make_mut(&mut viewers)
+            .remove(&player.gameprofile.id)
+            .is_some()
+    }
+
+    fn snapshot_viewers(&self) -> Arc<FxHashMap<Uuid, Arc<Player>>> {
+        // Packet observers and filters may change viewer membership during this send.
+        self.seen_by
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, packet: &P, _world: &World) {
+        let seen_by = self.snapshot_viewers();
         if seen_by.is_empty() {
             return;
         }
@@ -1022,10 +1030,7 @@ impl TrackedEntity {
         if !self.has_bedrock_watchers() {
             return;
         }
-        let seen_by = self
-            .seen_by
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let seen_by = self.snapshot_viewers();
         let recipients = seen_by.values().filter_map(|p| {
             if let ClientPlatform::Bedrock(client) = p.client.as_ref() {
                 return Some(client);
@@ -1041,10 +1046,7 @@ impl TrackedEntity {
         be_packet: &B,
         _world: &World,
     ) {
-        let seen_by = self
-            .seen_by
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let seen_by = self.snapshot_viewers();
         if seen_by.is_empty() {
             return;
         }
@@ -1092,10 +1094,7 @@ impl TrackedEntity {
         _world: &World,
         filter: F,
     ) {
-        let seen_by = self
-            .seen_by
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let seen_by = self.snapshot_viewers();
         if seen_by.is_empty() {
             return;
         }
@@ -1113,10 +1112,7 @@ impl TrackedEntity {
         _world: &World,
         filter: F,
     ) {
-        let seen_by = self
-            .seen_by
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let seen_by = self.snapshot_viewers();
         if seen_by.is_empty() {
             return;
         }

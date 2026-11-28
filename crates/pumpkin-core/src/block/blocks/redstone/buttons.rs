@@ -7,6 +7,7 @@ use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::AttachFace;
 use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::{tag, tag::Taggable};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -19,7 +20,7 @@ use crate::block::blocks::abstract_wall_mounting::WallMountedBlock;
 use crate::block::blocks::redstone::lever::LeverLikePropertiesExt;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, CanPlaceAtArgs, EmitsRedstonePowerArgs, GetRedstonePowerArgs,
+    BlockBehaviour, CanPlaceAtArgs, EmitsRedstonePowerArgs, ExplodeArgs, GetRedstonePowerArgs,
     GetStateForNeighborUpdateArgs, NormalUseArgs, OnEntityCollisionArgs, OnPlaceArgs,
     OnScheduledTickArgs, OnStateReplacedArgs,
 };
@@ -53,6 +54,12 @@ impl BlockBehaviour for ButtonBlock {
             BlockActionResult::Success
         } else {
             BlockActionResult::Consume
+        }
+    }
+
+    fn explode(&self, args: ExplodeArgs<'_>) {
+        if args.explosion.can_trigger_blocks(args.world) {
+            Self::press(args.world, args.position);
         }
     }
 
@@ -170,6 +177,9 @@ impl ButtonBlock {
     /// `ButtonBlock::useWithoutItem` does.
     pub(crate) fn press(world: &Arc<World>, block_pos: &BlockPos) -> bool {
         let (block, state) = world.get_block_and_state_id(block_pos);
+        if !block.has_tag(&tag::Block::MINECRAFT_BUTTONS) {
+            return false;
+        }
 
         let mut button_props = ButtonLikeProperties::from_state_id(state);
         if button_props.powered {
@@ -177,14 +187,20 @@ impl ButtonBlock {
         }
 
         button_props.powered = true;
-        world.set_block_state(
-            block_pos,
-            button_props.to_state_id(block),
-            BlockFlags::NOTIFY_ALL,
-        );
+        if world
+            .set_block_state_if(
+                block_pos,
+                button_props.to_state_id(block),
+                BlockFlags::NOTIFY_ALL,
+                |current| current == state,
+            )
+            .is_none()
+        {
+            return false;
+        }
+        Self::update_neighbors(world, block_pos, button_props);
         let delay = if is_stone_button(block) { 20 } else { 30 };
         world.schedule_block_tick(block, *block_pos, delay, TickPriority::Normal);
-        Self::update_neighbors(world, block_pos, button_props);
         world.play_block_sound(get_sound(block, true), SoundCategory::Blocks, *block_pos);
         world.emit_game_event(GameEvent::BlockActivate.name(), block_pos.to_centered_f64());
 

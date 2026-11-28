@@ -90,6 +90,14 @@ impl LeashKnotEntity {
 use crate::server::Server;
 
 impl EntityBase for LeashKnotEntity {
+    fn ignore_explosion(
+        &self,
+        explosion: &crate::world::Explosion<'_>,
+        world: &crate::world::World,
+    ) -> bool {
+        super::attachment_ignores_explosion(explosion, world)
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.entity
     }

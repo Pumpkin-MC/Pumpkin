@@ -382,9 +382,13 @@ impl HurtingProjectile {
     }
 
     pub fn read_nbt(&self, nbt: &NbtCompound) {
+        self.read_nbt_with_default(nbt, Self::DEFAULT_ACCELERATION_POWER);
+    }
+
+    fn read_nbt_with_default(&self, nbt: &NbtCompound, default_power: f64) {
         self.set_acceleration_power(
             nbt.get_double("acceleration_power")
-                .unwrap_or(Self::DEFAULT_ACCELERATION_POWER),
+                .unwrap_or(default_power),
         );
     }
 
@@ -400,11 +404,7 @@ impl HurtingProjectile {
         can_hit: impl Fn(&dyn EntityBase) -> bool,
     ) {
         let entity = self.get_entity();
-        entity.tick(caller, server);
-        if entity.is_removed() {
-            return;
-        }
-        self.owner.tick(entity);
+        entity.update_last_pos();
 
         let velocity = entity.velocity.load();
         let inertia = if entity.touching_water.load(Ordering::Relaxed) {
@@ -436,11 +436,17 @@ impl HurtingProjectile {
         rotate_towards_movement(entity, 0.2);
         entity.set_pos(new_pos);
         entity.tick_block_collisions(caller);
+        // The current and the shot's vibration use the position after the move.
+        self.owner.tick(entity);
+        entity.base_tick(caller);
+        if entity.is_removed() {
+            return;
+        }
         if should_burn {
             entity.set_on_fire_for(1.0);
         }
 
-        let packet = CEntityVelocity::new(entity.entity_id.into(), velocity);
+        let packet = CEntityVelocity::new(entity.entity_id.into(), entity.velocity.load());
         world.broadcast_to_chunk(entity.chunk_pos.load(), &packet);
 
         if let Some(hit) = hit

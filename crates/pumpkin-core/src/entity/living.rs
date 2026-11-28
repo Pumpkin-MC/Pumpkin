@@ -580,6 +580,18 @@ impl LivingEntity {
             .store(self.entity.tick_count.load(Relaxed), Relaxed);
     }
 
+    /// Records the target of the attack. Only a living target is remembered.
+    pub(crate) fn set_last_hurt_mob(&self, target: &dyn EntityBase) {
+        self.last_attacking_id.store(
+            target
+                .get_living_entity()
+                .map_or(0, |living| living.entity.entity_id),
+            Relaxed,
+        );
+        self.last_attack_time
+            .store(self.entity.tick_count.load(Relaxed), Relaxed);
+    }
+
     fn tick_last_hurt_by_mob(&self) {
         if self.last_hurt_by_mob.load().is_none() {
             return;
@@ -594,8 +606,24 @@ impl LivingEntity {
     }
 
     pub fn get_last_hurt_by_player(&self) -> Option<Arc<crate::entity::player::Player>> {
-        let uuid = self.last_hurt_by_player.load()?;
-        self.entity.world.load().get_player_by_uuid(uuid)
+        self.resolve_credited_player(self.last_hurt_by_player.load()?)
+    }
+
+    fn resolve_credited_player(&self, uuid: Uuid) -> Option<Arc<crate::entity::player::Player>> {
+        let world = self.entity.world.load();
+        world
+            .get_player_by_uuid(uuid)
+            .or_else(|| world.server.upgrade()?.get_player_by_uuid(uuid))
+    }
+
+    /// The tick can reach the credited player, including in another dimension.
+    pub(crate) fn player_kill_credit_id(&self) -> Option<i32> {
+        let uuid = self
+            .last_hurt_by_player
+            .load()
+            .or_else(|| self.last_hurt_by_mob.load().map(|attacker| attacker.uuid))?;
+        self.resolve_credited_player(uuid)
+            .map(|player| player.get_entity().entity_id)
     }
 
     /// Returns the entity that should receive kill credit for this entity's death.
@@ -603,17 +631,17 @@ impl LivingEntity {
     /// 1. Prioritize `last_hurt_by_player`, which is forgotten 100 ticks after the hit.
     /// 2. Then `last_hurt_by_mob`, which is cleared 100 ticks after the hit.
     pub fn get_kill_credit(&self) -> Option<Arc<dyn EntityBase>> {
-        if self.last_hurt_by_player.load().is_some() {
+        if let Some(uuid) = self.last_hurt_by_player.load() {
             return self
-                .get_last_hurt_by_player()
+                .resolve_credited_player(uuid)
                 .map(|player| player as Arc<dyn EntityBase>);
         }
 
-        if let Some(mob) = self.get_last_hurt_by_mob() {
-            return Some(mob);
-        }
-
-        None
+        self.get_last_hurt_by_mob().or_else(|| {
+            let attacker = self.last_hurt_by_mob.load()?;
+            self.resolve_credited_player(attacker.uuid)
+                .map(|player| player as Arc<dyn EntityBase>)
+        })
     }
 
     /// Triggers location-based enchantment effects (e.g. Frost Walker) when the entity's block position changes.
@@ -2855,7 +2883,7 @@ impl LivingEntity {
             let kill_credit = self.get_kill_credit();
             let killer = cause.or(source);
 
-            self.update_death_stats(&*dyn_self, kill_credit.as_deref());
+            self.update_death_stats(&*dyn_self, kill_credit.as_deref(), damage_type, source);
 
             self.make_voice_sound(&*dyn_self, self.death_sound(&*dyn_self));
             let perished = killer
@@ -3070,7 +3098,13 @@ impl LivingEntity {
         }
     }
 
-    fn update_death_stats(&self, dyn_self: &dyn EntityBase, cause: Option<&dyn EntityBase>) {
+    fn update_death_stats(
+        &self,
+        dyn_self: &dyn EntityBase,
+        cause: Option<&dyn EntityBase>,
+        damage_type: DamageType,
+        source: Option<&dyn EntityBase>,
+    ) {
         if let Some(victim_player) = dyn_self.get_player() {
             victim_player.increment_custom_stat(CustomStatistic::Deaths, 1);
             victim_player.set_stat(
@@ -3113,20 +3147,16 @@ impl LivingEntity {
 
                 let resource_name = self.entity.entity_type.resource_name;
                 let criterion_key = format!("minecraft:{resource_name}");
+                let distance = killer_player.position() - self.entity.pos.load();
                 killer_player.trigger_advancement(
                     crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilledEntity {
                         entity_type_resource: criterion_key,
+                        horizontal_distance: distance.horizontal_length(),
+                        absolute_distance: distance.length(),
+                        damage_type,
+                        direct_entity_type: source.map(|entity| entity.get_entity().entity_type.resource_name),
                     },
                 );
-
-                if resource_name == "skeleton" {
-                    let distance_sq = killer_player
-                        .position()
-                        .squared_distance_to_vec(&self.entity.pos.load());
-                    if distance_sq >= 2500.0 {
-                        killer_player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::SniperDuel);
-                    }
-                }
 
                 if resource_name == "phantom" {
                     killer_player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::TwoBirdsOneArrow);

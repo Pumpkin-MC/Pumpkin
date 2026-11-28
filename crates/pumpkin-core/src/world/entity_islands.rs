@@ -17,15 +17,20 @@ use pumpkin_config::world::EntityIslandsConfig;
 use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
-use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
-use crate::plugin::api::events::block::entity_block_form::EntityBlockFormEvent;
-use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
-    entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
+use crate::entity::{
+    DelayedLeash, EntityBase, PUSH_STRENGTH, projectile::wind_charge::WindChargeEntity,
+    tnt::TNTEntity,
 };
-use crate::plugin::{
-    api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
+use crate::plugin::api::events::{
+    block::entity_block_form::EntityBlockFormEvent,
+    entity::{
+        EntityBreedEvent, EntityPoseChangeEvent, EntitySpawnEvent, EntityTargetEvent,
+        EntityToggleSitEvent, PigZombieAngerEvent,
+    },
+    vehicle::vehicle_update::VehicleUpdateEvent,
+    world::GenericGameEvent,
 };
+use crate::plugin::server::packet::PacketSentEvent;
 use crate::server::Server;
 use crate::world::World;
 
@@ -137,6 +142,10 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<PigZombieAngerEvent>()
         || plugins.has_handlers::<EntityToggleSitEvent>()
         || plugins.has_handlers::<EntityBlockFormEvent>()
+        || plugins.has_handlers::<EntityPoseChangeEvent>()
+        || plugins.has_handlers::<EntitySpawnEvent>()
+        || plugins.has_handlers::<GenericGameEvent>()
+        || plugins.has_handlers::<PacketSentEvent>()
 }
 
 /// What one entity can read or change next tick.
@@ -343,10 +352,13 @@ impl EntityReach {
                         .expand(block_radius, block_radius, block_radius);
             }
         }
-        // Blast power and chained block effects can exceed the configured margins.
-        reach.global = entity
-            .get_mob()
-            .is_some_and(crate::entity::mob::Mob::has_global_tick_reach)
+        // Wind charges can hit after gateway contact, and their impacts can trigger remote
+        // damage effects such as death protection teleports. TNT can exceed the configured
+        // margins through its blast power and chained block updates.
+        reach.global = entity.cast_any().is::<WindChargeEntity>()
+            || entity
+                .get_mob()
+                .is_some_and(crate::entity::mob::Mob::has_global_tick_reach)
             || entity
                 .cast_any()
                 .downcast_ref::<TNTEntity>()
@@ -405,11 +417,7 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
     }
     if let Some(living) = entity.get_living_entity() {
         // Kill credit on death.
-        links.extend(
-            living
-                .get_last_hurt_by_player()
-                .map(|player| player.entity_id()),
-        );
+        links.extend(living.player_kill_credit_id());
         links.extend(living.get_last_hurt_by_mob_id().filter(|id| *id != 0));
     }
     links
@@ -1085,7 +1093,179 @@ impl DisjointSets {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_util::math::vector3::Vector3;
+    use crate::{
+        entity::{Entity, ai::test_support, r#type::from_type},
+        plugin::{EventPriority, EventRwHandler, api::events::Payload, player::PlayerChatEvent},
+        world::BlockFlags,
+    };
+    use pumpkin_data::dimension::Dimension;
+    use std::sync::{Arc, Mutex, PoisonError, atomic::Ordering::Relaxed};
+    use std::thread::{self, ThreadId};
+
+    struct IgnoreEvent;
+    impl<E: Payload> EventRwHandler<E> for IgnoreEvent {
+        fn handle<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            _event: &'a mut E,
+        ) -> crate::plugin::BoxFuture<'a, ()> {
+            Box::pin(async {})
+        }
+    }
+
+    fn force_separated_chunk(world: &World, index: usize) -> Vector2<i32> {
+        let chunk = Vector2::new(index as i32 * 32, 0);
+        world.level.loaded_chunks.insert(
+            chunk,
+            pumpkin_world::chunk::ChunkData::empty_sync(chunk.x, chunk.y),
+        );
+        world
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(chunk);
+        chunk
+    }
+
+    struct ObserveChargeTick {
+        entity: Entity,
+        charge: Arc<dyn EntityBase>,
+        tick: Mutex<Option<(ThreadId, bool)>>,
+    }
+
+    impl EntityBase for ObserveChargeTick {
+        fn get_entity(&self) -> &Entity {
+            &self.entity
+        }
+
+        fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
+            None
+        }
+
+        fn cast_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
+            let removed = self.charge.get_entity().is_removed();
+            *self.tick.lock().unwrap_or_else(PoisonError::into_inner) =
+                Some((thread::current().id(), removed));
+        }
+    }
+
+    #[tokio::test]
+    async fn wind_charge_impacts_preserve_world_tick_order()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for kind in [&EntityType::WIND_CHARGE, &EntityType::BREEZE_WIND_CHARGE] {
+            let folder = tempfile::tempdir()?;
+            let server = test_support::server(&folder).await?;
+            let world = server.get_world_from_dimension(&Dimension::OVERWORLD);
+            let plugins = &server.plugin_manager;
+            plugins.register_blocking::<PlayerChatEvent, _>(
+                Arc::new(IgnoreEvent),
+                EventPriority::Normal,
+                None,
+            );
+            assert!(!plugins_observe_entity_ticks(&server));
+
+            for index in 0..MIN_PARALLEL_ENTITIES {
+                let chunk = force_separated_chunk(&world, index);
+                world.add_entity_silent(from_type(
+                    &EntityType::ARMOR_STAND,
+                    Vector3::new(f64::from(chunk.x * 16) + 0.5, 100.0, 0.5),
+                    &world,
+                    uuid::Uuid::new_v4(),
+                ));
+            }
+            world.tick(&server);
+            let (entity_count, ticks_until_probe) = {
+                let schedule = world
+                    .island_schedule
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner);
+                (schedule.entity_count, schedule.ticks_until_probe)
+            };
+            assert_eq!(entity_count, MIN_PARALLEL_ENTITIES);
+            assert_eq!(ticks_until_probe, 0, "control tick should run in parallel");
+
+            let owner = from_type(
+                &EntityType::BREEZE,
+                // Resolve the shooter without letting its tick influence the schedule.
+                Vector3::new(-1023.5, 100.0, 0.5),
+                &world,
+                uuid::Uuid::new_v4(),
+            );
+            world.add_entity_silent(owner.clone());
+            world.set_block_state(
+                &BlockPos::new(5, 100, 2),
+                Block::STONE.default_state.id,
+                BlockFlags::UPDATE_KNOWN_SHAPE,
+            );
+            let charge = from_type(
+                kind,
+                Vector3::new(2.5, 100.6, 2.5),
+                &world,
+                uuid::Uuid::new_v4(),
+            );
+            charge
+                .get_projectile_owner()
+                .ok_or("expected a charge owner record")?
+                .set_uuid(Some(owner.get_entity().entity_uuid));
+            assert!(charge.get_owner_entity().is_some());
+            charge
+                .get_entity()
+                .set_velocity(Vector3::new(3.0, 0.0, 0.0));
+            world.add_entity_silent(charge.clone());
+            let chunk = force_separated_chunk(&world, MIN_PARALLEL_ENTITIES);
+            let observer = Arc::new(ObserveChargeTick {
+                entity: Entity::new(
+                    world.clone(),
+                    Vector3::new(f64::from(chunk.x * 16) + 0.5, 100.0, 0.5),
+                    &EntityType::ARMOR_STAND,
+                ),
+                charge: charge.clone(),
+                tick: Mutex::new(None),
+            });
+            world.add_entity_silent(observer.clone());
+
+            assert!(!charge.get_entity().is_removed());
+            let world_thread = thread::current().id();
+            world.tick(&server);
+
+            assert_eq!(owner.get_entity().tick_count.load(Relaxed), 0);
+            assert!(
+                charge.get_entity().is_removed(),
+                "the charge must hit the block"
+            );
+            assert_eq!(
+                *observer.tick.lock().unwrap_or_else(PoisonError::into_inner),
+                Some((world_thread, true)),
+                "the later entity must tick on the world thread after the impact",
+            );
+            server.stop();
+            server.shutdown().await;
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn packet_observers_use_the_world_entity_tick_gate()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let server = test_support::server(&folder).await?;
+        assert!(!plugins_observe_entity_ticks(&server));
+        server
+            .plugin_manager
+            .register_blocking::<PacketSentEvent, _>(
+                Arc::new(IgnoreEvent),
+                EventPriority::Normal,
+                None,
+            );
+        assert!(plugins_observe_entity_ticks(&server));
+        server.stop();
+        server.shutdown().await;
+        Ok(())
+    }
 
     #[test]
     fn serial_schedule_retries_after_twenty_ticks_or_a_count_change() {

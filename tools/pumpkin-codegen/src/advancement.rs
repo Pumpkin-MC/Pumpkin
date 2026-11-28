@@ -1557,7 +1557,35 @@ fn generate_condition_tokens(trigger: &str, val: &serde_json::Value) -> TokenStr
         }
         "minecraft:player_killed_entity" => {
             let entity_tok = generate_entity_condition_tokens(val);
-            quote! { AdvancementCondition::PlayerKilledEntity(#entity_tok) }
+            if let Some(killing_blow) = val.get("killing_blow") {
+                let direct_entity = opt_str_tokens(
+                    killing_blow
+                        .get("direct_entity")
+                        .and_then(|entity| entity.get("minecraft:entity_type"))
+                        .and_then(serde_json::Value::as_str),
+                );
+                let tags = killing_blow
+                    .get("tags")
+                    .and_then(serde_json::Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|entry| {
+                        let tag = entry.get("id")?.as_str()?;
+                        let expected = entry.get("expected")?.as_bool()?;
+                        Some(quote! { (#tag, #expected) })
+                    });
+                quote! {
+                    AdvancementCondition::PlayerKilledEntityWithDamage {
+                        entity: #entity_tok,
+                        killing_blow: DamageSourceCondition {
+                            direct_entity: #direct_entity,
+                            tags: &[#(#tags),*],
+                        },
+                    }
+                }
+            } else {
+                quote! { AdvancementCondition::PlayerKilledEntity(#entity_tok) }
+            }
         }
         "minecraft:tame_animal" => {
             let entity_tok = generate_entity_condition_tokens(val);

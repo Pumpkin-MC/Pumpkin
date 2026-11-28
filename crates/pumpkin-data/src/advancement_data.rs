@@ -222,6 +222,10 @@ pub enum AdvancementCondition {
     EnterBlock(&'static str),
     SlideDownBlock(&'static str),
     PlayerKilledEntity(EntityCondition),
+    PlayerKilledEntityWithDamage {
+        entity: EntityCondition,
+        killing_blow: DamageSourceCondition,
+    },
     BredAnimals(&'static BredAnimalsCondition),
     TameAnimal(EntityCondition),
     FilledBucket(&'static str),
@@ -415,6 +419,12 @@ pub struct DamageCondition {
     pub direct_entity: Option<&'static str>,
     pub dealt_min: Option<f64>,
     pub taken_min: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct DamageSourceCondition {
+    pub direct_entity: Option<&'static str>,
+    pub tags: &'static [(&'static str, bool)],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
