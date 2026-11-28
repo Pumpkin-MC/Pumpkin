@@ -21,7 +21,8 @@ and customizable experience. It prioritizes performance and player enjoyment whi
 > [!IMPORTANT]
 > Pumpkin is currently under heavy development.
 >
-> [See what needs to be done before the 1.0.0 Release](https://github.com/Pumpkin-MC/Pumpkin/issues/449)
+> [See what needs to be done before the 1.0.0 Release](https://github.com/Pumpkin-MC/Pumpkin/issues/449)  
+> [See Tracker-Page detailing what needs to be done for parity with Vanilla](https://pumpkinmc.org/tracker/#all)  
 
 ## Quick Start
 
