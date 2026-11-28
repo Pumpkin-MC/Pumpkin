@@ -32,11 +32,7 @@ impl<'a> ServerPacket<'a> for SClientInformationPlay<'a> {
         } else {
             VarInt(1)
         };
-        let text_filtering = if version >= &JavaMinecraftVersion::V_1_17 {
-            bytebuf.get_bool()?
-        } else {
-            false
-        };
+        let text_filtering = version >= &JavaMinecraftVersion::V_1_17 && bytebuf.get_bool()?;
         let server_listing = if version >= &JavaMinecraftVersion::V_1_18 {
             bytebuf.get_bool()?
         } else {

@@ -137,13 +137,9 @@ impl LightData {
     }
 
     pub fn read(bytebuf: &mut &[u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let trust_edges = if *version >= JavaMinecraftVersion::V_1_16
+        let trust_edges = *version >= JavaMinecraftVersion::V_1_16
             && *version <= JavaMinecraftVersion::V_1_19_4
-        {
-            bytebuf.get_bool()?
-        } else {
-            false
-        };
+            && bytebuf.get_bool()?;
 
         let (sky_light_mask, block_light_mask, empty_sky_light_mask, empty_block_light_mask) =
             if *version >= JavaMinecraftVersion::V_1_17 {

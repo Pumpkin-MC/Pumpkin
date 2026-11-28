@@ -1604,11 +1604,8 @@ impl BlockEntity for TrialSpawnerBlockEntity {
     fn tick(&self, world: &Arc<World>) {
         let block_id = world.get_block_state_id(&self.position);
         let block = world.get_block(&self.position);
-        let is_ominous = if block.id == pumpkin_data::BlockId::TRIAL_SPAWNER {
-            TrialSpawnerLikeProperties::from_state_id(block_id).ominous
-        } else {
-            false
-        };
+        let is_ominous = block.id == pumpkin_data::BlockId::TRIAL_SPAWNER
+            && TrialSpawnerLikeProperties::from_state_id(block_id).ominous;
 
         if let Ok(mut spawner) = self.trial_spawner.lock() {
             spawner.tick_server(world, self.position, is_ominous);

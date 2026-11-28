@@ -121,11 +121,8 @@ impl<'a> ServerPacket<'a> for CMultiBlockUpdate {
             let encoded_pos = bytebuf.get_i64_be()?;
             let chunk_section = vector3::unpacked_chunk_pos(encoded_pos);
 
-            let suppress_light_updates = if *version <= JavaMinecraftVersion::V_1_19_4 {
-                bytebuf.get_bool()?
-            } else {
-                false
-            };
+            let suppress_light_updates =
+                *version <= JavaMinecraftVersion::V_1_19_4 && bytebuf.get_bool()?;
 
             let count = bytebuf.get_var_int()?.0 as usize;
             let mut updates = Vec::with_capacity(count);

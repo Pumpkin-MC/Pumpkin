@@ -21,11 +21,7 @@ impl BlockBehaviour for LayeredSnowBlock {
 
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
         let props = SnowLikeProperties::from_state_id(args.state_id);
-        if props.layers < 8 {
-            args.direction == BlockDirection::Down
-        } else {
-            false
-        }
+        props.layers < 8 && args.direction == BlockDirection::Down
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {

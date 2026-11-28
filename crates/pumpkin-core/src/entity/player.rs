@@ -9060,11 +9060,8 @@ impl LastSeenMessagesValidator {
         let mut last_seen_entries = Vec::new();
 
         for i in 0..self.last_seen_count {
-            let is_acknowledged = if i / 8 < acknowledged.len() {
-                (acknowledged[i / 8] & (1 << (i % 8))) != 0
-            } else {
-                false
-            };
+            let is_acknowledged =
+                i / 8 < acknowledged.len() && (acknowledged[i / 8] & (1 << (i % 8))) != 0;
 
             let message = self.tracked_messages.get(i).cloned().flatten();
             if is_acknowledged {

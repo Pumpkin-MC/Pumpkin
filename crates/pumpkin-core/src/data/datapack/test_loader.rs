@@ -167,7 +167,7 @@ fn json_value_to_nbt(value: &Value) -> NbtTag {
                         i32::try_from(value).map_or_else(
                             |_| {
                                 i64::try_from(value)
-                                    .map_or_else(|_| NbtTag::Double(value as f64), NbtTag::Long)
+                                    .map_or(NbtTag::Double(value as f64), NbtTag::Long)
                             },
                             NbtTag::Int,
                         )

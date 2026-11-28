@@ -441,10 +441,10 @@ impl std::fmt::Display for NamedColor {
     }
 }
 
-impl TryFrom<&str> for NamedColor {
-    type Error = ();
+impl std::str::FromStr for NamedColor {
+    type Err = ();
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "black" => Ok(Self::Black),
             "dark_blue" => Ok(Self::DarkBlue),
@@ -464,5 +464,13 @@ impl TryFrom<&str> for NamedColor {
             "white" => Ok(Self::White),
             _ => Err(()),
         }
+    }
+}
+
+impl TryFrom<&str> for NamedColor {
+    type Error = <Self as std::str::FromStr>::Err;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        value.parse()
     }
 }

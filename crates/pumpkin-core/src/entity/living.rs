@@ -2198,11 +2198,8 @@ impl LivingEntity {
 
         let mut velo = self.entity.velocity.load();
 
-        let can_powder_snow_climb = if self.entity.was_in_powder_snow.load(Relaxed) {
-            crate::block::blocks::powder_snow::can_entity_walk_on_powder_snow(caller)
-        } else {
-            false
-        };
+        let can_powder_snow_climb = self.entity.was_in_powder_snow.load(Relaxed)
+            && crate::block::blocks::powder_snow::can_entity_walk_on_powder_snow(caller);
 
         if (self.entity.horizontal_collision.load(SeqCst) || self.jumping.load(SeqCst))
             && (caller.on_climbable() || can_powder_snow_climb)

@@ -390,7 +390,7 @@ pub(super) fn json_to_nbt(value: &Value) -> Option<NbtTag> {
         Value::String(value) => NbtTag::String(value.clone().into()),
         Value::Number(value) => {
             if let Some(value) = value.as_i64() {
-                i32::try_from(value).map_or_else(|_| NbtTag::Long(value), NbtTag::Int)
+                i32::try_from(value).map_or(NbtTag::Long(value), NbtTag::Int)
             } else if value.is_f64() {
                 NbtTag::Double(value.as_f64()?)
             } else {
@@ -682,13 +682,7 @@ fn match_enchantments(tool: &ItemStack, requirements: &Value, stored: bool) -> b
     };
 
     requirements.as_array().map_or_else(
-        || {
-            if requirements.is_object() {
-                check_requirement(requirements)
-            } else {
-                false
-            }
-        },
+        || requirements.is_object() && check_requirement(requirements),
         |req_array| req_array.iter().all(check_requirement),
     )
 }

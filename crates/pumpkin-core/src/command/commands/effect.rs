@@ -68,11 +68,8 @@ impl CommandExecutor for GiveExecutor {
             0
         };
 
-        let hide_particles = if self.has_hide_particles {
-            BoolArgumentType::get(context, "hideParticles")?
-        } else {
-            false
-        };
+        let hide_particles =
+            self.has_hide_particles && BoolArgumentType::get(context, "hideParticles")?;
 
         let mut successes = 0;
 

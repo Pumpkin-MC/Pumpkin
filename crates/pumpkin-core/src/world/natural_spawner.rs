@@ -1056,12 +1056,9 @@ pub fn is_spawn_position_ok(
             let cur = world.get_block_state(block_pos);
             let is_valid_spawn_below = is_valid_spawn_floor(down, entity_type);
 
-            if is_valid_spawn_below {
-                is_valid_empty_spawn_block(cur, entity_type)
-                    && is_valid_empty_spawn_block(up, entity_type)
-            } else {
-                false
-            }
+            is_valid_spawn_below
+                && is_valid_empty_spawn_block(cur, entity_type)
+                && is_valid_empty_spawn_block(up, entity_type)
         }
         SpawnLocation::Unrestricted => true,
     }
@@ -1097,12 +1094,9 @@ pub fn is_spawn_position_ok_cache(
 
             let is_valid_spawn_below = is_valid_spawn_floor(down, entity_type);
 
-            if is_valid_spawn_below {
-                is_valid_empty_spawn_block(state, entity_type)
-                    && is_valid_empty_spawn_block(up, entity_type)
-            } else {
-                false
-            }
+            is_valid_spawn_below
+                && is_valid_empty_spawn_block(state, entity_type)
+                && is_valid_empty_spawn_block(up, entity_type)
         }
         SpawnLocation::Unrestricted => true,
     }
