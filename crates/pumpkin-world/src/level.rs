@@ -48,9 +48,10 @@ use tokio_util::task::TaskTracker;
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone)]
 pub enum LoadedChunkChange {
-    Loaded(Vector2<i32>),
+    // Retain the chunk even if it unloads before the world tick consumes this change.
+    Loaded(SyncChunk),
     Unloaded(Vector2<i32>),
 }
 
@@ -735,10 +736,6 @@ impl Level {
             return res;
         }
         let chunk = self.fetch_chunk(pos).await;
-        if self.loaded_chunks.insert(pos, chunk.clone()).is_none() {
-            self.loaded_chunk_changes
-                .push(LoadedChunkChange::Loaded(pos));
-        }
         f(&chunk)
     }
 

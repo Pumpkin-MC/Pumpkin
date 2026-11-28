@@ -2,6 +2,8 @@ use super::super::FromIntoEvent;
 use crate::wit::pumpkin::plugin::event::{ChunkUnloadEventData, Event, EventType};
 
 /// Event triggered when a chunk is unloaded.
+///
+/// Delivered after the transition. The ABI `cancelled` field is ignored.
 pub struct ChunkUnloadEvent;
 impl FromIntoEvent for ChunkUnloadEvent {
     const EVENT_TYPE: EventType = EventType::ChunkUnloadEvent;

@@ -481,11 +481,35 @@ impl World {
         }
     }
 
+    pub fn update_active_chunks(self: &Arc<Self>) {
+        let changes: Vec<_> = self.level.loaded_chunk_changes().collect();
+        self.update_active_chunk_tracker(&changes);
+        if let Some(server) = self.server.upgrade() {
+            for change in changes {
+                match change {
+                    pumpkin_world::level::LoadedChunkChange::Loaded(chunk) => {
+                        let event = crate::plugin::api::events::world::ChunkLoad {
+                            world: self.clone(),
+                            chunk,
+                        };
+                        server.plugin_manager.fire_blocking(&server, event);
+                    }
+                    pumpkin_world::level::LoadedChunkChange::Unloaded(pos) => {
+                        self.unload_chunk(pos);
+                    }
+                }
+            }
+        }
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "active chunk tracking combines players and force tickets"
     )]
-    pub fn update_active_chunks(self: &Arc<Self>) {
+    fn update_active_chunk_tracker(
+        self: &Arc<Self>,
+        changes: &[pumpkin_world::level::LoadedChunkChange],
+    ) {
         let sim_dist = self.server.upgrade().map_or(16, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
@@ -555,9 +579,10 @@ impl World {
                 migrations.push(pos);
             }
         }
-        for change in self.level.loaded_chunk_changes() {
+        for change in changes {
             match change {
-                pumpkin_world::level::LoadedChunkChange::Loaded(pos) => {
+                pumpkin_world::level::LoadedChunkChange::Loaded(chunk) => {
+                    let pos = Vector2::new(chunk.x, chunk.z);
                     loaded_for_poi.insert(pos);
                     if active_chunks.contains(&pos)
                         && self.level.is_chunk_loaded(&pos)
@@ -567,8 +592,8 @@ impl World {
                     }
                 }
                 pumpkin_world::level::LoadedChunkChange::Unloaded(pos) => {
-                    if !self.level.is_chunk_loaded(&pos) {
-                        tracker.loaded_active_chunks.remove(&pos);
+                    if !self.level.is_chunk_loaded(pos) {
+                        tracker.loaded_active_chunks.remove(pos);
                     }
                 }
             }
@@ -8843,6 +8868,153 @@ mod tests {
         match registry.get(&GameRule::RandomTickSpeed) {
             GameRuleValue::Int(v) => assert_eq!(*v, 20),
             GameRuleValue::Bool(_) => panic!("expected int"),
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Lifecycle regression includes notification handlers and server setup"
+    )]
+    async fn chunk_lifecycle_dispatches_ordered_notifications()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{
+            data::VanillaData,
+            plugin::{
+                BoxFuture, EventPriority, EventRwHandler,
+                world::{ChunkLoad, ChunkUnloadEvent},
+            },
+            server::Server,
+        };
+        use futures::FutureExt;
+        use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+        use pumpkin_util::world_seed::Seed;
+        use pumpkin_world::world_info::{
+            GeneratorSettings, LevelData, WorldInfoWriter, anvil::AnvilLevelInfo,
+        };
+        use std::{
+            panic::AssertUnwindSafe,
+            sync::{Arc, Mutex},
+            time::Duration,
+        };
+
+        const STEP_TIMEOUT: Duration = Duration::from_secs(60);
+
+        #[derive(Default)]
+        struct Notifications(Mutex<Vec<(bool, Vector2<i32>)>>);
+        impl EventRwHandler<ChunkLoad> for Notifications {
+            fn handle<'a>(
+                &'a self,
+                _: &'a Arc<Server>,
+                event: &'a mut ChunkLoad,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    // Plugin callbacks must run after the active-chunk locks are released.
+                    assert!(event.world.active_chunk_tracker.try_lock().is_ok());
+                    assert!(event.world.active_chunks.try_write().is_ok());
+                    self.0
+                        .lock()
+                        .unwrap()
+                        .push((true, Vector2::new(event.chunk.x, event.chunk.z)));
+                })
+            }
+        }
+        impl EventRwHandler<ChunkUnloadEvent> for Notifications {
+            fn handle<'a>(
+                &'a self,
+                _: &'a Arc<Server>,
+                event: &'a mut ChunkUnloadEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(async move {
+                    self.0.lock().unwrap().push((false, event.chunk_pos));
+                })
+            }
+        }
+
+        let directory = tempfile::tempdir()?;
+        let basic = BasicConfiguration {
+            seed: Seed(0),
+            default_level_name: directory
+                .path()
+                .join("world")
+                .to_string_lossy()
+                .into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            ..Default::default()
+        };
+        // Exercise generation and disk reloads without the cost of noise terrain or structures.
+        let mut level_data = LevelData::default(basic.seed);
+        let overworld = level_data
+            .world_gen_settings
+            .dimensions
+            .get_mut("minecraft:overworld")
+            .ok_or("No overworld settings")?;
+        overworld.generator.generator_type = "minecraft:flat".to_owned();
+        overworld.generator.settings = Some(GeneratorSettings::Reference("the_void".to_owned()));
+        AnvilLevelInfo.write_world_info(&level_data, &basic.get_world_path())?;
+        let server = Server::new(
+            basic,
+            AdvancedConfiguration::default(),
+            TelemetryConfig::default(),
+            VanillaData::default(),
+            vec![],
+        )
+        .await?;
+        let world = server.worlds.load().first().cloned().ok_or("No world")?;
+        let result = AssertUnwindSafe(async {
+            let notifications = Arc::new(Notifications::default());
+            server.plugin_manager.register_blocking::<ChunkLoad, _>(
+                notifications.clone(),
+                EventPriority::Normal,
+                None,
+            );
+            server
+                .plugin_manager
+                .register_blocking::<ChunkUnloadEvent, _>(
+                    notifications.clone(),
+                    EventPriority::Normal,
+                    None,
+                );
+            let pos = Vector2::new(0, 0);
+            for (pass, expected) in [(1, 2), (2, 4)] {
+                // First generate the chunk, then reload the saved copy on the second pass.
+                tokio::time::timeout(STEP_TIMEOUT, world.level.get_or_fetch_chunk(pos, |_| ()))
+                    .await
+                    .map_err(|_| format!("Timed out fetching lifecycle chunk on pass {pass}"))?;
+                tokio::time::timeout(STEP_TIMEOUT, async {
+                    while world.level.is_chunk_loaded(&pos) {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await
+                .map_err(|_| format!("Timed out unloading lifecycle chunk on pass {pass}"))?;
+                // Both transitions occurred before the tick: the load notification must survive removal.
+                tokio::time::timeout(STEP_TIMEOUT, async {
+                    while notifications.0.lock().unwrap().len() < expected {
+                        world.update_active_chunks();
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await
+                .map_err(|_| {
+                    format!("Timed out dispatching lifecycle notifications on pass {pass}")
+                })?;
+                world.update_active_chunks();
+            }
+            let observed = notifications.0.lock().unwrap().clone();
+            assert_eq!(
+                observed,
+                vec![(true, pos), (false, pos), (true, pos), (false, pos)]
+            );
+            Ok::<(), Box<dyn std::error::Error>>(())
+        })
+        .catch_unwind()
+        .await;
+        world.shutdown().await;
+        match result {
+            Ok(result) => result,
+            Err(panic) => std::panic::resume_unwind(panic),
         }
     }
 

@@ -3,6 +3,8 @@ use crate::wit::pumpkin::plugin::event::{ChunkLoadEventData, Event, EventType};
 use super::super::FromIntoEvent;
 
 /// An event that occurs when a chunk is loaded in a world.
+///
+/// Delivered after the transition. The ABI `cancelled` field is ignored.
 pub struct ChunkLoadEvent;
 
 impl FromIntoEvent for ChunkLoadEvent {
