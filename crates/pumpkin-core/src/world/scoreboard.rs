@@ -1,4 +1,5 @@
 use rustc_hash::FxHashMap;
+use std::sync::atomic::Ordering;
 
 use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::{
@@ -20,6 +21,9 @@ use tracing::warn;
 use super::World;
 use crate::entity::player::Player;
 
+#[cfg(test)]
+mod tests;
+
 pub trait ScoreboardTarget: Send + Sync {
     fn send_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
         &self,
@@ -35,11 +39,22 @@ impl ScoreboardTarget for World {
         je_packet: &J,
         be_packet: &B,
     ) {
-        self.broadcast_editioned(je_packet, be_packet);
+        ScoreboardTarget::send_je(self, je_packet);
+        let players = self.players.load();
+        Self::broadcast_bedrock_grouped(
+            be_packet,
+            players.iter().filter_map(|player| player.client.bedrock()),
+        );
     }
 
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J) {
-        self.broadcast_packet_all(je_packet);
+        let players = self.players.load();
+        Self::broadcast_java_players(
+            je_packet,
+            players
+                .iter()
+                .filter(|player| player.scoreboard_initialized.load(Ordering::Acquire)),
+        );
     }
 }
 
@@ -63,11 +78,11 @@ impl ScoreboardTarget for std::sync::Arc<World> {
         je_packet: &J,
         be_packet: &B,
     ) {
-        self.broadcast_editioned(je_packet, be_packet);
+        ScoreboardTarget::send_editioned(self.as_ref(), je_packet, be_packet);
     }
 
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J) {
-        self.broadcast_packet_all(je_packet);
+        ScoreboardTarget::send_je(self.as_ref(), je_packet);
     }
 }
 
@@ -77,11 +92,15 @@ impl ScoreboardTarget for Player {
         je_packet: &J,
         be_packet: &B,
     ) {
-        self.try_enqueue_packet_editioned(je_packet, be_packet);
+        if self.scoreboard_initialized.load(Ordering::Acquire) {
+            self.try_enqueue_packet_editioned(je_packet, be_packet);
+        }
     }
 
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J) {
-        self.try_send_client_packet(je_packet);
+        if self.scoreboard_initialized.load(Ordering::Acquire) {
+            self.try_send_client_packet(je_packet);
+        }
     }
 }
 
@@ -91,11 +110,11 @@ impl ScoreboardTarget for std::sync::Arc<Player> {
         je_packet: &J,
         be_packet: &B,
     ) {
-        self.try_enqueue_packet_editioned(je_packet, be_packet);
+        ScoreboardTarget::send_editioned(self.as_ref(), je_packet, be_packet);
     }
 
     fn send_je<J: ClientPacket + Sync>(&self, je_packet: &J) {
-        self.try_send_client_packet(je_packet);
+        ScoreboardTarget::send_je(self.as_ref(), je_packet);
     }
 }
 
@@ -694,7 +713,14 @@ impl Scoreboard {
             }
         }
 
+        self.send_teams_to_player(player, None);
+    }
+
+    pub(crate) fn send_teams_to_player(&self, player: &Player, overrides: Option<&Self>) {
         for team in self.teams.values() {
+            if overrides.is_some_and(|board| board.teams.contains_key(&team.name)) {
+                continue;
+            }
             let parameters = TeamParameters {
                 display_name: &team.display_name,
                 options: team.options,
@@ -708,7 +734,14 @@ impl Scoreboard {
                 team_name: team.name.clone(),
                 method: TeamMethod::Create,
                 parameters: Some(parameters),
-                players: team.players.clone().into(),
+                players: team
+                    .players
+                    .iter()
+                    .filter(|member| {
+                        overrides.is_none_or(|board| board.get_entity_team(member).is_none())
+                    })
+                    .cloned()
+                    .collect(),
             };
             player.try_send_client_packet(&je_packet);
         }
