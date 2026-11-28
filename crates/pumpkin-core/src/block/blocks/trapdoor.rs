@@ -9,6 +9,7 @@ use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_properties::Half;
+use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
@@ -69,6 +70,37 @@ fn get_sound(block: &Block, open: bool) -> Sound {
     }
 }
 
+/// Facing and half of a placed trapdoor, as in vanilla `TrapDoorBlock#getStateForPlacement`.
+fn trapdoor_placement(
+    attached_face: BlockDirection,
+    player_facing: HorizontalFacing,
+    cursor_y: f32,
+    replaces_clicked_block: bool,
+) -> (HorizontalFacing, Half) {
+    match attached_face.to_horizontal_facing() {
+        // placed against a side of a full block: face the clicked side, and let
+        // the cursor height pick the half
+        Some(face) if !replaces_clicked_block => (
+            face.opposite(),
+            if cursor_y > 0.5 {
+                Half::Top
+            } else {
+                Half::Bottom
+            },
+        ),
+        // on the ground, under a ceiling, or inside a replaceable block such as
+        // a snow layer: face the player, and be TOP unless placed upwards
+        _ => (
+            player_facing.opposite(),
+            if attached_face == BlockDirection::Down {
+                Half::Bottom
+            } else {
+                Half::Top
+            },
+        ),
+    }
+}
+
 #[pumpkin_block_from_tag("minecraft:trapdoors")]
 pub struct TrapDoorBlock;
 
@@ -92,26 +124,17 @@ impl BlockBehaviour for TrapDoorBlock {
         let powered = block_receives_redstone_power(args.world, args.position);
 
         let player_facing = args.player.get_entity().get_horizontal_facing();
+        // placing into the clicked position means the clicked block is replaceable
+        let replaces_clicked_block = *args.position == args.use_item_on.position;
 
-        // Correct facing logic using Option unwrap
-        let facing = args
-            .direction
-            .to_horizontal_facing()
-            .unwrap_or(player_facing);
-
+        let (facing, half) = trapdoor_placement(
+            args.direction,
+            player_facing,
+            args.use_item_on.cursor_pos.y,
+            replaces_clicked_block,
+        );
         trapdoor_props.facing = facing;
-
-        trapdoor_props.half = match args.direction {
-            BlockDirection::Up => Half::Top,
-            BlockDirection::Down => Half::Bottom,
-            _ => {
-                if args.use_item_on.cursor_pos.y > 0.5 {
-                    Half::Top
-                } else {
-                    Half::Bottom
-                }
-            }
-        };
+        trapdoor_props.half = half;
 
         trapdoor_props.powered = powered;
         trapdoor_props.open = powered;
@@ -174,5 +197,42 @@ impl BlockBehaviour for TrapDoorBlock {
             PathComputationType::Land | PathComputationType::Air => props.open,
             PathComputationType::Water => props.waterlogged,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn placement_matches_vanilla() {
+        let south = HorizontalFacing::South;
+        // against the side of a full block: face the clicked side, half follows
+        // the cursor height
+        assert_eq!(
+            trapdoor_placement(BlockDirection::West, south, 0.25, false),
+            (HorizontalFacing::East, Half::Bottom)
+        );
+        assert_eq!(
+            trapdoor_placement(BlockDirection::West, south, 0.75, false),
+            (HorizontalFacing::East, Half::Top)
+        );
+        // clicking the side of a replaceable block (snow layer, short grass)
+        // puts the trapdoor into that block: it faces the player and is TOP
+        // whatever the cursor height is
+        assert_eq!(
+            trapdoor_placement(BlockDirection::West, south, 0.75, true),
+            (HorizontalFacing::North, Half::Top)
+        );
+        // on the ground: face the player, bottom half
+        assert_eq!(
+            trapdoor_placement(BlockDirection::Down, south, 0.9, false),
+            (HorizontalFacing::North, Half::Bottom)
+        );
+        // under a ceiling: face the player, top half
+        assert_eq!(
+            trapdoor_placement(BlockDirection::Up, south, 0.1, false),
+            (HorizontalFacing::North, Half::Top)
+        );
     }
 }
