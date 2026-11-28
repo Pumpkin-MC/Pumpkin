@@ -44,6 +44,8 @@ pub use server_links::ServerLinksConfig;
 pub use telemetry::TelemetryConfig;
 pub use update_checker::UpdateCheckerConfig;
 
+/// Changes to configuration files that keep the rest of the file as it is.
+pub mod edit;
 /// Telemetry configuration options.
 pub mod telemetry;
 /// Update checker configuration options.

@@ -920,7 +920,7 @@ async fn execute_method(
         }
         "minecraft:serversettings/use_allowlist/set" => {
             let use_list: bool = parse_param(params, "use")?;
-            server.white_list.store(use_list, Ordering::Relaxed);
+            server.set_using_whitelist(use_list);
             if use_list
                 && server
                     .management_hub

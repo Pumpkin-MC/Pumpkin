@@ -1406,9 +1406,7 @@ impl pumpkin::plugin::server::HostWhitelistManagerWithStore<PluginHostState>
         plugin
             .store
             .pump_blocking(&mut host, move || {
-                server
-                    .white_list
-                    .store(enabled, std::sync::atomic::Ordering::Relaxed);
+                server.set_using_whitelist(enabled);
                 if enabled && server.basic_config.enforce_whitelist {
                     let to_kick: Vec<_> = {
                         let whitelist = server.data.whitelist_config.read().unwrap();

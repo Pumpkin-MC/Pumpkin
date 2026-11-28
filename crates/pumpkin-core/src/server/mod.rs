@@ -23,7 +23,9 @@ use crate::{
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
-use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+use pumpkin_config::{
+    AdvancedConfiguration, BasicConfiguration, LoadConfiguration, PumpkinConfig, TelemetryConfig,
+};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
@@ -1200,6 +1202,36 @@ impl Server {
                 },
             );
         }
+    }
+
+    /// Turns the whitelist on or off and returns the previous value. A change is saved to
+    /// `white_list` in `pumpkin.toml`, so it stays after a restart.
+    pub fn set_using_whitelist(&self, enabled: bool) -> bool {
+        // Set after a failed save, so the next call saves again even if the value is the same.
+        // Holding the lock also keeps the file in step with memory when two changes race.
+        static SAVE_PENDING: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
+        let mut save_pending = SAVE_PENDING
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let previous = self.white_list.swap(enabled, Ordering::Relaxed);
+        if previous != enabled || *save_pending {
+            let path = std::env::current_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."))
+                .join(PumpkinConfig::get_path());
+            *save_pending =
+                match pumpkin_config::edit::set_top_level_bool(&path, "white_list", enabled) {
+                    Ok(()) => false,
+                    Err(err) => {
+                        warn!(
+                            "Couldn't save white_list to {}. Reason: {err}",
+                            path.display()
+                        );
+                        true
+                    }
+                };
+        }
+        previous
     }
 
     /// Searches for a player by their username across all worlds.
