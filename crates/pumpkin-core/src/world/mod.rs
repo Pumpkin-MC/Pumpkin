@@ -8873,11 +8873,19 @@ mod tests {
             },
             server::Server,
         };
+        use futures::FutureExt;
         use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+        use pumpkin_util::world_seed::Seed;
+        use pumpkin_world::world_info::{
+            GeneratorSettings, LevelData, WorldInfoWriter, anvil::AnvilLevelInfo,
+        };
         use std::{
+            panic::AssertUnwindSafe,
             sync::{Arc, Mutex},
             time::Duration,
         };
+
+        const STEP_TIMEOUT: Duration = Duration::from_secs(60);
 
         #[derive(Default)]
         struct Notifications(Mutex<Vec<(bool, Vector2<i32>)>>);
@@ -8912,6 +8920,7 @@ mod tests {
 
         let directory = tempfile::tempdir()?;
         let basic = BasicConfiguration {
+            seed: Seed(0),
             default_level_name: directory
                 .path()
                 .join("world")
@@ -8921,6 +8930,16 @@ mod tests {
             allow_end: false,
             ..Default::default()
         };
+        // Exercise generation and disk reloads without the cost of noise terrain or structures.
+        let mut level_data = LevelData::default(basic.seed);
+        let overworld = level_data
+            .world_gen_settings
+            .dimensions
+            .get_mut("minecraft:overworld")
+            .ok_or("No overworld settings")?;
+        overworld.generator.generator_type = "minecraft:flat".to_owned();
+        overworld.generator.settings = Some(GeneratorSettings::Reference("the_void".to_owned()));
+        AnvilLevelInfo.write_world_info(&level_data, &basic.get_world_path())?;
         let server = Server::new(
             basic,
             AdvancedConfiguration::default(),
@@ -8930,50 +8949,60 @@ mod tests {
         )
         .await?;
         let world = server.worlds.load().first().cloned().ok_or("No world")?;
-        let notifications = Arc::new(Notifications::default());
-        server.plugin_manager.register_blocking::<ChunkLoad, _>(
-            notifications.clone(),
-            EventPriority::Normal,
-            None,
-        );
-        server
-            .plugin_manager
-            .register_blocking::<ChunkUnloadEvent, _>(
+        let result = AssertUnwindSafe(async {
+            let notifications = Arc::new(Notifications::default());
+            server.plugin_manager.register_blocking::<ChunkLoad, _>(
                 notifications.clone(),
                 EventPriority::Normal,
                 None,
             );
-        let pos = Vector2::new(0, 0);
-        for expected in [2, 4] {
-            // First generate the chunk, then reload the saved copy on the second pass.
-            tokio::time::timeout(
-                Duration::from_secs(45),
-                world.level.get_or_fetch_chunk(pos, |_| ()),
-            )
-            .await?;
-            tokio::time::timeout(Duration::from_secs(10), async {
-                while world.level.is_chunk_loaded(&pos) {
-                    tokio::time::sleep(Duration::from_millis(10)).await;
-                }
-            })
-            .await?;
-            // Both transitions occurred before the tick: the load notification must survive removal.
-            tokio::time::timeout(Duration::from_secs(10), async {
-                while notifications.0.lock().unwrap().len() < expected {
-                    world.update_active_chunks();
-                    tokio::time::sleep(Duration::from_millis(10)).await;
-                }
-            })
-            .await?;
-            world.update_active_chunks();
-        }
-        let observed = notifications.0.lock().unwrap().clone();
+            server
+                .plugin_manager
+                .register_blocking::<ChunkUnloadEvent, _>(
+                    notifications.clone(),
+                    EventPriority::Normal,
+                    None,
+                );
+            let pos = Vector2::new(0, 0);
+            for (pass, expected) in [(1, 2), (2, 4)] {
+                // First generate the chunk, then reload the saved copy on the second pass.
+                tokio::time::timeout(STEP_TIMEOUT, world.level.get_or_fetch_chunk(pos, |_| ()))
+                    .await
+                    .map_err(|_| format!("Timed out fetching lifecycle chunk on pass {pass}"))?;
+                tokio::time::timeout(STEP_TIMEOUT, async {
+                    while world.level.is_chunk_loaded(&pos) {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await
+                .map_err(|_| format!("Timed out unloading lifecycle chunk on pass {pass}"))?;
+                // Both transitions occurred before the tick: the load notification must survive removal.
+                tokio::time::timeout(STEP_TIMEOUT, async {
+                    while notifications.0.lock().unwrap().len() < expected {
+                        world.update_active_chunks();
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await
+                .map_err(|_| {
+                    format!("Timed out dispatching lifecycle notifications on pass {pass}")
+                })?;
+                world.update_active_chunks();
+            }
+            let observed = notifications.0.lock().unwrap().clone();
+            assert_eq!(
+                observed,
+                vec![(true, pos), (false, pos), (true, pos), (false, pos)]
+            );
+            Ok::<(), Box<dyn std::error::Error>>(())
+        })
+        .catch_unwind()
+        .await;
         world.shutdown().await;
-        assert_eq!(
-            observed,
-            vec![(true, pos), (false, pos), (true, pos), (false, pos)]
-        );
-        Ok(())
+        match result {
+            Ok(result) => result,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
     }
 
     #[tokio::test]
