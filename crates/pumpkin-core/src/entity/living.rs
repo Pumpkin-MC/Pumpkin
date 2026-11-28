@@ -593,6 +593,25 @@ impl LivingEntity {
         }
     }
 
+    pub fn remove_all_effects(&self) -> bool {
+        let effects: Vec<_> = self
+            .active_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .keys()
+            .copied()
+            .collect();
+
+        let mut succeeded = false;
+        for effect in effects {
+            if self.remove_effect(effect) {
+                succeeded = true;
+            }
+        }
+
+        succeeded
+    }
+
     pub fn get_last_hurt_by_player(&self) -> Option<Arc<crate::entity::player::Player>> {
         let uuid = self.last_hurt_by_player.load()?;
         self.entity.world.load().get_player_by_uuid(uuid)
@@ -1543,14 +1562,14 @@ impl LivingEntity {
         }
     }
 
-    pub fn add_effect(&self, effect: Effect) {
-        self.add_effect_with_source(effect, None);
+    pub fn add_effect(&self, effect: Effect) -> bool {
+        self.add_effect_with_source(effect, None)
     }
 
     #[expect(clippy::too_many_lines)]
-    pub fn add_effect_with_source(&self, effect: Effect, source: Option<&dyn EntityBase>) {
+    pub fn add_effect_with_source(&self, effect: Effect, source: Option<&dyn EntityBase>) -> bool {
         if !self.can_be_affected(&effect) {
-            return;
+            return false;
         }
 
         let mut effect_event =
@@ -1564,12 +1583,12 @@ impl LivingEntity {
             effect_event = server.plugin_manager.fire_blocking(&server, effect_event);
         }
         if effect_event.cancelled {
-            return;
+            return false;
         }
 
         // Like vanilla, instant effects are never sent or stored as active effects.
         if self.apply_instant_effect(effect.effect_type, effect.amplifier, None, None) {
-            return;
+            return true;
         }
 
         // Apply non-instant effects
@@ -1684,6 +1703,8 @@ impl LivingEntity {
             self.trigger_effects_changed(source);
         }
         self.sync_effect_particles();
+
+        true
     }
 
     fn trigger_effects_changed(&self, source: Option<&dyn EntityBase>) {

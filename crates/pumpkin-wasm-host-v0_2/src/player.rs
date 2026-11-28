@@ -3318,7 +3318,10 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
             blend: false,
         };
 
-        run_blocking(accessor, move || player.add_effect(effect)).await
+        run_blocking(accessor, move || {
+            player.add_effect(effect);
+        })
+        .await
     }
 
     async fn add_post_effect(

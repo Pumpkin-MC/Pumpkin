@@ -6676,13 +6676,13 @@ impl Player {
         self.set_experience(new_level, progress, points);
     }
 
-    pub fn add_effect(&self, effect: Effect) {
-        self.living_entity.add_effect(effect);
+    pub fn add_effect(&self, effect: Effect) -> bool {
+        self.living_entity.add_effect(effect)
     }
 
-    pub fn add_effect_with_source(&self, effect: Effect, source: &dyn EntityBase) {
+    pub fn add_effect_with_source(&self, effect: Effect, source: &dyn EntityBase) -> bool {
         self.living_entity
-            .add_effect_with_source(effect, Some(source));
+            .add_effect_with_source(effect, Some(source))
     }
 
     pub fn has_effect(&self, effect_type: &'static StatusEffect) -> bool {

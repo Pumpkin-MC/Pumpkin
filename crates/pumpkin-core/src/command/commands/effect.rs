@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use pumpkin_data::potion::Effect;
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
@@ -53,7 +55,7 @@ struct GiveExecutor {
 
 impl CommandExecutor for GiveExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let targets = EntityArgumentType::get_players(context, "targets")?;
+        let targets = EntityArgumentType::get_entities(context, "targets")?;
         let effect = ResourceArgument::get_mob_effect(context, "effect")?;
 
         let duration_ticks = match self.duration {
@@ -76,14 +78,19 @@ impl CommandExecutor for GiveExecutor {
 
         let mut successes = 0;
 
+        let mut last_target: Option<&dyn EntityBase> = None;
+
         for target in &targets {
-            let should_skip = target
-                .living_entity
+            let Some(living) = target.get_living_entity() else {
+                continue;
+            };
+
+            let should_skip = living
                 .get_effect(effect)
                 .is_some_and(|existing| existing.amplifier >= amplifier);
 
             if !should_skip {
-                target.add_effect(Effect {
+                let new_effect = Effect {
                     effect_type: effect,
                     duration: duration_ticks,
                     amplifier,
@@ -91,8 +98,18 @@ impl CommandExecutor for GiveExecutor {
                     show_particles: !hide_particles,
                     show_icon: true,
                     blend: false,
-                });
-                successes += 1;
+                };
+
+                let applied = if let Some(player) = target.get_player() {
+                    player.add_effect(new_effect)
+                } else {
+                    living.add_effect(new_effect)
+                };
+
+                if applied {
+                    last_target = Some(target.as_ref());
+                    successes += 1;
+                }
             }
         }
 
@@ -106,12 +123,12 @@ impl CommandExecutor for GiveExecutor {
             return Err(ERROR_GIVE_FAILED.create_without_context());
         }
 
-        if targets.len() == 1 {
+        if successes == 1 {
             context.source.send_feedback(
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_SINGLE,
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_SINGLE,
-                    [translation_name, targets[0].as_ref().get_display_name()],
+                    [translation_name, last_target.unwrap().get_display_name()],
                 ),
                 true,
             );
@@ -120,10 +137,7 @@ impl CommandExecutor for GiveExecutor {
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_MULTIPLE,
                     translation::java::COMMANDS_EFFECT_GIVE_SUCCESS_MULTIPLE,
-                    [
-                        translation_name,
-                        TextComponent::text(targets.len().to_string()),
-                    ],
+                    [translation_name, TextComponent::text(successes.to_string())],
                 ),
                 true,
             );
@@ -142,6 +156,7 @@ enum ClearMode {
 struct ClearExecutor(ClearMode);
 
 impl CommandExecutor for ClearExecutor {
+    #[expect(clippy::too_many_lines)]
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let targets = match self.0 {
             ClearMode::SelfAll => {
@@ -150,25 +165,25 @@ impl CommandExecutor for ClearExecutor {
                     .output
                     .as_player()
                     .ok_or_else(|| ERROR_NOT_PLAYER.create_without_context())?;
-                vec![player]
+                vec![player as Arc<dyn EntityBase>]
             }
             ClearMode::TargetsAll | ClearMode::TargetsSpecific => {
-                EntityArgumentType::get_players(context, "targets")?
+                EntityArgumentType::get_entities(context, "targets")?
             }
         };
 
         match self.0 {
             ClearMode::SelfAll | ClearMode::TargetsAll => {
                 let mut succeeded_clears = 0;
+                let mut last_target: Option<&dyn EntityBase> = None;
+
                 for target in &targets {
-                    let has_effects = !target
-                        .living_entity
-                        .active_effects
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .is_empty();
-                    if has_effects {
-                        target.remove_all_effects();
+                    let Some(living) = target.get_living_entity() else {
+                        continue;
+                    };
+
+                    if living.remove_all_effects() {
+                        last_target = Some(target.as_ref());
                         succeeded_clears += 1;
                     }
                 }
@@ -177,12 +192,12 @@ impl CommandExecutor for ClearExecutor {
                     return Err(ERROR_CLEAR_EVERYTHING_FAILED.create_without_context());
                 }
 
-                if targets.len() == 1 {
+                if succeeded_clears == 1 {
                     context.source.send_feedback(
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_SINGLE,
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_SINGLE,
-                            [targets[0].as_ref().get_display_name()],
+                            [last_target.unwrap().get_display_name()],
                         ),
                         true,
                     );
@@ -191,7 +206,7 @@ impl CommandExecutor for ClearExecutor {
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_MULTIPLE,
                             translation::java::COMMANDS_EFFECT_CLEAR_EVERYTHING_SUCCESS_MULTIPLE,
-                            [TextComponent::text(targets.len().to_string())],
+                            [TextComponent::text(succeeded_clears.to_string())],
                         ),
                         true,
                     );
@@ -201,9 +216,16 @@ impl CommandExecutor for ClearExecutor {
             ClearMode::TargetsSpecific => {
                 let effect = ResourceArgument::get_mob_effect(context, "effect")?;
                 let mut succeeded_clears = 0;
+                let mut last_target: Option<&dyn EntityBase> = None;
+
                 for target in &targets {
-                    if target.living_entity.has_effect(effect) {
-                        target.remove_effect(effect);
+                    let Some(living) = target.get_living_entity() else {
+                        continue;
+                    };
+
+                    if living.has_effect(effect) {
+                        living.remove_effect(effect);
+                        last_target = Some(target.as_ref());
                         succeeded_clears += 1;
                     }
                 }
@@ -212,7 +234,7 @@ impl CommandExecutor for ClearExecutor {
                     return Err(ERROR_CLEAR_SPECIFIC_FAILED.create_without_context());
                 }
 
-                if targets.len() == 1 {
+                if succeeded_clears == 1 {
                     context.source.send_feedback(
                         TextComponent::translate_cross(
                             translation::java::COMMANDS_EFFECT_CLEAR_SPECIFIC_SUCCESS_SINGLE,
@@ -223,7 +245,7 @@ impl CommandExecutor for ClearExecutor {
                                     effect.translation_key,
                                     [],
                                 ),
-                                targets[0].as_ref().get_display_name(),
+                                last_target.unwrap().get_display_name(),
                             ],
                         ),
                         true,
@@ -239,7 +261,7 @@ impl CommandExecutor for ClearExecutor {
                                     effect.translation_key,
                                     [],
                                 ),
-                                TextComponent::text(targets.len().to_string()),
+                                TextComponent::text(succeeded_clears.to_string()),
                             ],
                         ),
                         true,
@@ -303,7 +325,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         );
 
     let give_node = literal("give").then(
-        argument("targets", EntityArgumentType::Players).then(
+        argument("targets", EntityArgumentType::Entities).then(
             argument("effect", MOB_EFFECT_ARGUMENT.clone())
                 .executes(GiveExecutor {
                     duration: Duration::Default,
@@ -318,7 +340,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     let clear_node = literal("clear")
         .executes(ClearExecutor(ClearMode::SelfAll))
         .then(
-            argument("targets", EntityArgumentType::Players)
+            argument("targets", EntityArgumentType::Entities)
                 .executes(ClearExecutor(ClearMode::TargetsAll))
                 .then(
                     argument("effect", MOB_EFFECT_ARGUMENT.clone())
