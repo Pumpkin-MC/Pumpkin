@@ -13,18 +13,11 @@ impl JavaClient {
         {
             let (_, send_time) = pending.swap_remove(pos);
             let ping = send_time.elapsed().as_millis() as u32;
-            // Vanilla logic
-            player.ping.store(
-                (player.ping.load(Ordering::Relaxed) * 3 + ping) / 4,
-                Ordering::Relaxed,
-            );
+            player.update_ping(ping);
             self.wait_for_keep_alive.store(false, Ordering::Relaxed);
         } else if keep_alive.keep_alive_id == self.keep_alive_id.load() {
             let ping = self.last_keep_alive_time.load().elapsed().as_millis() as u32;
-            player.ping.store(
-                (player.ping.load(Ordering::Relaxed) * 3 + ping) / 4,
-                Ordering::Relaxed,
-            );
+            player.update_ping(ping);
             self.wait_for_keep_alive.store(false, Ordering::Relaxed);
         } else {
             debug!(

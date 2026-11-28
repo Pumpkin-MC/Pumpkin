@@ -1263,6 +1263,11 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.config.load().locale.clone())
     }
 
+    fn get_latency(&mut self, player: Resource<Player>) -> wasmtime::Result<Option<u32>> {
+        let player = self.get(&player)?;
+        Ok(player.get_latency())
+    }
+
     fn get_ping(&mut self, player: Resource<Player>) -> wasmtime::Result<u32> {
         let player = self.get(&player)?;
         Ok(player.ping.load(Ordering::Relaxed))
