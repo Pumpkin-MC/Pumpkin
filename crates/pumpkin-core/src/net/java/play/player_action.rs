@@ -138,6 +138,9 @@ impl JavaClient {
                             self.sync_block_state_to_client(&world, position);
                         } else {
                             player.mining.store(true, Ordering::Relaxed);
+                            player
+                                .mining_face
+                                .store(player_action.face, Ordering::Relaxed);
                             *player
                                 .mining_pos
                                 .lock()
@@ -289,8 +292,12 @@ impl JavaClient {
                     let stack = player.inventory().held_item();
                     server.item_registry.on_spear_jab(&stack, player);
                 }
-                // The block being mined does not change, so there is nothing to update
-                Status::ChangeDestroyDirection => {}
+                // Only the face changes; it is the data of the mining world events.
+                Status::ChangeDestroyDirection => {
+                    player
+                        .mining_face
+                        .store(player_action.face, Ordering::Relaxed);
+                }
             },
             Err(_) => self.try_kick(&TextComponent::text("Invalid status")),
         }

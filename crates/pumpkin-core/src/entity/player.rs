@@ -658,6 +658,8 @@ pub struct Player {
     pub start_mining_time: AtomicI32,
     pub tick_counter: AtomicI32,
     pub mining_pos: Mutex<BlockPos>,
+    /// Face of the block being mined (vanilla `Direction` ordinal), for the mining world events.
+    pub mining_face: AtomicU8,
     /// Vanilla `hasDelayedDestroy`: a finish below the progress threshold continues in tick.
     pub has_delayed_destroy: AtomicBool,
     /// Position of the block being broken by vanilla's delayed destroy.
@@ -996,6 +998,7 @@ impl Player {
             teleport_id_count: AtomicI32::new(0),
             mining: AtomicBool::new(false),
             mining_pos: Mutex::new(BlockPos::ZERO),
+            mining_face: AtomicU8::new(0),
             has_delayed_destroy: AtomicBool::new(false),
             delayed_destroy_pos: Mutex::new(BlockPos::ZERO),
             delayed_tick_start: AtomicI32::new(0),
@@ -3543,11 +3546,19 @@ impl Player {
             if state.is_air() {
                 p.stop_mining();
             } else {
-                let finished = p.continue_mining(
+                let start = p.start_mining_time.load(Ordering::Relaxed);
+                let finished = p.continue_mining(pos, &world, state, start);
+                // Vanilla ServerPlayerGameMode.tick: since 26.3 the server drives the mining
+                // particles, and every 4th tick also the hit sound, for everyone incl. the miner.
+                let event = if (p.tick_counter.load(Ordering::Relaxed) - start) % 4 == 0 {
+                    pumpkin_data::world::WorldEvent::ParticlesAndSoundDestroyProgress
+                } else {
+                    pumpkin_data::world::WorldEvent::ParticlesDestroyProgress
+                };
+                world.sync_world_event(
+                    event,
                     pos,
-                    &world,
-                    state,
-                    p.start_mining_time.load(Ordering::Relaxed),
+                    i32::from(p.mining_face.load(Ordering::Relaxed)),
                 );
                 if finished && matches!(p.client.as_ref(), ClientPlatform::Bedrock(_)) {
                     p.stop_mining();
