@@ -342,6 +342,12 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:loot_entity_context_and_nested_tables" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/loot_entity_context_and_nested_tables.json"
         )),
+        "pumpkin:minecart_carries_chest_boat_to_hopper" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/minecart_carries_chest_boat_to_hopper.json"
+        )),
+        "pumpkin:minecart_dismounts_beside_its_motion" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/minecart_dismounts_beside_its_motion.json"
+        )),
         "pumpkin:note_block_instrument_and_power" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/note_block_instrument_and_power.json"
         )),
@@ -612,6 +618,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:target_block_projectile_hit" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/target_block_projectile_hit.json"
         )),
+        "pumpkin:tnt_minecart_explodes_after_fall" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/tnt_minecart_explodes_after_fall.json"
+        )),
         "pumpkin:tnt_primed_by_redstone_torch" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/tnt_primed_by_redstone_torch.json"
         )),
@@ -797,6 +806,8 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:light_weighted_pressure_plate_counts_entities",
         "pumpkin:list_counts_visible_simulated_players",
         "pumpkin:loot_entity_context_and_nested_tables",
+        "pumpkin:minecart_carries_chest_boat_to_hopper",
+        "pumpkin:minecart_dismounts_beside_its_motion",
         "pumpkin:note_block_instrument_and_power",
         "pumpkin:note_block_instruments_bone_iron_soul_pumpkin",
         "pumpkin:note_block_instruments_clay_gold_wool_ice",
@@ -887,6 +898,7 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:summon_command_regression",
         "pumpkin:target_block_egg_hit_emits_pulse_and_clears",
         "pumpkin:target_block_projectile_hit",
+        "pumpkin:tnt_minecart_explodes_after_fall",
         "pumpkin:tnt_primed_by_redstone_torch",
         "pumpkin:tnt_redstone_ignites",
         "pumpkin:torch_and_soul_torch_break_without_support",

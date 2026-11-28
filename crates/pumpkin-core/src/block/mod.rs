@@ -137,11 +137,10 @@ pub trait BlockBehaviour: Send + Sync {
     fn player_placed(&self, _args: PlayerPlacedArgs<'_>) {}
 
     fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
-        if let Some(living) = args.entity.get_living_entity() {
-            let reduced_fall_distance =
-                args.fall_distance * (1.0 - args.block.fall_distance_reduction);
-            living.handle_fall_damage(args.entity, reduced_fall_distance, 1.0);
-        }
+        let reduced_fall_distance =
+            args.fall_distance * f64::from(1.0 - args.block.fall_distance_reduction);
+        args.entity
+            .cause_fall_damage(args.entity, reduced_fall_distance, 1.0);
     }
 
     fn update_entity_movement_after_fall_on(&self, args: UpdateEntityMovementAfterFallOnArgs<'_>) {
@@ -399,7 +398,7 @@ pub struct PlayerPlacedArgs<'a> {
 pub struct OnLandedUponArgs<'a> {
     pub world: &'a Arc<World>,
     pub block: &'a Block,
-    pub fall_distance: f32,
+    pub fall_distance: f64,
     pub entity: &'a dyn EntityBase,
 }
 

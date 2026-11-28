@@ -8,10 +8,9 @@ pub struct SlimeBlock;
 
 impl BlockBehaviour for SlimeBlock {
     fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
-        if !args.entity.get_entity().is_sneaking()
-            && let Some(living) = args.entity.get_living_entity()
-        {
-            living.handle_fall_damage(args.entity, args.fall_distance, 0.0);
+        if !args.entity.get_entity().is_sneaking() {
+            args.entity
+                .cause_fall_damage(args.entity, args.fall_distance, 0.0);
         }
     }
 

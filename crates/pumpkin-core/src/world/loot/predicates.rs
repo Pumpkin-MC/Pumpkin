@@ -79,11 +79,7 @@ fn entity_matches(
                 let vel = entity.get_entity().velocity.load();
                 let horiz = vel.x.hypot(vel.z);
                 let vert = vel.y.abs();
-                let fall = f64::from(
-                    entity
-                        .get_living_entity()
-                        .map_or(0.0, |l| l.fall_distance.load()),
-                );
+                let fall = entity.get_entity().fall_distance.load();
                 expected.as_object().is_some_and(|bounds| {
                     bounds
                         .iter()

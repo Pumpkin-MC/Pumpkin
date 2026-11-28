@@ -411,6 +411,7 @@ impl BlockBehaviour for CommandBlock {
                 |entity| {
                     let command_block_entity: Option<&CommandBlockEntity> =
                         entity.as_any().downcast_ref();
+                    // TODO: saturate like the command block minecart instead of wrapping.
                     command_block_entity.map(|e| e.success_count.load(Ordering::Acquire) as u8)
                 },
             )

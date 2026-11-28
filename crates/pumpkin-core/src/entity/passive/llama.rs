@@ -54,7 +54,7 @@ const MAX_STRENGTH: i32 = 5;
 const MAX_TEMPER: i32 = 30;
 const FOLLOW_CARAVAN_SPEED: f64 = 2.1;
 const FOLLOW_LEASH_SPEED: f64 = 2.0;
-const LLAMA_SAFE_FALL_DISTANCE: f32 = 6.0;
+const LLAMA_SAFE_FALL_DISTANCE: f64 = 6.0;
 const BEDROCK_CONTAINER_STRENGTH_MODIFIER: i32 = 3;
 
 /// Vanilla `Wolf.avoidLlama`: the stronger the llama, the likelier a wolf flees.
@@ -496,7 +496,7 @@ impl Mob for LlamaEntity {
     fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,
-        fall_distance: f32,
+        fall_distance: f64,
         damage_modifier: f32,
     ) -> bool {
         let damage = self.calculate_fall_damage(fall_distance, damage_modifier);
@@ -506,7 +506,9 @@ impl Mob for LlamaEntity {
         let living = &self.mob_entity.living_entity;
         if fall_distance >= LLAMA_SAFE_FALL_DISTANCE {
             living.damage(caller, damage as f32, DamageType::FALL);
-            living.propagate_fall_to_passengers(fall_distance, damage_modifier);
+            living
+                .entity
+                .propagate_fall_to_passengers(fall_distance, damage_modifier);
         }
         living.play_block_fall_sound(caller);
         true

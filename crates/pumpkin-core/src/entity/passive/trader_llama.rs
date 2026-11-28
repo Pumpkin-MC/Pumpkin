@@ -200,11 +200,10 @@ impl Mob for TraderLlamaEntity {
     fn cause_fall_damage(
         &self,
         caller: &dyn EntityBase,
-        fall_distance: f32,
+        fall_distance: f64,
         damage_modifier: f32,
     ) -> bool {
-        self.llama
-            .cause_fall_damage(caller, fall_distance, damage_modifier)
+        Mob::cause_fall_damage(self.llama.as_ref(), caller, fall_distance, damage_modifier)
     }
 
     fn mob_is_pushable(&self) -> bool {

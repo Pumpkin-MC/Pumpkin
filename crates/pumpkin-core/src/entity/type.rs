@@ -132,7 +132,7 @@ use crate::entity::projectile::wind_charge::{WIND_CHARGE_GRAVITY, WindChargeEnti
 use crate::entity::projectile::wither_skull::WitherSkullEntity;
 use crate::entity::tnt::TNTEntity;
 use crate::entity::vehicle::boat::BoatEntity;
-use crate::entity::vehicle::minecart::MinecartEntity;
+use crate::entity::vehicle::minecart::{AbstractMinecart, MinecartType};
 use crate::entity::{Entity, EntityBase, mob};
 use crate::world::World;
 use pumpkin_data::Block;
@@ -146,6 +146,14 @@ pub fn from_type(
     world: &Arc<World>,
     uuid: Uuid,
 ) -> Arc<dyn EntityBase> {
+    if let Some(kind) = MinecartType::of(entity_type) {
+        return Arc::new(AbstractMinecart::from_uuid(
+            uuid,
+            world.clone(),
+            position,
+            kind,
+        ));
+    }
     let entity = Entity::from_uuid(uuid, world.clone(), position, entity_type);
 
     let mob: Arc<dyn EntityBase> = match entity_type.id {
@@ -287,16 +295,6 @@ pub fn from_type(
         id if id == EntityType::ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
         id if id == EntityType::SPECTRAL_ARROW.id => Arc::new(ArrowEntity::new(entity, None)),
         id if id == EntityType::TRIDENT.id => Arc::new(TridentEntity::new(entity, None)),
-        id if id == EntityType::MINECART.id
-            || id == EntityType::CHEST_MINECART.id
-            || id == EntityType::FURNACE_MINECART.id
-            || id == EntityType::TNT_MINECART.id
-            || id == EntityType::HOPPER_MINECART.id
-            || id == EntityType::COMMAND_BLOCK_MINECART.id
-            || id == EntityType::SPAWNER_MINECART.id =>
-        {
-            Arc::new(MinecartEntity::new(entity))
-        }
         id if id == EntityType::FIREBALL.id => Arc::new(FireballEntity::new(entity)),
         id if id == EntityType::DRAGON_FIREBALL.id => Arc::new(DragonFireballEntity::new(entity)),
         id if id == EntityType::SMALL_FIREBALL.id => Arc::new(SmallFireballEntity::new(entity)),

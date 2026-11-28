@@ -2,8 +2,13 @@ use pumpkin_data::packet::clientbound::play::MOVE_MINECART_ALONG_TRACK;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
-use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+use pumpkin_util::{
+    math::{pack_degrees, vector3::Vector3},
+    version::JavaMinecraftVersion,
+};
 
+/// Vanilla `NewMinecartBehavior.MinecartStep`.
+#[derive(Clone, Copy)]
 pub struct MinecartStep {
     pub position: Vector3<f64>,
     pub movement: Vector3<f64>,
@@ -40,10 +45,34 @@ impl ClientPacket for CMoveMinecartAlongTrack<'_> {
             write.write_f64_be(step.movement.x)?;
             write.write_f64_be(step.movement.y)?;
             write.write_f64_be(step.movement.z)?;
-            write.write_f32_be(step.yaw)?;
-            write.write_f32_be(step.pitch)?;
+            // `ByteBufCodecs.ROTATION_BYTE`
+            write.write_u8(pack_degrees(step.yaw))?;
+            write.write_u8(pack_degrees(step.pitch))?;
             write.write_f32_be(step.weight)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn step_rotations_are_bytes() {
+        let step = MinecartStep {
+            position: Vector3::new(0.0, 0.0, 0.0),
+            movement: Vector3::new(0.0, 0.0, 0.0),
+            yaw: 90.0,
+            pitch: -45.0,
+            weight: 1.0,
+        };
+        let mut buf = Vec::new();
+        CMoveMinecartAlongTrack::new(VarInt(5), &[step])
+            .write_packet_data(&mut buf, &JavaMinecraftVersion::V_26_3)
+            .unwrap();
+        // id, step count, six doubles, `ROTATION_BYTE` yaw and pitch, float weight.
+        assert_eq!(buf.len(), 1 + 1 + 6 * 8 + 2 + 4);
+        assert_eq!(buf[50..], [64, 0xE0, 0x3F, 0x80, 0x00, 0x00]);
     }
 }

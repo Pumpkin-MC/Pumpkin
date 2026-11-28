@@ -165,15 +165,13 @@ impl BlockBehaviour for DripstoneBlock {
             if props.vertical_direction == VerticalDirection::Up
                 && props.thickness == SpeleothemThickness::Tip
             {
-                if let Some(living) = args.entity.get_living_entity() {
-                    living.handle_fall_damage(args.entity, args.fall_distance + 2.5, 2.0);
-                }
+                args.entity
+                    .cause_fall_damage(args.entity, args.fall_distance + 2.5, 2.0);
                 return;
             }
         }
-        if let Some(living) = args.entity.get_living_entity() {
-            living.handle_fall_damage(args.entity, args.fall_distance, 1.0);
-        }
+        args.entity
+            .cause_fall_damage(args.entity, args.fall_distance, 1.0);
     }
 
     fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {

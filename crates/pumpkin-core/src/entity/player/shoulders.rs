@@ -138,7 +138,7 @@ impl Player {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .flying;
-        if self.living_entity.fall_distance.load() > 0.5
+        if self.living_entity.entity.fall_distance.load() > 0.5
             || e.is_in_water()
             || flying
             || self.is_sleeping()

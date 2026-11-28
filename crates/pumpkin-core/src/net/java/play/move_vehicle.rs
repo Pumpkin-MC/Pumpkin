@@ -15,14 +15,14 @@ impl JavaClient {
             let old_pos = vehicle_entity.pos.load();
             let old_y = old_pos.y;
             vehicle_entity.set_pos(pos);
+            // Vanilla `handlePlayerKnownMovement`: the driver moves as its vehicle did.
+            entity.movement.store(pos - old_pos);
             vehicle_entity.set_rotation(packet.yaw, packet.pitch);
             vehicle_entity
                 .on_ground
                 .store(packet.on_ground, Ordering::Relaxed);
             vehicle_entity.emit_client_movement(vehicle.as_ref(), pos - old_pos);
-            if let Some(living) = vehicle.get_living_entity() {
-                living.fall(vehicle.as_ref(), pos.y - old_y, packet.on_ground);
-            }
+            vehicle.check_fall_damage(vehicle.as_ref(), pos.y - old_y, packet.on_ground);
 
             let world = player.world();
             let vehicle_pos = pos.to_block_pos();

@@ -1,4 +1,5 @@
 use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::PoweredRailLikeProperties;
 use pumpkin_data::block_properties::RailLikeProperties;
@@ -161,6 +162,25 @@ impl Rail {
             }
         }
     }
+}
+
+/// Vanilla `BaseRailBlock.isRail` + `getShapeProperty`: the shape, `None` for a non-rail.
+#[must_use]
+pub fn rail_shape(block: &Block, state_id: BlockStateId) -> Option<RailShape> {
+    // `isRail` also wants a `BaseRailBlock`: a datapack can tag other blocks as `#rails`.
+    let base_rail = RailLikeProperties::handles_block_id(block.id)
+        || PoweredRailLikeProperties::handles_block_id(block.id);
+    (base_rail && block.has_tag(&tag::Block::MINECRAFT_RAILS))
+        .then(|| RailProperties::new(state_id, block).shape())
+}
+
+/// Vanilla `getRailShape` of `MinecartItem` and `MinecartDispenseItemBehavior`: the shape of
+/// any `#rails` block, north-south for one that isn't a `BaseRailBlock`.
+#[must_use]
+pub fn rails_tag_shape(block: &Block, state_id: BlockStateId) -> Option<RailShape> {
+    block
+        .has_tag(&tag::Block::MINECRAFT_RAILS)
+        .then(|| rail_shape(block, state_id).unwrap_or(RailShape::NorthSouth))
 }
 
 enum RailProperties {

@@ -17,15 +17,19 @@ use pumpkin_config::world::EntityIslandsConfig;
 use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
-use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
+use crate::entity::vehicle::minecart::AbstractMinecart;
+use crate::entity::velocity_transfer::PUSH_STRENGTH;
+use crate::entity::{DelayedLeash, EntityBase, tnt::TNTEntity};
 use crate::plugin::api::events::block::entity_block_form::EntityBlockFormEvent;
 use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
-    entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
+    entity_breed::EntityBreedEvent, entity_mount::EntityMountEvent,
+    entity_target::EntityTargetEvent, entity_toggle_sit::EntityToggleSitEvent,
+    pig_zombie_anger::PigZombieAngerEvent,
 };
-use crate::plugin::{
-    api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
+use crate::plugin::api::events::vehicle::{
+    vehicle_enter::VehicleEnterEvent, vehicle_update::VehicleUpdateEvent,
 };
+use crate::plugin::server::packet::PacketSentEvent;
 use crate::server::Server;
 use crate::world::World;
 
@@ -129,6 +133,8 @@ impl Schedule {
 
 /// A plugin listens to an event an entity tick can fire. Its handler may touch anything,
 /// so the tick runs in list order.
+// TODO: more events fire during entity ticks, e.g. `GenericGameEvent` from movement emission
+// and the damage and explosion events.
 #[must_use]
 pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
     let plugins = &server.plugin_manager;
@@ -137,6 +143,10 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<PigZombieAngerEvent>()
         || plugins.has_handlers::<EntityToggleSitEvent>()
         || plugins.has_handlers::<EntityBlockFormEvent>()
+        // Every vehicle tick, and a minecart picking up a mob.
+        || plugins.has_handlers::<VehicleUpdateEvent>()
+        || plugins.has_handlers::<EntityMountEvent>()
+        || plugins.has_handlers::<VehicleEnterEvent>()
 }
 
 /// What one entity can read or change next tick.
@@ -248,6 +258,8 @@ impl AuditedReach {
 }
 
 /// Blocks whose contact, step or landing callbacks change blocks or change dimension.
+// TODO: a touched tripwire updates hooks about 40 blocks along the wire, past the
+// `BLOCK_UPDATE_REACH` that the writer's reach adds.
 fn changes_on_contact(block: &Block) -> bool {
     block.has_tag(&tag::Block::MINECRAFT_PRESSURE_PLATES)
         || [
@@ -278,8 +290,8 @@ pub enum EntityReach {
 #[derive(Clone, Copy)]
 pub(crate) enum BlockWriteCheck {
     Unconditional,
+    /// Contact callbacks anywhere in the reach body.
     Contact,
-    DetectorRail(BlockPos),
 }
 
 impl EntityReach {
@@ -287,24 +299,22 @@ impl EntityReach {
     pub(crate) fn block_write_check(&self, entity: &dyn EntityBase) -> BlockWriteCheck {
         match self {
             Self::Audited(audited) if !audited.changes_blocks => BlockWriteCheck::Contact,
+            // Chest carts change blocks only through contact callbacks along their move. Knockback
+            // before their turn isn't clamped vertically, so the whole body counts.
             Self::Conservative(reach)
                 if entity.get_entity().entity_type == &EntityType::CHEST_MINECART
-                    && entity
-                        .cast_any()
-                        .is::<crate::entity::vehicle::minecart::MinecartEntity>()
+                    && entity.cast_any().is::<AbstractMinecart>()
                     && reach.links.is_empty() =>
             {
-                let base = entity.get_entity();
-                let world = base.world.load();
-                if world.server.upgrade().is_some_and(|server| {
-                    server.plugin_manager.has_handlers::<VehicleUpdateEvent>()
-                        || server.plugin_manager.has_handlers::<PacketSentEvent>()
-                }) {
+                let world = entity.get_entity().world.load();
+                if world
+                    .server
+                    .upgrade()
+                    .is_some_and(|server| server.plugin_manager.has_handlers::<PacketSentEvent>())
+                {
                     return BlockWriteCheck::Unconditional;
                 }
-                // Chest carts only activate the rail inspected before movement. Their tick
-                // does not run Entity's general contact callbacks.
-                BlockWriteCheck::DetectorRail(BlockPos::floored_v(base.pos.load()))
+                BlockWriteCheck::Contact
             }
             _ => BlockWriteCheck::Unconditional,
         }
@@ -316,12 +326,25 @@ impl EntityReach {
             return Self::Audited(reach);
         }
         let base = entity.get_entity();
-        let movement = base.velocity.load().length()
+        let minecart = entity.cast_any().downcast_ref::<AbstractMinecart>();
+        // A cart clamps its own track and horizontal speed, so pushes before its turn can't
+        // carry it sideways past this.
+        let movement = base
+            .velocity
+            .load()
+            .length()
+            .max(minecart.map_or(0.0, AbstractMinecart::max_tick_travel))
             + entity
                 .get_mob()
                 .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement);
+        // A TNT cart set off by a push or a hit still keeps its blast inside the island.
+        let margin = config.unaudited_reach.max(
+            minecart
+                .and_then(AbstractMinecart::explosion_reach)
+                .unwrap_or(0.0),
+        );
         let radius = movement
-            + config.unaudited_reach
+            + margin
             + entity.get_living_entity().map_or(0.0, |living| {
                 living
                     .get_attribute_value(&Attributes::FOLLOW_RANGE)
@@ -350,7 +373,8 @@ impl EntityReach {
             || entity
                 .cast_any()
                 .downcast_ref::<TNTEntity>()
-                .is_some_and(TNTEntity::is_about_to_explode);
+                .is_some_and(TNTEntity::is_about_to_explode)
+            || minecart.is_some_and(AbstractMinecart::may_explode_next_tick);
         Self::Conservative(reach)
     }
 }
@@ -497,28 +521,16 @@ pub(crate) fn prune_block_writes(
         }
         let contact = match checks[slot] {
             BlockWriteCheck::Unconditional => continue,
-            BlockWriteCheck::Contact => {
-                let area = reach.body.expand_towards(0.0, -1.0, 0.0);
-                let contact = BoundingBox::new(
-                    area.min_block_pos().0.to_f64(),
-                    area.max_block_pos().0.to_f64() + Vector3::new(1.0, 1.0, 1.0),
-                );
-                if contact_may_change_blocks(world, &contact, &mut sections) {
-                    continue;
-                }
-                contact
-            }
-            BlockWriteCheck::DetectorRail(pos) => {
-                if !world.level.is_chunk_loaded(&pos.chunk_position())
-                    || [pos, pos.down()]
-                        .iter()
-                        .any(|pos| world.get_block(pos).id == Block::DETECTOR_RAIL.id)
-                {
-                    continue;
-                }
-                BoundingBox::from_block(&pos).expand_towards(0.0, -1.0, 0.0)
-            }
+            BlockWriteCheck::Contact => reach.body,
         };
+        let area = contact.expand_towards(0.0, -1.0, 0.0);
+        let contact = BoundingBox::new(
+            area.min_block_pos().0.to_f64(),
+            area.max_block_pos().0.to_f64() + Vector3::new(1.0, 1.0, 1.0),
+        );
+        if contact_may_change_blocks(world, &contact, &mut sections) {
+            continue;
+        }
         active[slot] = false;
         contacts.insert(candidates.len(), contact, &mut budget)?;
         candidates.push(slot);
@@ -1722,23 +1734,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn chest_cart_writes_only_bridge_elevated_readers_when_a_rail_can_activate()
+    async fn chest_cart_writes_only_bridge_elevated_readers_when_a_contact_block_is_near()
     -> Result<(), Box<dyn std::error::Error>> {
-        use crate::entity::{Entity, vehicle::minecart::MinecartEntity};
+        use crate::entity::Entity;
+        use crate::entity::vehicle::minecart::{AbstractMinecart, MinecartType};
 
         let folder = tempfile::tempdir()?;
         let world = crate::entity::ai::test_support::world(&folder);
         let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
-        world
-            .level
-            .loaded_chunks
-            .insert(Vector2::new(0, 0), chunk.clone());
+        // The cart's contact area is its whole body, which spans the neighbouring chunks.
+        for x in -1..=1 {
+            for z in -1..=1 {
+                let neighbour = if x == 0 && z == 0 {
+                    chunk.clone()
+                } else {
+                    pumpkin_world::chunk::ChunkData::empty_sync(x, z)
+                };
+                world
+                    .level
+                    .loaded_chunks
+                    .insert(Vector2::new(x, z), neighbour);
+            }
+        }
         let pos = BlockPos::new(8, 40, 8);
-        let cart = MinecartEntity::new(Entity::new(
+        let cart = AbstractMinecart::new(
             world.clone(),
             Vector3::new(8.5, 40.0, 8.5),
-            &EntityType::CHEST_MINECART,
-        ));
+            MinecartType::Chest,
+        );
         let config = EntityIslandsConfig::default();
         let custom = Entity::new(
             world.clone(),
@@ -1772,13 +1795,12 @@ mod tests {
             islands(&nodes, &[], &[])
         };
         assert_eq!(partitioned(&original), [vec![0, 1]]);
+        let prune = |reaches: &mut [TickReach]| {
+            prune_block_writes(&world, reaches, &[check, BlockWriteCheck::Unconditional])
+                .ok_or("unexpected pruning budget exhaustion")
+        };
         let mut reaches = original.clone();
-        prune_block_writes(
-            &world,
-            &mut reaches,
-            &[check, BlockWriteCheck::Unconditional],
-        )
-        .ok_or("unexpected pruning budget exhaustion")?;
+        prune(&mut reaches)?;
         assert_eq!(partitioned(&reaches), [vec![0], vec![1]]);
         assert_box(&reaches[0].body, &original[0].body);
         assert_box(&reaches[0].entities, &original[0].entities);
@@ -1786,12 +1808,7 @@ mod tests {
 
         chunk.set_block_absolute_y(8, 39, 8, Block::DETECTOR_RAIL.default_state.id);
         let mut reaches = original.clone();
-        prune_block_writes(
-            &world,
-            &mut reaches,
-            &[check, BlockWriteCheck::Unconditional],
-        )
-        .ok_or("unexpected pruning budget exhaustion")?;
+        prune(&mut reaches)?;
         assert_eq!(partitioned(&reaches), [vec![0, 1]]);
 
         chunk.set_block_absolute_y(8, 39, 8, Block::AIR.default_state.id);
@@ -1813,12 +1830,7 @@ mod tests {
 
         world.level.loaded_chunks.remove(&Vector2::new(0, 0));
         let mut reaches = original;
-        prune_block_writes(
-            &world,
-            &mut reaches,
-            &[check, BlockWriteCheck::Unconditional],
-        )
-        .ok_or("unexpected pruning budget exhaustion")?;
+        prune(&mut reaches)?;
         assert!(reaches[0].block_writes.is_some());
         world.level.shutdown().await;
         Ok(())

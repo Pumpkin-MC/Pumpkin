@@ -242,7 +242,7 @@ impl Mob for FrogEntity {
             .store(living.entity.velocity.load() * WATER_DRAG);
     }
 
-    fn calculate_fall_damage(&self, fall_distance: f32, damage_modifier: f32) -> i32 {
+    fn calculate_fall_damage(&self, fall_distance: f64, damage_modifier: f32) -> i32 {
         self.mob_entity
             .living_entity
             .base_fall_damage(fall_distance, damage_modifier)

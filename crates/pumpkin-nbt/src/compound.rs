@@ -272,6 +272,13 @@ impl NbtCompound {
             .and_then(super::tag::NbtTag::as_numeric_float)
     }
 
+    /// Returns any named numeric value as a double
+    #[must_use]
+    pub fn get_numeric_double(&self, name: &str) -> Option<f64> {
+        self.get(name)
+            .and_then(super::tag::NbtTag::as_numeric_double)
+    }
+
     /// Returns the named double value, or `None` if the tag is absent or has another type.
     #[must_use]
     pub fn get_double(&self, name: &str) -> Option<f64> {

@@ -112,9 +112,9 @@ fn convert_single(from: &dyn Mob, to: &dyn Mob, params: ConversionParams) {
         }
     }
 
-    to_living
+    to_entity
         .fall_distance
-        .store(from_living.fall_distance.load());
+        .store(from_living.entity.fall_distance.load());
     to_entity
         .fall_flying
         .store(from_entity.fall_flying.load(Relaxed), Relaxed);
