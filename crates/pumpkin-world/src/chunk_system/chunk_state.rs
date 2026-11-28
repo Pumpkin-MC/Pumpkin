@@ -340,6 +340,9 @@ impl Chunk {
             preserved_tags: Mutex::new(NbtCompound::new()),
         };
 
+        if let Some(structures) = proto_chunk.vanilla_structures {
+            chunk.set_vanilla_structures(*structures);
+        }
         *self = Self::Level(Arc::new(chunk));
     }
 }

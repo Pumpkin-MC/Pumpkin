@@ -158,6 +158,7 @@ pub struct ProtoChunk {
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
+    pub(crate) vanilla_structures: Option<Box<NbtCompound>>,
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
@@ -279,6 +280,7 @@ impl ProtoChunk {
                     .collect(),
             },
             blending_data: None,
+            vanilla_structures: None,
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
             fluid_ticks: Vec::new(),
@@ -303,6 +305,8 @@ impl ProtoChunk {
         proto_chunk
             .blending_data
             .clone_from(&chunk_data.blending_data);
+
+        proto_chunk.vanilla_structures = chunk_data.vanilla_structures().map(Box::new);
 
         // Chunks loaded from disk carry their block entities in the chunk data.
         // Keep them so the world can create the block entities when the chunk

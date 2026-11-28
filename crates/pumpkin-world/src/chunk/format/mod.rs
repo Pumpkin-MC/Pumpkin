@@ -65,6 +65,9 @@ fn preserved_root_tags(root_tag: &NbtCompound) -> NbtCompound {
     preserved
 }
 
+// Pump stores imported structure data in its existing custom data field.
+const VANILLA_STRUCTURES_KEY: &str = "PumpkinVanillaStructures";
+
 impl SingleChunkDataSerializer for ChunkData {
     #[inline]
     fn from_bytes(bytes: &Bytes, pos: Vector2<i32>) -> Result<Self, ChunkReadingError> {
@@ -497,11 +500,15 @@ impl ChunkData {
             _ => ChunkStatus::Empty,
         };
 
-        let custom_data = root_tag
+        let mut custom_data = root_tag
             .get_compound("PumpkinCustomData")
             .or_else(|| root_tag.get_compound("BukkitValues"))
             .cloned()
             .unwrap_or_default();
+
+        if let Some(structures) = root_tag.get_compound("structures") {
+            custom_data.put_compound(VANILLA_STRUCTURES_KEY, structures.clone());
+        }
 
         Ok(Self {
             section,
@@ -728,12 +735,18 @@ impl ChunkData {
             self.inhabited_time.load(Ordering::Relaxed) as i64,
         );
 
-        let custom_data = self
+        let mut custom_data = self
             .custom_data
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if let Some(NbtTag::Compound(structures)) =
+            custom_data.child_tags.remove(VANILLA_STRUCTURES_KEY)
+        {
+            root_compound.put_compound("structures", structures);
+        }
         if !custom_data.is_empty() {
-            root_compound.put_compound("PumpkinCustomData", custom_data.clone());
+            root_compound.put_compound("PumpkinCustomData", custom_data);
         }
 
         let nbt = pumpkin_nbt::Nbt::from(root_compound);
@@ -1193,6 +1206,21 @@ impl ChunkData {
         })
     }
 
+    pub(crate) fn vanilla_structures(&self) -> Option<NbtCompound> {
+        self.custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_compound(VANILLA_STRUCTURES_KEY)
+            .cloned()
+    }
+
+    pub(crate) fn set_vanilla_structures(&self, structures: NbtCompound) {
+        self.custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .put_compound(VANILLA_STRUCTURES_KEY, structures);
+    }
+
     pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
         let mut custom_data = self
             .custom_data
@@ -1547,6 +1575,68 @@ mod tests {
             NbtTag::List(sections.into_iter().map(NbtTag::Compound).collect()),
         );
         pumpkin_nbt::Nbt::new(String::new(), root)
+    }
+
+    #[test]
+    fn imported_structures_survive_anvil_save_and_pump_resume() {
+        use crate::{
+            chunk::ChunkData,
+            chunk_system::chunk_state::{Chunk, StagedChunkEnum},
+            generation::{get_world_gen, proto_chunk::ProtoChunk},
+        };
+        use pumpkin_config::lighting::LightingEngineConfig;
+        use pumpkin_data::dimension::Dimension;
+        use pumpkin_util::{math::vector2::Vector2, world_seed::Seed};
+
+        let mut start = NbtCompound::new();
+        start.put_string("id", "minecraft:village_plains".into());
+        start.put_int("ChunkX", 0);
+        start.put_int("ChunkZ", 0);
+        let mut starts = NbtCompound::new();
+        starts.put_compound("minecraft:village_plains", start);
+        let mut references = NbtCompound::new();
+        references.put("minecraft:village_plains", NbtTag::LongArray(vec![0, 1]));
+        let mut structures = NbtCompound::new();
+        structures.put_compound("starts", starts);
+        structures.put_compound("References", references);
+
+        let pos = Vector2::new(0, 0);
+        let mut source = test_chunk(vec![test_section(-4, "minecraft:stone", true)]);
+        source
+            .root_tag
+            .put_string("Status", "minecraft:initialize_light".into());
+        source
+            .root_tag
+            .put_compound("structures", structures.clone());
+        let imported = ChunkData::internal_from_bytes(&source.write(), pos).unwrap();
+
+        let assert_anvil = |chunk: &ChunkData| {
+            let bytes = chunk.internal_to_bytes();
+            let cursor = std::io::Cursor::new(bytes.as_ref());
+            let mut reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(cursor);
+            let saved = pumpkin_nbt::Nbt::read(&mut reader).unwrap();
+            assert_eq!(saved.root_tag.get_compound("structures"), Some(&structures));
+        };
+        assert_anvil(&imported);
+
+        let restored =
+            ChunkData::internal_from_pump_bytes(&imported.internal_to_pump_bytes(), pos).unwrap();
+        let generator = get_world_gen(
+            Seed(42),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let mut proto = ProtoChunk::from_chunk_data(&restored, &generator);
+        assert_eq!(proto.stage, StagedChunkEnum::Lighting);
+        proto.stage = StagedChunkEnum::Full;
+        let mut resumed = Chunk::Proto(Box::new(proto));
+        resumed.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(resumed) = resumed else {
+            unreachable!();
+        };
+        assert_anvil(&resumed);
     }
 
     #[test]
