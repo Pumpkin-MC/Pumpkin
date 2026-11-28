@@ -12,7 +12,9 @@ use std::collections::{HashMap, VecDeque};
 use std::f64::consts::TAU;
 use std::num::NonZero;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicBool, AtomicI8, AtomicI32, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{
+    AtomicBool, AtomicI8, AtomicI32, AtomicU8, AtomicU32, AtomicU64, Ordering,
+};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
@@ -747,6 +749,8 @@ pub struct Player {
     /// Inbound packets waiting to be processed during player tick.
     pub inbound_packets: SegQueue<RawPacket>,
     shoulders: Mutex<shoulders::Shoulders>,
+    /// Number of absolute motion packets sent to this player's own client.
+    own_motion_revision: AtomicU64,
 }
 
 use base64::prelude::*;
@@ -965,6 +969,7 @@ impl Player {
         Self {
             living_entity,
             shoulders: Mutex::new(shoulders::Shoulders::default()),
+            own_motion_revision: AtomicU64::new(0),
             config: ArcSwap::new(Arc::new(config)),
             advancements: Arc::new(Mutex::new(
                 server
@@ -3133,10 +3138,28 @@ impl Player {
 
     /// Vanilla `hurtMarked` send: `PlayerVelocityEvent`, then watchers and the own client.
     pub fn send_hurt_velocity(&self) {
+        self.send_hurt_velocity_inner(None);
+    }
+
+    pub(crate) fn send_explosion_hurt_velocity(
+        &self,
+        previous_velocity: Vector3<f64>,
+        own_motion_revision: u64,
+    ) {
+        self.send_hurt_velocity_inner(Some((previous_velocity, own_motion_revision)));
+    }
+
+    fn send_hurt_velocity_inner(&self, rollback: Option<(Vector3<f64>, u64)>) {
         let entity = self.get_entity();
         let Some(velocity) = self.fire_velocity_event(entity.velocity.load()) else {
-            // Cancelled -> back to the motion the client has, watchers get that instead
-            entity.velocity.store(entity.known_movement());
+            if let Some((previous_velocity, own_motion_revision)) = rollback {
+                if own_motion_revision == self.own_motion_revision() {
+                    entity.velocity.store(previous_velocity);
+                }
+            } else {
+                // Cancelled -> back to the motion the client has, watchers get that instead
+                entity.velocity.store(entity.known_movement());
+            }
             entity.velocity_dirty.store(true, Ordering::SeqCst);
             return;
         };
@@ -3161,7 +3184,12 @@ impl Player {
         self.send_own_motion(velocity);
     }
 
+    pub(crate) fn own_motion_revision(&self) -> u64 {
+        self.own_motion_revision.load(Ordering::SeqCst)
+    }
+
     fn send_own_motion(&self, velocity: Vector3<f64>) {
+        self.own_motion_revision.fetch_add(1, Ordering::SeqCst);
         let tick = self
             .client
             .bedrock()

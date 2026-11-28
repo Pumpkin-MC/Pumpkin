@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex, atomic::Ordering},
+};
 
 use pumpkin_data::{
     Block, BlockState, BlockStateId,
@@ -18,11 +21,14 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     block::{ExplodeArgs, collect_loot},
-    entity::{Entity, EntityBase, item::ItemEntity, projectile::is_redirectable, tnt::TNTEntity},
+    entity::{
+        Entity, EntityBase, item::ItemEntity, player::Player, projectile::is_redirectable,
+        tnt::TNTEntity,
+    },
     world::loot::LootContextParameters,
 };
 
-use super::{BlockFlags, World};
+use super::{BlockFlags, EXPLOSION_PACKET_RANGE_SQUARED, World};
 
 /// Defines the type of explosion interaction with the world.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -178,6 +184,13 @@ impl ExplosionDamageCalculator for SimpleExplosionDamageCalculator {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct RecordedKnockback {
+    pub(crate) impulse: Vector3<f64>,
+    pub(crate) previous_velocity: Vector3<f64>,
+    pub(crate) own_motion_revision: u64,
+}
+
 pub struct Explosion<'a> {
     power: f32,
     pos: Vector3<f64>,
@@ -193,6 +206,7 @@ pub struct Explosion<'a> {
     large_particle: Particle,
     sound: Sound,
     from_wind_charge: bool,
+    hit_players: Mutex<BTreeMap<i32, RecordedKnockback>>,
 }
 
 impl<'a> Explosion<'a> {
@@ -212,6 +226,7 @@ impl<'a> Explosion<'a> {
             large_particle: Particle::ExplosionEmitter,
             sound: Sound::EntityGenericExplode,
             from_wind_charge: false,
+            hit_players: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -275,6 +290,25 @@ impl<'a> Explosion<'a> {
     #[must_use]
     pub const fn power(&self) -> f32 {
         self.power
+    }
+
+    #[must_use]
+    pub fn player_knockback(&self, entity_id: i32) -> Option<Vector3<f64>> {
+        self.hit_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&entity_id)
+            .map(|record| record.impulse)
+    }
+
+    pub(crate) fn player_knockback_if_current(&self, player: &Player) -> Option<RecordedKnockback> {
+        let record = self
+            .hit_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&player.entity_id())
+            .copied()?;
+        (record.own_motion_revision == player.own_motion_revision()).then_some(record)
     }
 
     #[must_use]
@@ -473,6 +507,11 @@ impl<'a> Explosion<'a> {
     }
 
     fn damage_entities(&self, world: &Arc<World>) {
+        self.hit_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+
         // Explosion is too small
         if self.power < 1.0e-5 {
             return;
@@ -533,6 +572,8 @@ impl<'a> Explosion<'a> {
                 Self::calculate_exposure(&self.pos, entity, world) as f64
             };
 
+            let was_hurt_marked = entity.sync_velocity.load(Ordering::SeqCst);
+
             // No exposure still deals the formula's flat 1 damage, like vanilla.
             if should_damage
                 && self
@@ -573,21 +614,108 @@ impl<'a> Explosion<'a> {
                 .get_player()
                 .is_some_and(|player| player.is_creative() && player.is_flying())
             {
-                // A living entity's goes through `EntityKnockbackEvent`
-                let knockback = if entity_base.get_living_entity().is_some() {
-                    entity.fire_knockback_events(knockback_power, knockback, None)
-                } else {
-                    Some(knockback)
-                };
-                if let Some(knockback) = knockback {
-                    // TODO vanilla sends a player's knockback in `ClientboundExplodePacket`, added to the client's
-                    // motion. Setting the motion here starts from the server's stale copy of a player's velocity.
-                    entity.add_velocity(knockback);
-                }
+                self.push_from_explosion(
+                    entity_base.as_ref(),
+                    knockback_power,
+                    knockback,
+                    was_hurt_marked,
+                );
             }
 
             self.on_explosion_hit(entity_base.as_ref());
         }
+    }
+
+    fn push_from_explosion(
+        &self,
+        entity_base: &dyn EntityBase,
+        knockback_power: f64,
+        knockback: Vector3<f64>,
+        was_hurt_marked: bool,
+    ) {
+        let entity = entity_base.get_entity();
+        let previous_velocity = entity.velocity.load();
+        let player = entity_base.get_player();
+        let own_motion_revision = player
+            .as_ref()
+            .map_or(0, |player| player.own_motion_revision());
+        // A living entity goes through `EntityKnockbackEvent`.
+        let knockback = if entity_base.get_living_entity().is_some() {
+            entity.fire_knockback_events(knockback_power, knockback, None)
+        } else {
+            Some(knockback)
+        };
+        let Some(knockback) = knockback else {
+            return;
+        };
+        let Some(player) = player else {
+            entity.add_velocity(knockback);
+            return;
+        };
+        if own_motion_revision != player.own_motion_revision() {
+            if !was_hurt_marked {
+                entity.sync_velocity.store(false, Ordering::SeqCst);
+            }
+            // Absolute self-motion from the knockback listener supersedes the explosion impulse.
+            return;
+        }
+
+        let knockback = if player.as_java().is_some() {
+            if !was_hurt_marked {
+                // Explosion damage calls `mark_hurt`. Do not follow the additive
+                // packet with an absolute motion packet for that same damage.
+                entity.sync_velocity.store(false, Ordering::SeqCst);
+            }
+            if player.position().squared_distance_to_vec(&self.pos) > EXPLOSION_PACKET_RANGE_SQUARED
+            {
+                // The distant fallback fires PlayerVelocityEvent when it sends absolute motion.
+                entity.push_by(knockback);
+                knockback
+            } else {
+                let previous_velocity = entity.velocity.load();
+                let velocity_event_revision = player.own_motion_revision();
+                let Some(velocity) = player.fire_velocity_event(previous_velocity + knockback)
+                else {
+                    if velocity_event_revision == player.own_motion_revision() {
+                        entity.velocity.store(previous_velocity);
+                    }
+                    entity.velocity_dirty.store(true, Ordering::SeqCst);
+                    return;
+                };
+                // The Java client adds this vector to its predicted motion when it
+                // receives `ClientboundExplodePacket`.
+                let knockback = velocity - previous_velocity;
+                if entity.velocity.load() == previous_velocity
+                    && velocity_event_revision == player.own_motion_revision()
+                {
+                    entity.push_by(knockback);
+                    knockback
+                } else {
+                    // A listener changed live velocity or sent absolute motion. Send the
+                    // accepted value instead of adding the event delta to an intermediate
+                    // value. The early return leaves CExplosion without additive knockback.
+                    entity.velocity.store(velocity);
+                    entity.send_velocity_to_watchers();
+                    player.send_own_velocity(velocity);
+                    return;
+                }
+            }
+        } else {
+            entity.velocity.store(previous_velocity + knockback);
+            player.send_explosion_hurt_velocity(previous_velocity, own_motion_revision);
+            knockback
+        };
+        self.hit_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                entity.entity_id,
+                RecordedKnockback {
+                    impulse: knockback,
+                    previous_velocity,
+                    own_motion_revision,
+                },
+            );
     }
 
     /// A pushed redirectable projectile now belongs to whoever caused the explosion, and a player remembers the
@@ -795,8 +923,8 @@ fn add_or_append_stack(
 #[cfg(test)]
 mod tests {
     use super::{
-        BlockInteraction, Explosion, ExplosionDamageCalculator, SimpleExplosionDamageCalculator,
-        add_or_append_stack,
+        BlockInteraction, Explosion, ExplosionDamageCalculator, RecordedKnockback,
+        SimpleExplosionDamageCalculator, add_or_append_stack,
     };
     use pumpkin_data::item::Item;
     use pumpkin_data::item_stack::ItemStack;
@@ -880,6 +1008,32 @@ mod tests {
 
         let counts: Vec<_> = drops.iter().map(|(_, stack)| stack.item_count).collect();
         assert_eq!(counts, [10, 60]);
+    }
+
+    #[tokio::test]
+    async fn damage_pass_discards_previous_player_knockback()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let explosion = Explosion::new(6.0, Vector3::new(0.0, 64.0, 0.0), BlockInteraction::Keep);
+        explosion
+            .hit_players
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                7,
+                RecordedKnockback {
+                    impulse: Vector3::new(1.0, 2.0, 3.0),
+                    previous_velocity: Vector3::default(),
+                    own_motion_revision: 0,
+                },
+            );
+
+        explosion.damage_entities(&world);
+
+        assert_eq!(explosion.player_knockback(7), None);
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test]

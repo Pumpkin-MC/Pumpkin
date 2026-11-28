@@ -76,6 +76,7 @@ pub use explosion::{
     BlockInteraction, DefaultExplosionDamageCalculator, Explosion, ExplosionDamageCalculator,
     ExplosionInteraction, SimpleExplosionDamageCalculator,
 };
+pub(crate) const EXPLOSION_PACKET_RANGE_SQUARED: f64 = 64.0 * 64.0;
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
@@ -4487,17 +4488,35 @@ impl World {
         let particle = explosion.particle();
         let sound = IdOr::<SoundEvent>::Id(explosion.sound() as u16);
         for player in self.players.load().iter() {
-            if player.position().squared_distance_to_vec(&position) > 4096.0 {
+            let knockback = explosion.player_knockback_if_current(player);
+            if player.position().squared_distance_to_vec(&position) > EXPLOSION_PACKET_RANGE_SQUARED
+            {
+                // Vanilla only sends CExplosion within 64 blocks; preserve hurt-motion
+                // delivery for hit Java players outside it unless a send is already pending.
+                if let Some(record) = knockback
+                    && player.as_java().is_some()
+                    && !player.get_entity().sync_velocity.load(Ordering::SeqCst)
+                {
+                    player.send_explosion_hurt_velocity(
+                        record.previous_velocity,
+                        record.own_motion_revision,
+                    );
+                }
                 continue;
             }
+            let impulse = knockback.map(|record| record.impulse);
             player.try_send_client_packet(&CExplosion::new(
                 position,
                 power,
                 block_count as i32,
-                None,
+                impulse,
                 VarInt(particle as i32),
                 sound.clone(),
             ));
+            if impulse.is_some() && explosion.player_knockback_if_current(player).is_none() {
+                // PacketSentEvent may have superseded the additive impulse after serialization.
+                player.send_own_velocity(player.get_entity().velocity.load());
+            }
         }
     }
 
