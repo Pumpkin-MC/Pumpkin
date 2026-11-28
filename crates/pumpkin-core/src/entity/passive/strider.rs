@@ -123,6 +123,10 @@ impl Goal for StriderGoToLavaGoal {
         self.move_to_target_pos_goal.tick(mob);
     }
 
+    fn should_run_every_tick(&self) -> bool {
+        self.move_to_target_pos_goal.should_run_every_tick()
+    }
+
     fn controls(&self) -> Controls {
         self.move_to_target_pos_goal.controls()
     }

@@ -114,7 +114,7 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
     }
 
     pub fn move_mob_to_block(&self, mob: &dyn Mob) {
-        let target = self.get_target_pos();
+        let target = self.target_pos.up();
         let steered = mob.get_mob_entity().steered();
         let mut navigator = steered.navigator();
 

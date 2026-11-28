@@ -5746,16 +5746,10 @@ impl Entity {
             .and_then(Weak::upgrade)
     }
 
-    pub fn try_add_passenger(
-        &self,
-        vehicle: Arc<dyn EntityBase>,
-        passenger: Arc<dyn EntityBase>,
-    ) -> bool {
-        if !vehicle.can_add_passenger(passenger.as_ref()) {
-            return false;
+    pub fn try_add_passenger(&self, vehicle: Arc<dyn EntityBase>, passenger: Arc<dyn EntityBase>) {
+        if vehicle.can_add_passenger(passenger.as_ref()) {
+            self.add_passenger(vehicle, passenger);
         }
-        self.add_passenger(vehicle, passenger);
-        true
     }
 
     #[expect(
