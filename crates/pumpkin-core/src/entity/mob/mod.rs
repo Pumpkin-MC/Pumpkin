@@ -2318,7 +2318,7 @@ pub trait Mob: EntityBase + Send + Sync {
     fn spawn_as_baby(&self) -> bool {
         self.as_ageable().is_some_and(|ageable| {
             ageable.set_baby(true);
-            true
+            ageable.is_baby()
         })
     }
 
