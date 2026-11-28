@@ -165,11 +165,6 @@ impl Mob for OcelotEntity {
         feline::is_stepping_carefully(self)
     }
 
-    fn requires_custom_persistence(&self) -> bool {
-        let entity = self.get_entity();
-        entity.has_vehicle() || entity.is_leashed()
-    }
-
     fn check_spawn_obstruction(&self, world: &World) -> bool {
         let entity = self.get_entity();
         if !world.is_unobstructed(entity) || world.contains_any_liquid(entity.bounding_box.load()) {

@@ -1613,7 +1613,8 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn requires_custom_persistence(&self) -> bool {
-        false
+        let entity = self.get_entity();
+        entity.has_vehicle() || entity.is_leashed()
     }
 
     /// Whether daylight burns this mob. Default: entity tag `burn_in_daylight`.
