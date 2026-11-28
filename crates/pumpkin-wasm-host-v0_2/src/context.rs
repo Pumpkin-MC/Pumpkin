@@ -1,5 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
-use wasmtime::component::Resource;
+use wasmtime::component::{Accessor, HasSelf, Resource};
 
 use crate::{
     events::WasmPluginEventHandler,
@@ -259,11 +259,16 @@ fn event_type_to_name(event_type: EventType) -> &'static str {
                 JavaConnectionPacketReceivedEvent, JavaConnectionPacketSentEvent,
                 PacketReceivedEvent, PacketSentEvent,
             },
+            plugin_disable::PluginDisableEvent,
+            plugin_enable::PluginEnableEvent,
             server_broadcast::ServerBroadcastEvent,
             server_command::ServerCommandEvent,
             server_load::ServerLoadEvent,
             server_tick_end::ServerTickEndEvent,
             server_tick_start::ServerTickStartEvent,
+            service_register::ServiceRegisterEvent,
+            service_unregister::ServiceUnregisterEvent,
+            tab_complete::TabCompleteEvent,
         },
         vehicle::{
             vehicle_block_collision::VehicleBlockCollisionEvent,
@@ -567,11 +572,16 @@ fn event_type_to_name(event_type: EventType) -> &'static str {
         EventType::JavaConnectionPacketSent => JavaConnectionPacketSentEvent::get_name_static(),
         EventType::PacketReceived => PacketReceivedEvent::get_name_static(),
         EventType::PacketSent => PacketSentEvent::get_name_static(),
+        EventType::PluginDisable => PluginDisableEvent::get_name_static(),
+        EventType::PluginEnable => PluginEnableEvent::get_name_static(),
         EventType::ServerBroadcast => ServerBroadcastEvent::get_name_static(),
         EventType::ServerCommand => ServerCommandEvent::get_name_static(),
         EventType::ServerLoad => ServerLoadEvent::get_name_static(),
         EventType::ServerTickEnd => ServerTickEndEvent::get_name_static(),
         EventType::ServerTickStart => ServerTickStartEvent::get_name_static(),
+        EventType::ServiceRegister => ServiceRegisterEvent::get_name_static(),
+        EventType::ServiceUnregister => ServiceUnregisterEvent::get_name_static(),
+        EventType::TabComplete => TabCompleteEvent::get_name_static(),
 
         // Vehicle
         EventType::VehicleBlockCollision => VehicleBlockCollisionEvent::get_name_static(),
@@ -647,27 +657,6 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         });
 
         ctx.register_event_dyn(event_type_to_name(event_type), &handler);
-
-        Ok(())
-    }
-
-    fn register_command(
-        &mut self,
-        context: Resource<WitContext>,
-        command: Resource<Command>,
-        permission: String,
-    ) -> wasmtime::Result<()> {
-        use pumpkin_core::command::argument_builder::ArgumentBuilder;
-
-        let command = self.take(command)?;
-        let context = self.get(&context)?.clone();
-        let aliases = if command.names.len() > 1 {
-            command.names[1..].to_vec()
-        } else {
-            Vec::new()
-        };
-        let node = command.builder.build();
-        context.register_command_with_aliases(node, &aliases, permission);
 
         Ok(())
     }
@@ -766,5 +755,42 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
 
     fn drop(&mut self, rep: Resource<WitContext>) -> wasmtime::Result<()> {
         self.drop(rep)
+    }
+}
+
+impl pumpkin::plugin::context::HostContextWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn register_command(
+        accessor: &Accessor<PluginHostState, Self>,
+        context: Resource<WitContext>,
+        command: Resource<Command>,
+        permission: String,
+    ) -> wasmtime::Result<()> {
+        use pumpkin_core::command::argument_builder::ArgumentBuilder;
+
+        let (context, command) = accessor.with(|mut host| -> wasmtime::Result<_> {
+            let state = host.get();
+            Ok((state.get(&context)?.clone(), state.take(command)?))
+        })?;
+        let aliases = if command.names.len() > 1 {
+            command.names[1..].to_vec()
+        } else {
+            Vec::new()
+        };
+        let node = command.builder.build();
+        crate::run_blocking(accessor, move || {
+            context.register_command_with_aliases(node, &aliases, permission);
+        })
+        .await
+    }
+
+    async fn reload_commands_for_everyone(
+        accessor: &Accessor<PluginHostState, Self>,
+        context: Resource<WitContext>,
+    ) -> wasmtime::Result<()> {
+        let context = accessor.with(|mut host| host.get().get(&context).cloned())?;
+        crate::run_blocking(accessor, move || {
+            context.reload_commands_for_everyone();
+        })
+        .await
     }
 }

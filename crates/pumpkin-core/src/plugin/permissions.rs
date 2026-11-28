@@ -65,6 +65,9 @@ pub const SYS_INFO_RAM: &str = "sys.info.ram";
 /// Allows the plugin to read OS information.
 pub const SYS_INFO_OS: &str = "sys.info.os";
 
+/// Allows the plugin to initiate a server shutdown.
+pub const SERVER_SHUTDOWN: &str = "server.shutdown";
+
 #[must_use]
 pub fn get_permission_description(permission: &str) -> Option<&'static str> {
     match permission {
@@ -102,6 +105,7 @@ pub fn get_permission_description(permission: &str) -> Option<&'static str> {
         SYS_INFO_CPU => Some("Allows the plugin to read CPU information."),
         SYS_INFO_RAM => Some("Allows the plugin to read RAM information."),
         SYS_INFO_OS => Some("Allows the plugin to read OS information."),
+        SERVER_SHUTDOWN => Some("Allows the plugin to initiate a server shutdown."),
         p if p.starts_with(SYS_ENV_PREFIX) => {
             Some("Allows the plugin to read specific environment variables.")
         }

@@ -1,4 +1,5 @@
 use super::{AccessorExt, in_active_context, run_blocking};
+use crate::LockIgnorePoison;
 use crate::RequireServer;
 use crate::RwLockIgnorePoison;
 
@@ -282,7 +283,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     fn has_whitelist(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
         let server = self.require_server()?;
 
-        Ok(server.basic_config.white_list)
+        Ok(server.white_list.load(std::sync::atomic::Ordering::Relaxed))
     }
 
     fn get_allow_nether(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
@@ -319,10 +320,8 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
     ) -> wasmtime::Result<pumpkin::plugin::common::GameMode> {
         let server = self.require_server()?;
-
-        Ok(super::events::to_wasm_game_mode(
-            server.basic_config.default_gamemode,
-        ))
+        let gm = server.defaultgamemode.lock_ignore_poison().gamemode;
+        Ok(super::events::to_wasm_game_mode(gm))
     }
 
     fn get_spawn_protection_radius(&mut self, _rep: Resource<Server>) -> wasmtime::Result<u32> {
@@ -430,6 +429,119 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .get_permissions()
             .into_iter()
             .map(to_wit_permission)
+            .collect())
+    }
+
+    fn get_java_ip(&mut self, _rep: Resource<Server>) -> wasmtime::Result<String> {
+        let server = self.require_server()?;
+        Ok(server
+            .advanced_config
+            .networking
+            .java
+            .address
+            .ip()
+            .to_string())
+    }
+
+    fn get_bedrock_ip(&mut self, _rep: Resource<Server>) -> wasmtime::Result<Option<String>> {
+        let server = self.require_server()?;
+        let bedrock = &server.advanced_config.networking.bedrock;
+        Ok((bedrock.enabled && bedrock.nethernet.enabled)
+            .then(|| bedrock.nethernet.address.ip().to_string()))
+    }
+
+    fn is_pvp_enabled(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
+        let server = self.require_server()?;
+        Ok(server.advanced_config.pvp.enabled)
+    }
+
+    fn is_whitelist_enforced(&mut self, _rep: Resource<Server>) -> wasmtime::Result<bool> {
+        let server = self.require_server()?;
+        Ok(server.basic_config.enforce_whitelist)
+    }
+
+    fn get_op_permission_level(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<pumpkin::plugin::permission::PermissionLevel> {
+        let server = self.require_server()?;
+        Ok(super::player::to_wit_permission_level(
+            server.basic_config.op_permission_level,
+        ))
+    }
+
+    fn get_idle_timeout(&mut self, _rep: Resource<Server>) -> wasmtime::Result<i32> {
+        let server = self.require_server()?;
+        Ok(server
+            .player_idle_timeout
+            .load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    fn set_idle_timeout(&mut self, _rep: Resource<Server>, minutes: i32) -> wasmtime::Result<()> {
+        let server = self.require_server()?;
+        server
+            .player_idle_timeout
+            .store(minutes, std::sync::atomic::Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn set_default_gamemode(
+        &mut self,
+        _rep: Resource<Server>,
+        mode: pumpkin::plugin::common::GameMode,
+    ) -> wasmtime::Result<()> {
+        let server = self.require_server()?;
+        server.defaultgamemode.lock_ignore_poison().gamemode =
+            super::events::from_wasm_game_mode(mode);
+        Ok(())
+    }
+
+    fn get_tick_info(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<pumpkin::plugin::server::ServerTickInfo> {
+        use std::sync::atomic::Ordering;
+        let server = self.require_server()?;
+        let tick_rate = server.tick_rate_manager.tickrate();
+        let is_frozen = server.tick_rate_manager.is_frozen();
+        let is_sprinting = server.tick_rate_manager.is_sprinting();
+        let is_stepping = server.tick_rate_manager.is_stepping_forward();
+        let tick_count = server.tick_count.load(Ordering::Relaxed);
+        let average_tick_time = server.get_mspt();
+        let tick_times_nanos = server.get_tick_times_nanos_copy().to_vec();
+        Ok(pumpkin::plugin::server::ServerTickInfo {
+            tick_rate,
+            is_frozen,
+            is_sprinting,
+            is_stepping,
+            average_tick_time,
+            tick_count,
+            tick_times_nanos,
+        })
+    }
+
+    fn set_tick_rate(&mut self, _rep: Resource<Server>, tick_rate: f32) -> wasmtime::Result<()> {
+        let server = self.require_server()?;
+        server.tick_rate_manager.set_tick_rate(server, tick_rate);
+        Ok(())
+    }
+
+    fn set_tick_frozen(&mut self, _rep: Resource<Server>, frozen: bool) -> wasmtime::Result<()> {
+        let server = self.require_server()?;
+        server.tick_rate_manager.set_frozen(server, frozen);
+        Ok(())
+    }
+
+    fn list_sounds(
+        &mut self,
+        _rep: Resource<Server>,
+    ) -> wasmtime::Result<Vec<pumpkin::plugin::server::SoundEntry>> {
+        Ok(pumpkin_data::sound::Sound::slice()
+            .iter()
+            .map(|s| pumpkin::plugin::server::SoundEntry {
+                id: *s as u32,
+                name: s.to_name().to_string(),
+            })
             .collect())
     }
 
@@ -575,19 +687,49 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
         in_active_context(accessor, server.save_all()).await
     }
 
-    async fn broadcast(
+    async fn broadcast_message(
         accessor: &Accessor<PluginHostState, Self>,
         _rep: Resource<Server>,
-        message: String,
+        message: Resource<pumpkin::plugin::text::TextComponent>,
+        sender: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let server = accessor.server()?;
-        let message = TextComponent::text(message);
-        let sender = TextComponent::text("Server");
-
+        let (server, message, sender) = accessor.with(|mut host| -> wasmtime::Result<_> {
+            let state = host.get();
+            let server = state.require_server()?.clone();
+            let message = state.take(message)?;
+            let sender = state.take(sender)?;
+            Ok((server, message, sender))
+        })?;
         run_blocking(accessor, move || {
             server.broadcast_message(&message, &sender, 0, None);
         })
         .await
+    }
+
+    async fn shutdown(
+        accessor: &Accessor<PluginHostState, Self>,
+        _rep: Resource<Server>,
+        save: bool,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let (server, allowed) = accessor.with(|mut host| -> wasmtime::Result<_> {
+            let state = host.get();
+            let allowed = state
+                .permissions
+                .iter()
+                .any(|p| p == pumpkin_core::plugin::permissions::SERVER_SHUTDOWN);
+            Ok((state.require_server()?.clone(), allowed))
+        })?;
+        if !allowed {
+            return Ok(Err(format!(
+                "Plugin lacks required `{}` permission to shut down the server",
+                pumpkin_core::plugin::permissions::SERVER_SHUTDOWN
+            )));
+        }
+        if save && let Err(error) = in_active_context(accessor, server.save_all()).await? {
+            return Ok(Err(error));
+        }
+        server.stop();
+        Ok(Ok(()))
     }
 
     async fn execute_command(

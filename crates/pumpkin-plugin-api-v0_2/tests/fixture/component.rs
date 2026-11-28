@@ -130,7 +130,9 @@ impl Plugin for Fixture {
         );
         let ping = Command::new(&["ping".to_string()], "replies when allowed").execute(Ping);
         let node = CommandNode::literal("complete").suggest(Suggest);
-        context.register_command(ping.then(node), "fixture.ping");
+        context
+            .register_command(ping.then(node), "fixture.ping".to_string())
+            .await;
         let player = context
             .get_server()
             .get_player_by_name("fixture")
@@ -163,11 +165,19 @@ impl Plugin for Fixture {
         });
         let message = std::cell::Cell::new("fixture task ran".to_string());
         schedule_delayed_task(20, move |server| async move {
-            server.broadcast(message.into_inner()).await;
+            server
+                .broadcast_message(
+                    TextComponent::text(&message.into_inner()),
+                    TextComponent::text("Server"),
+                )
+                .await;
         });
         schedule_repeating_task(20, 40, |server| async move {
             server
-                .broadcast("fixture repeating task ran".to_string())
+                .broadcast_message(
+                    TextComponent::text("fixture repeating task ran"),
+                    TextComponent::text("Server"),
+                )
                 .await;
         });
         Ok(())

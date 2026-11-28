@@ -235,7 +235,7 @@ mod resource_with {
         type Internal = Arc<Mutex<PluginGui>>;
     }
     impl FromResource for plugin::boss_bar::BossBar {
-        type Internal = Arc<Mutex<crate::boss_bar::PluginBossBar>>;
+        type Internal = Arc<crate::boss_bar::PluginBossBarHandle>;
     }
     impl FromResource for plugin::text::TextComponent {
         type Internal = TextComponent;

@@ -46,7 +46,10 @@ interface context {
         ///
         /// * `command`: The command definition.
         /// * `permission`: The required permission node to execute this command.
-        register-command: func(command: command, permission: string);
+        register-command: async func(command: command, permission: string);
+
+        /// Resends the command tree to all currently connected players.
+        reload-commands-for-everyone: async func();
 
         /// Registers a permission node with the server.
         register-permission: func(permission: permission) -> result<_, string>;

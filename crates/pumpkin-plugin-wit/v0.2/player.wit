@@ -1374,6 +1374,45 @@ interface player {
         /// This allows access to Bedrock-exclusive features like custom forms
         /// or detailed device information.
         as-bedrock: func() -> option<bedrock-player>;
+
+        /// Returns the remote TCP/UDP port of the player's connection.
+        get-port: func() -> u16;
+
+        /// Clears the player's custom display name override.
+        clear-display-name: func();
+
+        /// Sends the current health, food, and saturation state to the player's client.
+        send-health: func();
+
+        /// Clears and resets any title displayed on the player's screen.
+        reset-title: func();
+
+        /// Puts the player to sleep at the specified bed block position.
+        sleep: func(pos: block-pos);
+
+        /// Wakes the player up from sleeping.
+        wake-up: func();
+
+        /// Clears the player's custom respawn point.
+        clear-respawn-location: func();
+
+        /// Sets the player's respawn point in the specified world with full orientation and forced flag.
+        set-respawn-location-full: async func(%world: %world, pos: block-pos, yaw: f32, pitch: f32, force: bool);
+
+        /// Returns the player's respawn point as `(dimension-name, block-pos, yaw, pitch)`, if set.
+        get-respawn-location-full: func() -> option<tuple<string, block-pos, f32, f32>>;
+
+        /// Plays a sound effect with an explicit seed at a position for this player.
+        play-sound-at-with-seed: func(pos: position, sound: sound, category: sound-category, volume: f32, pitch: f32, seed: s64);
+
+        /// Plays an entity-attached sound effect with an explicit seed for this player (Java Edition only).
+        play-entity-sound: func(entity-id: s32, sound: sound, category: sound-category, volume: f32, pitch: f32, seed: s64);
+
+        /// Spawns particles with Java `CParticle` extra data bytes and force flag visible only to this player (Java Edition only).
+        spawn-particle-raw: func(particle: particle, force: bool, pos: position, offset: position, max-speed: f32, count: s32, data: list<u8>);
+
+        /// Sends a low-level bossbar update packet keyed by UUID (0=add, 1=remove, 2=health, 3=title, 4=style, 5=flags).
+        send-bossbar-raw: func(id: uuid, action: u8, title: option<text-component>, health: f32, color: u8, division: u8, bossbar-flags: u8);
     }
 
     /// Represents a resource pack sent to a Java Edition player.
@@ -1454,6 +1493,9 @@ interface player {
 
         /// Sends an already-encoded clientbound packet directly to the player without re-observing it.
         send-raw-packet: func(packet-id: s32, payload: list<u8>);
+
+        /// Enqueues already-framed clientbound packet bytes directly without firing `PacketSentEvent`.
+        send-raw-packet-data-unobserved: func(data: list<u8>);
 
         /// Sends a custom payload packet (plugin message) to the player.
         send-custom-payload: async func(channel: string, data: list<u8>);

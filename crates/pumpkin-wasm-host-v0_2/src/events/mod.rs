@@ -351,6 +351,31 @@ impl pumpkin::plugin::event::HostEvent for PluginHostState {
         set_server_tick_end
     );
     impl_event_getter_setter!(
+        pumpkin_core::plugin::events::server::tab_complete::TabCompleteEvent,
+        get_tab_complete,
+        set_tab_complete
+    );
+    impl_event_getter_setter!(
+        pumpkin_core::plugin::events::server::plugin_enable::PluginEnableEvent,
+        get_plugin_enable,
+        set_plugin_enable
+    );
+    impl_event_getter_setter!(
+        pumpkin_core::plugin::events::server::plugin_disable::PluginDisableEvent,
+        get_plugin_disable,
+        set_plugin_disable
+    );
+    impl_event_getter_setter!(
+        pumpkin_core::plugin::events::server::service_register::ServiceRegisterEvent,
+        get_service_register,
+        set_service_register
+    );
+    impl_event_getter_setter!(
+        pumpkin_core::plugin::events::server::service_unregister::ServiceUnregisterEvent,
+        get_service_unregister,
+        set_service_unregister
+    );
+    impl_event_getter_setter!(
         pumpkin_core::plugin::events::server::PacketReceivedEvent,
         get_packet_received,
         set_packet_received

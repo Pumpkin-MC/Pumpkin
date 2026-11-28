@@ -1664,6 +1664,18 @@ impl World {
         pitch: f32,
     ) {
         let seed = rand::rng().random::<i64>();
+        self.play_sound_raw_with_seed(sound_id, category, position, volume, pitch, seed);
+    }
+
+    pub fn play_sound_raw_with_seed(
+        &self,
+        sound_id: u16,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+        seed: i64,
+    ) {
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
         // Calculate the number of chunks the sound can be heard from based on its volume.
@@ -5634,8 +5646,7 @@ impl World {
         }
 
         entity.init_data_tracker();
-        self.add_entity_silent(entity);
-        true
+        self.add_entity_silent(entity)
     }
 
     /// Fires [`CreatureSpawnEvent`], then spawns the entity; `false` if either event is cancelled.
@@ -5666,34 +5677,46 @@ impl World {
     }
 
     #[expect(clippy::needless_pass_by_value)]
-    pub fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
+    pub fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) -> bool {
         let base_entity = entity.get_entity();
-
-        // Guard against duplicate entities with the same UUID.
-        // This can happen when chunk entity data is loaded while the entity
-        // already exists in the world (e.g. another player is still tracking it).
-        let already_exists = self
-            .entities
-            .load()
-            .iter()
-            .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
-        if already_exists {
-            return;
+        if base_entity.removed.load(Ordering::Acquire) {
+            return false;
         }
+
+        // Atomically reserve the UUID against concurrent spawns, existing entities, and online
+        // players before touching `spawn_state` or `entity_tracker`. Keeping insertion into
+        // `self.entities` last guarantees `remove_entity` cannot outrun tracker registration.
+        let Some(pending_guard) =
+            self.entity_index
+                .try_claim_entity_uuid(base_entity.entity_uuid, || {
+                    self.entities
+                        .load()
+                        .iter()
+                        .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid)
+                        || self
+                            .players
+                            .load()
+                            .iter()
+                            .any(|p| p.get_entity().entity_uuid == base_entity.entity_uuid)
+                })
+        else {
+            return false;
+        };
 
         // The entity stays live-only: it is written to its chunk's saved data on
         // unload (see `save_entities_by_chunk`), never at spawn, so it can't be both live and
         // serialized at once (which would double it on the next reload).
         self.spawn_state.load().add_entity(self, entity.as_ref());
         self.entity_tracker.add_entity(&entity, self);
-
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
             new_entities.push(entity.clone());
             new_entities
         });
-        self.record_tick_spawn(entity.get_entity().entity_id);
+        drop(pending_guard);
+        self.record_tick_spawn(base_entity.entity_id);
         self.add_pending_riders(&entity);
+        true
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {

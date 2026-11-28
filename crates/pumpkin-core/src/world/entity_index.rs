@@ -1,8 +1,8 @@
-use std::sync::{Arc, RwLock, Weak};
+use std::sync::{Arc, Mutex, RwLock, Weak};
 
 use pumpkin_data::entity::EntityType;
 use pumpkin_util::math::boundingbox::BoundingBox;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
@@ -288,14 +288,50 @@ impl PlayerIndex {
     }
 }
 
+/// Releases a reserved entity UUID when `World::add_entity_silent` finishes or unwinds.
+pub struct PendingUuidGuard<'a> {
+    pending_uuids: &'a Mutex<FxHashSet<Uuid>>,
+    uuid: Uuid,
+}
+
+impl Drop for PendingUuidGuard<'_> {
+    fn drop(&mut self) {
+        self.pending_uuids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&self.uuid);
+    }
+}
+
 /// Live broad phase for the world's non-player entity queries.
 #[derive(Default)]
 pub struct EntityIndex {
     inner: RwLock<Index>,
     players: RwLock<PlayerIndex>,
+    pending_uuids: Mutex<FxHashSet<Uuid>>,
 }
 
 impl EntityIndex {
+    /// Atomically reserves `uuid` if neither another pending registration nor `is_taken` owns it.
+    pub fn try_claim_entity_uuid(
+        &self,
+        uuid: Uuid,
+        is_taken: impl FnOnce() -> bool,
+    ) -> Option<PendingUuidGuard<'_>> {
+        let mut pending = self
+            .pending_uuids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if pending.contains(&uuid) || is_taken() {
+            return None;
+        }
+        pending.insert(uuid);
+        drop(pending);
+        Some(PendingUuidGuard {
+            pending_uuids: &self.pending_uuids,
+            uuid,
+        })
+    }
     fn with_index<T>(&self, registry: &Arc<Registry>, query: impl FnOnce(&Index) -> T) -> T {
         let index = self
             .inner

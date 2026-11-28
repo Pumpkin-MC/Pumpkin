@@ -55,6 +55,29 @@ const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
     }
 }
 
+const fn from_wit_entity_pose(pose: EntityPose) -> InternalEntityPose {
+    match pose {
+        EntityPose::Standing => InternalEntityPose::Standing,
+        EntityPose::FallFlying => InternalEntityPose::FallFlying,
+        EntityPose::Sleeping => InternalEntityPose::Sleeping,
+        EntityPose::Swimming => InternalEntityPose::Swimming,
+        EntityPose::SpinAttack => InternalEntityPose::SpinAttack,
+        EntityPose::Crouching => InternalEntityPose::Crouching,
+        EntityPose::LongJumping => InternalEntityPose::LongJumping,
+        EntityPose::Dying => InternalEntityPose::Dying,
+        EntityPose::Croaking => InternalEntityPose::Croaking,
+        EntityPose::UsingTongue => InternalEntityPose::UsingTongue,
+        EntityPose::Sitting => InternalEntityPose::Sitting,
+        EntityPose::Roaring => InternalEntityPose::Roaring,
+        EntityPose::Sniffing => InternalEntityPose::Sniffing,
+        EntityPose::Emerging => InternalEntityPose::Emerging,
+        EntityPose::Digging => InternalEntityPose::Digging,
+        EntityPose::Sliding => InternalEntityPose::Sliding,
+        EntityPose::Shooting => InternalEntityPose::Shooting,
+        EntityPose::Inhaling => InternalEntityPose::Inhaling,
+    }
+}
+
 impl HostEntity for PluginHostState {
     fn get_id(&mut self, entity: Resource<Entity>) -> wasmtime::Result<u32> {
         let entity = self.get(&entity)?;
@@ -838,9 +861,38 @@ impl HostEntity for PluginHostState {
         }))
     }
 
+    fn clear_custom_name(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
+        let entity = self.get(&entity)?;
+        entity.get_entity().clear_custom_name();
+        Ok(())
+    }
+
     fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
+}
+
+async fn teleport_entity(
+    accessor: &Accessor<PluginHostState, HasSelf<PluginHostState>>,
+    entity: Resource<Entity>,
+    pos: Position,
+    yaw: Option<f32>,
+    pitch: Option<f32>,
+    world: Resource<World>,
+) -> wasmtime::Result<()> {
+    let (entity, world) = accessor.with(|mut host| -> wasmtime::Result<_> {
+        let state = host.get();
+        let world = state.take(world)?;
+        let entity = state.get(&entity)?.clone();
+        Ok((entity, world))
+    })?;
+    if entity.get_player().is_none() && !Arc::ptr_eq(&entity.get_entity().world.load(), &world) {
+        return Err(wasmtime::Error::msg(
+            "Cross-world teleport is not supported for non-player entities",
+        ));
+    }
+    let pos = Vector3::new(pos.0, pos.1, pos.2);
+    run_blocking(accessor, move || entity.teleport(pos, yaw, pitch, world)).await
 }
 
 impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
@@ -850,14 +902,31 @@ impl HostEntityWithStore<PluginHostState> for HasSelf<PluginHostState> {
         pos: Position,
         world: Resource<World>,
     ) -> wasmtime::Result<()> {
-        let (entity, world) = accessor.with(|mut host| -> wasmtime::Result<_> {
-            let state = host.get();
-            let world = state.take(world)?;
-            let entity = state.get(&entity)?.clone();
-            Ok((entity, world))
-        })?;
-        let pos = Vector3::new(pos.0, pos.1, pos.2);
-        run_blocking(accessor, move || entity.teleport(pos, None, None, world)).await
+        teleport_entity(accessor, entity, pos, None, None, world).await
+    }
+
+    async fn teleport_with_rotation(
+        accessor: &Accessor<PluginHostState, Self>,
+        entity: Resource<Entity>,
+        pos: Position,
+        yaw: f32,
+        pitch: f32,
+        world: Resource<World>,
+    ) -> wasmtime::Result<()> {
+        teleport_entity(accessor, entity, pos, Some(yaw), Some(pitch), world).await
+    }
+
+    async fn set_pose(
+        accessor: &Accessor<PluginHostState, Self>,
+        entity: Resource<Entity>,
+        pose: EntityPose,
+    ) -> wasmtime::Result<()> {
+        let entity = accessor.get_res(&entity)?;
+        let pose = from_wit_entity_pose(pose);
+        run_blocking(accessor, move || {
+            entity.get_entity().set_pose(pose);
+        })
+        .await
     }
 
     async fn set_swimming(

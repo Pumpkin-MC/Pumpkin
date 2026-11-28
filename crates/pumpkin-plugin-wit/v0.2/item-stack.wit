@@ -149,6 +149,18 @@ interface item-stack {
         set-component: async func(component: data-component, value: list<u8>);
         /// Removes a data component from this item stack.
         remove-component: async func(component: data-component);
+
+        /// Serializes this item stack into an NBT compound tree, returning none if the stack is empty.
+        to-nbt: async func() -> result<option<nbt-tree>, string>;
+
+        /// Deserializes an item stack from an NBT compound tree.
+        from-nbt: static func(nbt-data: nbt-tree) -> option<item-stack>;
+
+        /// Returns the `minecraft:custom_data` NBT compound tree, if present.
+        get-raw-custom-data: async func() -> option<nbt-tree>;
+
+        /// Sets the `minecraft:custom_data` component directly from an NBT compound tree.
+        set-raw-custom-data: async func(nbt-data: nbt-tree) -> result<_, string>;
     }
 
     /// Returns whether the item with `item-name` (e.g. `"minecraft:diamond_pickaxe"` or `"diamond_pickaxe"`) belongs to `tag` (e.g. `"#minecraft:pickaxes"` or `"c:tools"`).

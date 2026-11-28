@@ -416,12 +416,15 @@ interface %world {
         get-head-yaw: func() -> f32;
 
         teleport: async func(pos: position, world-ref: %world);
+        teleport-with-rotation: async func(pos: position, yaw: f32, pitch: f32, world-ref: %world);
         set-velocity: func(velocity: position);
         get-velocity: func() -> position;
 
         get-pose: func() -> entity-pose;
+        set-pose: async func(pose: entity-pose);
         get-name: func() -> text-component;
         set-custom-name: func(name: text-component);
+        clear-custom-name: func();
         get-custom-name: func() -> option<text-component>;
         set-custom-name-visible: func(visible: bool);
         is-custom-name-visible: func() -> bool;
@@ -852,8 +855,28 @@ interface %world {
         /// Returns whether the specified position is within the border.
         contains-pos: func(pos: position) -> bool;
 
+        /// Gets the portal teleport boundary / max center coordinate of the border.
+        get-max-center-coordinate: func() -> s32;
+        /// Sets the portal teleport boundary / max center coordinate of the border.
+        set-max-center-coordinate: func(max: s32);
+
         /// Resets the world border to vanilla default settings.
         reset: func();
+    }
+
+    /// World difficulty level.
+    enum world-difficulty {
+        peaceful,
+        easy,
+        normal,
+        hard,
+    }
+
+    /// Heightmap type for querying column surface heights.
+    enum heightmap-type {
+        world-surface,
+        motion-blocking,
+        motion-blocking-no-leaves,
     }
 
     /// Represents an axis-aligned bounding box.
@@ -985,7 +1008,7 @@ interface %world {
         set-time-of-day: func(time: u64);
 
         /// Returns the total age of the world in ticks.
-        get-world-age: func() -> u64;
+        get-world-age: func() -> s64;
 
         /// Returns the dimension type (e.g., \"minecraft:overworld\").
         get-dimension: func() -> string;
@@ -1157,6 +1180,36 @@ interface %world {
         get-game-rule: func(rule: game-rule) -> game-rule-value;
         /// Sets the value of a game rule in this world.
         set-game-rule: func(rule: game-rule, value: game-rule-value);
+
+        /// Sets the total age of the world in ticks.
+        set-world-age: func(age: s64);
+
+        /// Returns this world's difficulty level.
+        get-difficulty: func() -> world-difficulty;
+
+        /// Sets this world's difficulty level.
+        set-difficulty: func(difficulty: world-difficulty);
+
+        /// Gets the heightmap Y coordinate at `(x, z)` for the requested heightmap type.
+        get-heightmap-height: func(heightmap: heightmap-type, x: s32, z: s32) -> s32;
+
+        /// Removes the block entity at the specified position, if any.
+        remove-block-entity: func(pos: block-pos);
+
+        /// Plays a sound with an explicit random seed for audible players in the world.
+        play-sound-with-seed: func(sound: sound, category: sound-category, pos: position, volume: f32, pitch: f32, seed: s64);
+
+        /// Spawns particles with Java `CParticle` extra data bytes and long-distance force flag (Java Edition only).
+        spawn-particle-raw: func(particle: particle, force: bool, pos: position, offset: position, max-speed: f32, count: s32, data: list<u8>);
+
+        /// Spawns an entity of the specified type at the given position and rotation using an explicit UUID.
+        spawn-entity-with-uuid: async func(entity-type: entity-type, pos: position, id: uuid, yaw: f32, pitch: f32) -> option<entity>;
+
+        /// Spawns a dropped item entity with an explicit UUID, position, and rotation.
+        spawn-item-with-uuid: async func(pos: position, item: item-stack, id: uuid, yaw: f32, pitch: f32) -> option<entity>;
+
+        /// Spawns an experience orb entity with an explicit UUID, XP value, position, and rotation.
+        spawn-experience-orb-with-uuid: async func(pos: position, amount: u32, id: uuid, yaw: f32, pitch: f32) -> option<entity>;
     }
 
     /// Generation phase for custom chunk generation.

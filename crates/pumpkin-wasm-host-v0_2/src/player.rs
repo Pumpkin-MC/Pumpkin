@@ -1421,9 +1421,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         pitch: f32,
     ) -> wasmtime::Result<()> {
         let player = self.get(&player)?;
-        let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
+        let sound_data = super::world::from_wit_sound(sound)?;
         let internal_category = super::world::from_wit_sound_category(category);
         let pos = player.position();
         player.play_sound(
@@ -1447,9 +1445,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         pitch: f32,
     ) -> wasmtime::Result<()> {
         let player = self.get(&player)?;
-        let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
+        let sound_data = super::world::from_wit_sound(sound)?;
         let internal_category = super::world::from_wit_sound_category(category);
         player.play_sound(
             sound_data as u16,
@@ -1469,10 +1465,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         category: Option<pumpkin::plugin::sounds::SoundCategory>,
     ) -> wasmtime::Result<()> {
         let player = self.get(&player)?;
-        let sound_rl = sound.and_then(|s| {
-            let sound_name = format!("{s:?}").to_lowercase().replace('_', ".");
-            pumpkin_data::sound::Sound::from_name(&sound_name).map(|s| s.to_name().into())
-        });
+        let sound_rl = sound
+            .map(super::world::from_wit_sound)
+            .transpose()?
+            .map(|s| s.to_name().into());
         let cat = category.map(super::world::from_wit_sound_category);
         player.stop_sound(sound_rl, cat);
         Ok(())
@@ -2912,12 +2908,259 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         Ok(player.get_mining_speed(block))
     }
 
+    fn get_port(&mut self, player: Resource<Player>) -> wasmtime::Result<u16> {
+        let player = self.get(&player)?;
+        Ok(player.client.address().port())
+    }
+
+    fn clear_display_name(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        player.set_display_name(None);
+        Ok(())
+    }
+
+    fn send_health(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        player.send_health();
+        Ok(())
+    }
+
+    fn reset_title(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        player.try_enqueue_packet_editioned(
+            &pumpkin_protocol::java::client::play::CClearTitle::new(true),
+            &pumpkin_protocol::bedrock::client::set_title::CSetTitle::new(
+                pumpkin_protocol::bedrock::client::TitleType::Reset,
+                String::new(),
+                0,
+                0,
+                0,
+            ),
+        );
+        Ok(())
+    }
+
+    fn sleep(
+        &mut self,
+        player: Resource<Player>,
+        pos: pumpkin::plugin::world::BlockPos,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        player.sleep(pumpkin_util::math::position::BlockPos::new(
+            pos.x, pos.y, pos.z,
+        ));
+        Ok(())
+    }
+
+    fn wake_up(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        player.wake_up();
+        Ok(())
+    }
+
+    fn clear_respawn_location(&mut self, player: Resource<Player>) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        *player.respawn_point.lock_ignore_poison() = None;
+        Ok(())
+    }
+
+    fn get_respawn_location_full(
+        &mut self,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<Option<(String, pumpkin::plugin::world::BlockPos, f32, f32)>> {
+        let player = self.get(&player)?;
+        let guard = player.respawn_point.lock_ignore_poison();
+        Ok(guard.as_ref().map(|pt| {
+            (
+                pt.dimension.minecraft_name.to_string(),
+                pumpkin::plugin::world::BlockPos {
+                    x: pt.position.0.x,
+                    y: pt.position.0.y,
+                    z: pt.position.0.z,
+                },
+                pt.yaw,
+                0.0,
+            )
+        }))
+    }
+
+    fn play_sound_at_with_seed(
+        &mut self,
+        player: Resource<Player>,
+        pos: pumpkin::plugin::common::Position,
+        sound: pumpkin::plugin::sounds::Sound,
+        category: pumpkin::plugin::sounds::SoundCategory,
+        volume: f32,
+        pitch: f32,
+        seed: i64,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        let sound_data = super::world::from_wit_sound(sound)?;
+        let internal_category = super::world::from_wit_sound_category(category);
+        player.play_sound(
+            sound_data as u16,
+            internal_category,
+            &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+            volume,
+            pitch,
+            seed,
+        );
+        Ok(())
+    }
+
+    fn play_entity_sound(
+        &mut self,
+        player: Resource<Player>,
+        entity_id: i32,
+        sound: pumpkin::plugin::sounds::Sound,
+        category: pumpkin::plugin::sounds::SoundCategory,
+        volume: f32,
+        pitch: f32,
+        seed: i64,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        let sound_data = super::world::from_wit_sound(sound)?;
+        let internal_category = super::world::from_wit_sound_category(category);
+        if let Some(client) = player.client.java() {
+            let packet = pumpkin_protocol::java::client::play::CEntitySoundEffect::new(
+                pumpkin_protocol::IdOr::Id(sound_data as u16),
+                internal_category,
+                entity_id.into(),
+                volume,
+                pitch,
+                seed,
+            );
+            client.try_send_packet(&packet);
+        }
+        Ok(())
+    }
+
+    fn spawn_particle_raw(
+        &mut self,
+        player: Resource<Player>,
+        particle: pumpkin::plugin::particles::Particle,
+        force: bool,
+        pos: pumpkin::plugin::common::Position,
+        offset: pumpkin::plugin::common::Position,
+        max_speed: f32,
+        count: i32,
+        data: Vec<u8>,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?;
+        let particle_data =
+            pumpkin_data::particle::Particle::from_id(particle as u16).ok_or_else(|| {
+                wasmtime::Error::msg(format!("Unknown particle ID: {}", particle as u16))
+            })?;
+        if let Some(client) = player.client.java() {
+            let packet = pumpkin_protocol::java::client::play::CParticle::new(
+                force,
+                false,
+                pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
+                pumpkin_util::math::vector3::Vector3::new(
+                    offset.0 as f32,
+                    offset.1 as f32,
+                    offset.2 as f32,
+                ),
+                max_speed,
+                count,
+                pumpkin_protocol::codec::var_int::VarInt(particle_data as i32),
+                &data,
+            );
+            client.try_send_packet(&packet);
+        }
+        Ok(())
+    }
+
+    fn send_bossbar_raw(
+        &mut self,
+        player: Resource<Player>,
+        id: Uuid,
+        action: u8,
+        title: Option<Resource<pumpkin::plugin::text::TextComponent>>,
+        health: f32,
+        color: u8,
+        division: u8,
+        flags: u8,
+    ) -> wasmtime::Result<()> {
+        use pumpkin_core::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags};
+        let title_comp = title.map(|t| self.take(t)).transpose()?;
+        let player = self.get(&player)?;
+        let bossbar_uuid = Uuid::from_wit(&id);
+        let color = match color {
+            0 => BossbarColor::Pink,
+            1 => BossbarColor::Blue,
+            2 => BossbarColor::Red,
+            3 => BossbarColor::Green,
+            4 => BossbarColor::Yellow,
+            5 => BossbarColor::Purple,
+            _ => BossbarColor::White,
+        };
+        let division = match division {
+            1 => BossbarDivisions::Notches6,
+            2 => BossbarDivisions::Notches10,
+            3 => BossbarDivisions::Notches12,
+            4 => BossbarDivisions::Notches20,
+            _ => BossbarDivisions::NoDivision,
+        };
+        let flags = BossbarFlags::from_bits_truncate(flags);
+        match action {
+            0 => {
+                let bar = Bossbar {
+                    uuid: bossbar_uuid,
+                    title: title_comp
+                        .unwrap_or_else(|| pumpkin_util::text::TextComponent::text("")),
+                    health: health.clamp(0.0, 1.0),
+                    color,
+                    division,
+                    flags,
+                };
+                player.send_bossbar(&bar);
+            }
+            1 => player.remove_bossbar(bossbar_uuid),
+            2 => player.update_bossbar_health(&bossbar_uuid, health.clamp(0.0, 1.0)),
+            3 => {
+                if let Some(title) = title_comp {
+                    player.update_bossbar_title(&bossbar_uuid, title);
+                }
+            }
+            4 => player.update_bossbar_style(&bossbar_uuid, color, division),
+            5 => player.update_bossbar_flags(&bossbar_uuid, flags),
+            _ => {}
+        }
+        Ok(())
+    }
+
     fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
 }
 
 impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn set_respawn_location_full(
+        accessor: &Accessor<PluginHostState, Self>,
+        player: Resource<Player>,
+        world: Resource<World>,
+        pos: pumpkin::plugin::world::BlockPos,
+        yaw: f32,
+        pitch: f32,
+        force: bool,
+    ) -> wasmtime::Result<()> {
+        let (player, world) = accessor.with(|mut host| -> wasmtime::Result<_> {
+            let state = host.get();
+            Ok((state.get(&player)?.clone(), state.take(world)?))
+        })?;
+        run_blocking(accessor, move || {
+            player.set_respawn_point(
+                world.dimension.clone(),
+                pumpkin_util::math::position::BlockPos::new(pos.x, pos.y, pos.z),
+                yaw,
+                pitch,
+                force,
+            );
+        })
+        .await
+    }
+
     async fn perform_command(
         accessor: &Accessor<PluginHostState, Self>,
         player: Resource<Player>,
@@ -3893,6 +4136,20 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             internal_status as u8 as i8,
         );
         player.try_send_client_packet(&packet);
+        Ok(())
+    }
+
+    fn send_raw_packet_data_unobserved(
+        &mut self,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
+        data: Vec<u8>,
+    ) -> wasmtime::Result<()> {
+        let player = self.get(&player)?.clone();
+        let client = player
+            .client
+            .java()
+            .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
+        client.try_enqueue_packet_data_unobserved(bytes::Bytes::from(data));
         Ok(())
     }
 

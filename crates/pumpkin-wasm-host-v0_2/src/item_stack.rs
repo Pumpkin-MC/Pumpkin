@@ -124,6 +124,19 @@ impl HostItemStack for PluginHostState {
         self.add(Arc::new(Mutex::new(stack)))
     }
 
+    fn from_nbt(
+        &mut self,
+        nbt_data: WitNbtTree,
+    ) -> wasmtime::Result<Option<Resource<ItemStackHandle>>> {
+        let Ok(NbtTag::Compound(compound)) = from_wit_nbt_tree(&nbt_data) else {
+            return Ok(None);
+        };
+        let Some(stack) = pumpkin_data::item_stack::ItemStack::read_item_stack(&compound) else {
+            return Ok(None);
+        };
+        Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
+    }
+
     fn drop(&mut self, rep: Resource<ItemStackHandle>) -> wasmtime::Result<()> {
         self.drop(rep)
     }
@@ -958,5 +971,55 @@ impl HostItemStackWithStore<PluginHostState> for HasSelf<PluginHostState> {
         let id = from_wit_data_component(component);
         stack.patch.retain(|(pid, _)| *pid != id);
         Ok(())
+    }
+
+    async fn to_nbt(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<ItemStackHandle>,
+    ) -> wasmtime::Result<Result<Option<WitNbtTree>, String>> {
+        let stack = accessor.get_res(&res)?;
+        let stack = stack.lock().await;
+        if stack.is_empty() {
+            return Ok(Ok(None));
+        }
+        let Some(compound) = stack.to_nbt() else {
+            return Ok(Err(
+                "Failed to serialize non-empty item stack to NBT".to_string()
+            ));
+        };
+        Ok(Ok(Some(to_wit_nbt_tree(NbtTag::Compound(compound)))))
+    }
+
+    async fn get_raw_custom_data(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<ItemStackHandle>,
+    ) -> wasmtime::Result<Option<WitNbtTree>> {
+        let stack = accessor.get_res(&res)?;
+        let stack = stack.lock().await;
+        Ok(stack
+            .get_data_component::<pumpkin_data::data_component_impl::CustomDataImpl>()
+            .map(|c| to_wit_nbt_tree(NbtTag::Compound(c.data.clone()))))
+    }
+
+    async fn set_raw_custom_data(
+        accessor: &Accessor<PluginHostState, Self>,
+        res: Resource<ItemStackHandle>,
+        nbt_data: WitNbtTree,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let tag = match from_wit_nbt_tree(&nbt_data) {
+            Ok(tag) => tag,
+            Err(e) => return Ok(Err(format!("Invalid NBT tree: {e}"))),
+        };
+        let NbtTag::Compound(compound) = tag else {
+            return Ok(Err(
+                "Expected a root NBT compound tag for custom data".to_string()
+            ));
+        };
+        let stack = accessor.get_res(&res)?;
+        let mut stack = stack.lock().await;
+        stack.set_data_component(pumpkin_data::data_component_impl::CustomDataImpl::new(
+            compound,
+        ));
+        Ok(Ok(()))
     }
 }
