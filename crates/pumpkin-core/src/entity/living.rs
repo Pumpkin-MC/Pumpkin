@@ -3991,7 +3991,7 @@ impl LivingEntity {
         if !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_RESISTANCE)
             && let Some(effect) = self.get_effect(&StatusEffect::RESISTANCE)
         {
-            let absorb_value = (effect.amplifier + 1) * 5;
+            let absorb_value = (i32::from(effect.amplifier) + 1) * 5;
             let absorb = 25 - absorb_value;
             let v = damage * absorb as f32;
             let old_damage = damage;
@@ -6471,6 +6471,45 @@ mod player_wall_tests {
         assert_eq!(restored.last_damage_taken.load(), 3.0);
 
         world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn resistance_caps_at_level_five_instead_of_overflowing() -> TestResult {
+        use crate::entity::mob::bat::BatEntity;
+        use pumpkin_data::{damage::DamageType, effect::StatusEffect, potion::Effect};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let bat = BatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::BAT,
+        ));
+        let living = &bat.mob_entity.living_entity;
+
+        // Each level is stronger than the last, so every `add_effect` replaces the previous one.
+        let mut after_resistance = Vec::new();
+        for amplifier in [0, 1, 3, 4, 5, 50, 255] {
+            living.add_effect(Effect {
+                effect_type: &StatusEffect::RESISTANCE,
+                duration: 600,
+                amplifier,
+                ambient: false,
+                show_particles: false,
+                show_icon: false,
+                blend: false,
+            });
+            after_resistance.push(living.get_damage_after_magic_absorb(
+                10.0,
+                &DamageType::MOB_ATTACK,
+                bat.as_ref(),
+                None,
+            ));
+        }
+        world.level.shutdown().await;
+
+        assert_eq!(after_resistance, [8.0, 6.0, 2.0, 0.0, 0.0, 0.0, 0.0]);
         Ok(())
     }
 }
