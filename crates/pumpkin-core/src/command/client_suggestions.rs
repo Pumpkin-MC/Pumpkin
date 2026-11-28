@@ -112,6 +112,7 @@ pub fn send_c_commands_packet(
                 .children_ref()
                 .values()
                 .copied()
+                .filter(|id| dispatcher.tree[*id].requirements().evaluate(source))
                 .map(|id| VarInt((id.0.get() - 1) as i32))
                 .collect(),
         };
