@@ -226,6 +226,16 @@ impl PumpkinError for GetBlockError {
     }
 }
 
+pub(crate) enum BlockEntityLookup {
+    Unloaded,
+    Loaded(Option<Arc<dyn BlockEntity>>),
+}
+
+struct BlockStateChange {
+    previous: BlockStateId,
+    outgoing_entity: Option<Arc<dyn BlockEntity>>,
+}
+
 /// Represents a Minecraft world, containing entities, players, and the underlying level data.
 ///
 /// Each dimension (Overworld, Nether, End) typically has its own `World`.
@@ -817,11 +827,7 @@ impl World {
         }
     }
 
-    /// Serializes the live block entities of a chunk back into that chunk's block
-    /// entity data. The live map is the source of truth while a chunk is loaded -
-    /// `get_block_entity` takes the saved NBT out of the chunk when it wakes an
-    /// entity up - so this has to run before the chunk is dropped, or everything
-    /// the entity did since it was loaded is lost.
+    /// Snapshots live block entities into the chunk's pending NBT before a save or unload.
     fn save_block_entities(&self, chunk_pos: Vector2<i32>) {
         let Some(block_entities) = self
             .block_entities
@@ -1472,6 +1478,75 @@ impl World {
         self.broadcast_packet_all(&packet);
     }
 
+    pub fn spawn_block_crumble(
+        &self,
+        position: Vector3<f64>,
+        offset: Vector3<f32>,
+        particle_count: i32,
+        state: BlockStateId,
+    ) {
+        let mut data = Vec::new();
+        if VarInt(i32::from(state.as_u16())).encode(&mut data).is_err() {
+            return;
+        }
+        let packet = CParticle::new(
+            false,
+            false,
+            position,
+            offset,
+            0.0,
+            particle_count,
+            VarInt(Particle::BlockCrumble.to_id() as i32),
+            &data,
+        );
+        self.broadcast_particle_in_range(&packet);
+    }
+
+    pub fn spawn_trail_particle(
+        &self,
+        position: Vector3<f64>,
+        target: Vector3<f64>,
+        color: i32,
+        duration: i32,
+    ) {
+        let mut data = Vec::with_capacity(33);
+        data.extend_from_slice(&target.x.to_be_bytes());
+        data.extend_from_slice(&target.y.to_be_bytes());
+        data.extend_from_slice(&target.z.to_be_bytes());
+        data.extend_from_slice(&color.to_be_bytes());
+        if VarInt(duration).encode(&mut data).is_err() {
+            return;
+        }
+        let packet = CParticle::new(
+            true,
+            true,
+            position,
+            Vector3::new(0.0, 0.0, 0.0),
+            0.0,
+            1,
+            VarInt(Particle::Trail.to_id() as i32),
+            &data,
+        );
+        self.broadcast_particle_in_range(&packet);
+    }
+
+    fn broadcast_particle_in_range(&self, packet: &CParticle<'_>) {
+        let radius: f64 = if packet.force_spawn { 512.0 } else { 32.0 };
+        let players = self.players.load();
+        Self::broadcast_java_players(
+            packet,
+            players.iter().filter(|player| {
+                player
+                    .get_entity()
+                    .block_pos
+                    .load()
+                    .to_centered_f64()
+                    .squared_distance_to_vec(&packet.position)
+                    < radius.powi(2)
+            }),
+        );
+    }
+
     /// Spawns `minecraft:item` particles textured like `stack`.
     pub fn spawn_item_particle(
         &self,
@@ -1803,83 +1878,27 @@ impl World {
         let t_entities = std::time::Instant::now();
         let tickable: Vec<_> = entities_to_tick
             .par_iter()
-            .filter_map(|entity| {
+            .filter(|entity| {
                 let entity_chunk = entity.get_entity().chunk_pos.load();
-                if !active_chunks.contains(&entity_chunk) {
-                    return None;
-                }
-                if !level_for_entities.is_chunk_loaded(&entity_chunk) {
-                    return None;
-                }
-                Some((entity, entity_chunk))
+                active_chunks.contains(&entity_chunk)
+                    && level_for_entities.is_chunk_loaded(&entity_chunk)
             })
             .collect();
 
         // Entities that can affect each other tick in list order; separate islands run in
         // parallel.
-        let islands_config = &server.advanced_config.world.entity_islands;
-        let plan_islands = !entity_islands::plugins_observe_entity_ticks(server)
-            && self
-                .island_schedule
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .should_plan(tickable.len());
-        let islands = if plan_islands {
-            let islands = (|| {
-                let reports: Vec<_> = tickable
-                    .par_iter()
-                    .map(|(entity, _)| {
-                        entity_islands::EntityReach::of(entity.as_ref(), islands_config)
-                    })
-                    .collect();
-                let block_write_checks: Vec<_> = reports
-                    .iter()
-                    .zip(&tickable)
-                    .map(|(report, (entity, _))| report.block_write_check(entity.as_ref()))
-                    .collect();
-                let mut reaches = entity_islands::resolve(reports, islands_config)?;
-                entity_islands::prune_block_writes(self, &mut reaches, &block_write_checks)?;
-                let nodes: Vec<_> = tickable
-                    .iter()
-                    .map(|(entity, _)| entity.get_entity().entity_id)
-                    .zip(reaches)
-                    .collect();
-                let ticking: FxHashSet<i32> = nodes.iter().map(|(id, _)| *id).collect();
-                let idle_entities: Vec<_> = entities_to_tick
-                    .iter()
-                    .map(|entity| entity.get_entity())
-                    .filter(|entity| !ticking.contains(&entity.entity_id))
-                    .map(|entity| (entity.entity_id, entity.bounding_box.load()))
-                    .collect();
-                // Includes the vehicle, like the pickup area.
-                let player_bodies: Vec<_> = players
-                    .iter()
-                    .map(|player| (player.get_entity().entity_id, pickup_body(player).0))
-                    .collect();
-                let mut islands =
-                    entity_islands::partition(&nodes, &idle_entities, &player_bodies)?;
-                // Start the largest islands first.
-                islands
-                    .islands
-                    .sort_by_key(|island| std::cmp::Reverse(island.len()));
-                Some(islands)
-            })();
-            let parallel = self
-                .island_schedule
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .record_plan(islands.as_ref().map_or(tickable.len(), |islands| {
-                    islands.islands.first().map_or(0, Vec::len)
-                }));
-            islands.filter(|_| parallel)
-        } else {
-            None
-        };
+        let islands = self.plan_entity_islands(
+            &server.plugin_manager,
+            &server.advanced_config.world.entity_islands,
+            &entities_to_tick,
+            &tickable,
+            &players,
+        );
         let first_order = self.level.reserve_entity_tick_orders(tickable.len());
 
         let server_ref = server.as_ref();
         let tick_entity = |index: usize| {
-            let (entity, _) = &tickable[index];
+            let entity = tickable[index];
             order::set_entity_order(Some(first_order + index as u64 * order::ORDERS_PER_ENTITY));
 
             let base = entity.get_entity();
@@ -1898,7 +1917,7 @@ impl World {
                 .for_each(|island| {
                     for &index in island {
                         #[cfg(debug_assertions)]
-                        entity_islands::enter(&islands, tickable[index].0.get_entity().entity_id);
+                        entity_islands::enter(&islands, tickable[index].get_entity().entity_id);
                         tick_entity(index);
                     }
                     order::set_entity_order(None);
@@ -1912,7 +1931,7 @@ impl World {
             order::set_entity_order(None);
         }
         // Vanilla `rideTick`: riders follow their vehicle's seat once it has moved
-        tickable.par_iter().for_each(|(entity, _)| {
+        tickable.par_iter().for_each(|entity| {
             if !entity.is_passenger() && entity.get_entity().has_passengers() {
                 crate::entity::ride_tick_riders(entity.as_ref());
             }
@@ -1975,6 +1994,98 @@ impl World {
                 block_entity_count,
                 block_entity_elapsed,
             );
+        }
+    }
+
+    fn plan_entity_islands(
+        &self,
+        plugins: &crate::plugin::PluginManager,
+        islands_config: &pumpkin_config::world::EntityIslandsConfig,
+        entities_to_tick: &[Arc<dyn EntityBase>],
+        tickable: &[&Arc<dyn EntityBase>],
+        players: &[Arc<Player>],
+    ) -> Option<entity_islands::Islands> {
+        let plan_islands = !entity_islands::plugins_observe_entity_ticks(plugins)
+            && !tickable.iter().any(|entity| {
+                entity
+                    .get_mob()
+                    .is_some_and(|mob| mob.requires_serial_tick(plugins))
+            })
+            && self
+                .island_schedule
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .should_plan(tickable.len());
+        if plan_islands {
+            let islands = (|| {
+                let mut passive_writes = Vec::new();
+                let observes_block_writes =
+                    entity_islands::plugins_observe_passive_block_writes(plugins);
+                for entity in entities_to_tick {
+                    if let Some(mob) = entity.get_mob()
+                        && let Some(reach) = mob.passive_block_writes()
+                    {
+                        if observes_block_writes || mob.requires_serial_tick(plugins) {
+                            return None;
+                        }
+                        passive_writes.push((entity.get_entity().entity_id, reach));
+                    }
+                }
+                let reports: Vec<_> = tickable
+                    .par_iter()
+                    .map(|entity| entity_islands::EntityReach::of(entity.as_ref(), islands_config))
+                    .collect();
+                let block_write_checks: Vec<_> = reports
+                    .iter()
+                    .zip(tickable)
+                    .map(|(report, entity)| report.block_write_check(entity.as_ref()))
+                    .collect();
+                let mut reaches = entity_islands::resolve(reports, islands_config)?;
+                entity_islands::prune_block_writes(
+                    self,
+                    &mut reaches,
+                    &block_write_checks,
+                    &passive_writes,
+                )?;
+                let nodes: Vec<_> = tickable
+                    .iter()
+                    .map(|entity| entity.get_entity().entity_id)
+                    .zip(reaches)
+                    .collect();
+                let ticking: FxHashSet<i32> = nodes.iter().map(|(id, _)| *id).collect();
+                let idle_entities: Vec<_> = entities_to_tick
+                    .iter()
+                    .map(|entity| entity.get_entity())
+                    .filter(|entity| !ticking.contains(&entity.entity_id))
+                    .map(|entity| (entity.entity_id, entity.bounding_box.load()))
+                    .collect();
+                // Includes the vehicle, like the pickup area.
+                let player_bodies: Vec<_> = players
+                    .iter()
+                    .map(|player| (player.get_entity().entity_id, pickup_body(player).0))
+                    .collect();
+                let mut islands = entity_islands::partition_with_passive_writes(
+                    &nodes,
+                    &idle_entities,
+                    &player_bodies,
+                    &passive_writes,
+                )?;
+                // Start the largest islands first.
+                islands
+                    .islands
+                    .sort_by_key(|island| std::cmp::Reverse(island.len()));
+                Some(islands)
+            })();
+            let parallel = self
+                .island_schedule
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .record_plan(islands.as_ref().map_or(tickable.len(), |islands| {
+                    islands.islands.first().map_or(0, Vec::len)
+                }));
+            islands.filter(|_| parallel)
+        } else {
+            None
         }
     }
 
@@ -2293,6 +2404,13 @@ impl World {
                 for scheduled_tick in batch {
                     let pos = scheduled_tick.position;
                     let block = world.get_block(&pos);
+                    let scheduled_block = scheduled_tick.value;
+                    // Bubble columns schedule their first tick while the block is still water.
+                    let pending_bubble_column =
+                        scheduled_block == &Block::BUBBLE_COLUMN && block == &Block::WATER;
+                    if block.id != scheduled_block.id && !pending_bubble_column {
+                        continue;
+                    }
                     if let Some(pumpkin_block) = world.block_registry.get_pumpkin_block(block.id) {
                         pumpkin_block.on_scheduled_tick(OnScheduledTickArgs {
                             world: &world,
@@ -5856,10 +5974,13 @@ impl World {
         if !self.is_in_build_limit(*position) {
             return Block::AIR.default_state.id;
         }
-        let replaced_block_state_id = self
-            .write_block_state_if(position, block_state_id, |_| true)
-            .unwrap_or(Block::AIR.default_state.id);
-        self.on_block_state_set(position, replaced_block_state_id, block_state_id, flags)
+        let change = self
+            .write_block_state_if(position, block_state_id, flags, |_| true)
+            .unwrap_or(BlockStateChange {
+                previous: Block::AIR.default_state.id,
+                outgoing_entity: None,
+            });
+        self.on_block_state_set(position, change, block_state_id, flags)
     }
 
     /// `set_block_state`, but only when `condition` accepts the current state. The check and
@@ -5875,9 +5996,8 @@ impl World {
         if !self.is_in_build_limit(*position) {
             return None;
         }
-        let replaced_block_state_id =
-            self.write_block_state_if(position, block_state_id, condition)?;
-        Some(self.on_block_state_set(position, replaced_block_state_id, block_state_id, flags))
+        let change = self.write_block_state_if(position, block_state_id, flags, condition)?;
+        Some(self.on_block_state_set(position, change, block_state_id, flags))
     }
 
     /// Writes the state into the loaded chunk
@@ -5885,23 +6005,42 @@ impl World {
         &self,
         position: &BlockPos,
         block_state_id: BlockStateId,
+        flags: BlockFlags,
         condition: impl Fn(BlockStateId) -> bool,
-    ) -> Option<BlockStateId> {
+    ) -> Option<BlockStateChange> {
         let (chunk_coordinate, relative) = position.chunk_and_chunk_relative_position();
         self.level
             .read_chunk_sync(&chunk_coordinate, |chunk| {
+                let mut outgoing_entity = None;
                 let replaced_block_state_id = chunk.set_block_absolute_y_if(
                     relative.x as usize,
                     relative.y,
                     relative.z as usize,
                     block_state_id,
-                    &condition,
+                    |previous| {
+                        if !condition(previous) {
+                            return false;
+                        }
+                        let previous_type = BlockState::from_id(previous).block_entity_type;
+                        let new_type = BlockState::from_id(block_state_id).block_entity_type;
+                        if previous_type != u16::MAX && previous_type != new_type {
+                            if !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
+                                outgoing_entity =
+                                    self.resolve_block_entity(chunk, position, previous, false);
+                            }
+                            self.detach_replaced_block_entity(chunk, position);
+                        }
+                        true
+                    },
                 )?;
                 // Mark chunk dirty if it isn't already
                 if replaced_block_state_id != block_state_id && !chunk.is_dirty() {
                     chunk.mark_dirty(true);
                 }
-                Some(replaced_block_state_id)
+                Some(BlockStateChange {
+                    previous: replaced_block_state_id,
+                    outgoing_entity,
+                })
             })
             .flatten()
     }
@@ -5934,10 +6073,11 @@ impl World {
     fn on_block_state_set(
         self: &Arc<Self>,
         position: &BlockPos,
-        replaced_block_state_id: BlockStateId,
+        change: BlockStateChange,
         block_state_id: BlockStateId,
         flags: BlockFlags,
     ) -> BlockStateId {
+        let replaced_block_state_id = change.previous;
         if !flags.contains(BlockFlags::FORCE_STATE) && replaced_block_state_id == block_state_id {
             return block_state_id;
         }
@@ -5947,16 +6087,8 @@ impl World {
         let is_new_block = old_block != new_block;
         let block_moved = flags.contains(BlockFlags::MOVED);
 
-        if is_new_block
-            && old_block.default_state.block_entity_type != u16::MAX
-            && old_block.default_state.block_entity_type
-                != new_block.default_state.block_entity_type
-            && let Some(entity) = self.get_block_entity(position)
-        {
-            if !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
-                entity.on_block_replaced(self, position);
-            }
-            self.remove_block_entity(position);
+        if let Some(entity) = change.outgoing_entity {
+            entity.on_block_replaced(self, position);
         }
 
         if is_new_block && (flags.contains(BlockFlags::NOTIFY_NEIGHBORS) || block_moved) {
@@ -5970,22 +6102,26 @@ impl World {
             );
         }
 
-        if !flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) && is_new_block {
-            self.on_block_placed(
-                position,
-                new_block,
-                block_state_id,
-                replaced_block_state_id,
-                block_moved,
-            );
-        } else if flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK)
-            && is_new_block
-            && new_block.default_state.block_entity_type != u16::MAX
-            && self.get_block_entity(position).is_none()
-            && let Some(entity) =
-                crate::block::entities::create_block_entity_for_state(block_state_id, *position)
-        {
-            self.add_block_entity(entity);
+        if is_new_block {
+            let current_state = self.get_block_state_id(position);
+            if Block::from_state_id(current_state) == new_block {
+                if flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) {
+                    if new_block.default_state.block_entity_type != u16::MAX {
+                        self.level
+                            .read_chunk_sync(&position.chunk_position(), |chunk| {
+                                self.get_block_entity_in_chunk(chunk, position, true);
+                            });
+                    }
+                } else {
+                    self.on_block_placed(
+                        position,
+                        new_block,
+                        current_state,
+                        replaced_block_state_id,
+                        block_moved,
+                    );
+                }
+            }
         }
 
         // Level.java setBlock
@@ -6073,6 +6209,8 @@ impl World {
         cause: Option<&Arc<Player>>,
         flags: BlockFlags,
     ) -> Option<BlockStateId> {
+        use crate::block::blocks::creaking_heart::CreakingHeartBlock;
+
         if let Some(player) = cause
             && self.is_in_spawn_protection(player, position)
         {
@@ -6099,11 +6237,16 @@ impl World {
             flags.remove(BlockFlags::SKIP_DROPS);
         }
 
+        let experience = cause
+            .filter(|_| broken_block == &Block::CREAKING_HEART)
+            .map_or(0, |player| {
+                CreakingHeartBlock::break_experience(self, broken_block_state.id, player)
+            });
         let mut event = BlockBreakEvent::new(
             cause.cloned(),
             broken_block,
             *position,
-            0,
+            experience,
             !flags.contains(BlockFlags::SKIP_DROPS),
         );
         if let Some(server) = self.server.upgrade() {
@@ -6117,6 +6260,12 @@ impl World {
             flags.remove(BlockFlags::SKIP_DROPS);
         } else {
             flags.insert(BlockFlags::SKIP_DROPS);
+        }
+
+        if broken_block == &Block::CREAKING_HEART
+            && let Some(player) = cause
+        {
+            CreakingHeartBlock::player_will_destroy(self, position, player, event.exp);
         }
 
         let broken_block_state =
@@ -7255,41 +7404,120 @@ impl World {
     }
 
     pub fn get_block_entity(&self, block_pos: &BlockPos) -> Option<Arc<dyn BlockEntity>> {
+        match self.get_block_entity_if_chunk_loaded(block_pos) {
+            BlockEntityLookup::Unloaded => None,
+            BlockEntityLookup::Loaded(entity) => entity,
+        }
+    }
+
+    /// Distinguishes an unavailable chunk from a loaded position without a block entity.
+    pub(crate) fn get_block_entity_if_chunk_loaded(
+        &self,
+        block_pos: &BlockPos,
+    ) -> BlockEntityLookup {
+        if !self.is_in_build_limit(*block_pos) {
+            return BlockEntityLookup::Loaded(None);
+        }
+        let chunk_pos = block_pos.chunk_position();
+        self.level
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                self.get_block_entity_in_chunk(chunk, block_pos, false)
+            })
+            .map_or(BlockEntityLookup::Unloaded, BlockEntityLookup::Loaded)
+    }
+
+    fn get_block_entity_in_chunk(
+        &self,
+        chunk: &ChunkData,
+        block_pos: &BlockPos,
+        initialize: bool,
+    ) -> Option<Arc<dyn BlockEntity>> {
+        let relative = block_pos.chunk_relative_position();
+        chunk
+            .section
+            .read_block_absolute_y(
+                relative.x as usize,
+                relative.y,
+                relative.z as usize,
+                |state| {
+                    // Creaking can resolve a state-only home after loading a chunk.
+                    // Other blocks keep Pumpkin's existing placement and migration
+                    // lifecycle until their callbacks can reuse an early instance.
+                    let recover_missing_heart =
+                        Block::from_state_id(state) == &Block::CREAKING_HEART;
+                    self.resolve_block_entity(
+                        chunk,
+                        block_pos,
+                        state,
+                        initialize || recover_missing_heart,
+                    )
+                },
+            )
+            .flatten()
+    }
+
+    fn resolve_block_entity(
+        &self,
+        chunk: &ChunkData,
+        block_pos: &BlockPos,
+        block_state: BlockStateId,
+        create_if_missing: bool,
+    ) -> Option<Arc<dyn BlockEntity>> {
+        let block_entity_type = usize::from(BlockState::from_id(block_state).block_entity_type);
+        let expected_name =
+            *pumpkin_data::block_properties::BLOCK_ENTITY_TYPES.get(block_entity_type)?;
+        let matches_state = |entity: &Arc<dyn BlockEntity>| {
+            entity.resource_location().rsplit(':').next() == Some(expected_name)
+        };
         let chunk_pos = block_pos.chunk_position();
         if let Some(entity) = self
             .block_entities
             .get(&chunk_pos)
             .and_then(|m| m.get(block_pos).cloned())
         {
-            return Some(entity);
+            return matches_state(&entity).then_some(entity);
         }
 
-        let nbt = self
-            .level
-            .read_chunk_sync(&chunk_pos, |chunk| {
-                chunk
-                    .pending_block_entities
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .get(block_pos)
-                    .cloned()
-            })
-            .flatten()?;
-        if let Some(custom_data) = nbt
-            .get_compound("PumpkinCustomData")
-            .or_else(|| nbt.get_compound("BukkitValues"))
-        {
+        let mut entities = self.block_entities.entry(chunk_pos).or_default();
+        if let Some(entity) = entities.get(block_pos) {
+            return matches_state(entity).then(|| entity.clone());
+        }
+        let mut pending = chunk
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let saved = pending.get(block_pos);
+        let (entity, recovered) = match saved {
+            Some(nbt) if nbt.get_string("id") != Some("DUMMY") => {
+                (block_entity_from_nbt(nbt).filter(matches_state)?, false)
+            }
+            _ if create_if_missing => (
+                crate::block::entities::create_block_entity_for_state(block_state, *block_pos)?,
+                true,
+            ),
+            _ => return None,
+        };
+        let custom_data = saved.and_then(|nbt| {
+            nbt.get_compound("PumpkinCustomData")
+                .or_else(|| nbt.get_compound("BukkitValues"))
+        });
+        if let Some(custom_data) = custom_data {
             self.custom_block_entity_data
                 .insert(*block_pos, custom_data.clone());
         }
-        let entity = block_entity_from_nbt(&nbt)?;
+        if recovered {
+            let mut nbt = NbtCompound::new();
+            entity.write_internal(&mut nbt);
+            if let Some(custom_data) = custom_data {
+                nbt.put_compound("PumpkinCustomData", custom_data.clone());
+            }
+            pending.insert(*block_pos, nbt);
+            chunk.mark_dirty(true);
+        }
         if let Some(weak) = self.weak_self() {
             entity.set_world(weak);
         }
-        self.block_entities
-            .entry(chunk_pos)
-            .or_default()
-            .insert(*block_pos, entity.clone());
+        entities.insert(*block_pos, entity.clone());
         Some(entity)
     }
 
@@ -7298,8 +7526,13 @@ impl World {
         state_id: BlockStateId,
         position: BlockPos,
     ) -> Option<NbtCompound> {
-        self.get_block_entity(&position)?
+        // Java 26.3 stores bed colors in block states; Bedrock still needs an actor.
+        crate::block::entities::bed::BedBlockEntity::new(position)
             .bedrock_block_actor_data(state_id)
+            .or_else(|| {
+                self.get_block_entity(&position)?
+                    .bedrock_block_actor_data(state_id)
+            })
     }
 
     /// Builds Bedrock block actor tags that are not represented by Java block states alone.
@@ -7315,10 +7548,15 @@ impl World {
                     .collect()
             })
             .unwrap_or_default();
-        let pending = chunk
+        // Block-entity lookup takes the section lock before pending NBT.
+        let pending: Vec<_> = chunk
             .pending_block_entities
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter(|(position, _)| !live_entities.contains_key(position))
+            .map(|(position, nbt)| (*position, nbt.clone()))
+            .collect();
 
         live_entities
             .iter()
@@ -7332,22 +7570,16 @@ impl World {
                             .or_else(|| entity.bedrock_block_actor_data(state_id))
                     })
             })
-            .chain(
-                pending
-                    .iter()
-                    .filter(|(position, _)| !live_entities.contains_key(position))
-                    .filter_map(|(position, nbt)| {
-                        let relative = position.chunk_relative_position();
-                        let state_id = chunk.section.get_block_absolute_y(
-                            relative.x as usize,
-                            relative.y,
-                            relative.z as usize,
-                        )?;
-                        bedrock_chest_block_actor(state_id, *position).or_else(|| {
-                            block_entity_from_nbt(nbt)?.bedrock_block_actor_data(state_id)
-                        })
-                    }),
-            )
+            .chain(pending.iter().filter_map(|(position, nbt)| {
+                let relative = position.chunk_relative_position();
+                let state_id = chunk.section.get_block_absolute_y(
+                    relative.x as usize,
+                    relative.y,
+                    relative.z as usize,
+                )?;
+                bedrock_chest_block_actor(state_id, *position)
+                    .or_else(|| block_entity_from_nbt(nbt)?.bedrock_block_actor_data(state_id))
+            }))
             .collect()
     }
 
@@ -7360,25 +7592,7 @@ impl World {
         let block_entity_nbt = block_entity.chunk_data_nbt();
         let entity_id = block_entity.resource_location().to_string();
 
-        if let Some(nbt) = &block_entity_nbt {
-            let bytes = pumpkin_nbt::Nbt::from(nbt.clone()).write_unnamed();
-            self.broadcast_to_chunk(
-                chunk_pos,
-                &CBlockEntityData::new(
-                    block_entity.get_position(),
-                    VarInt(block_entity.get_id() as i32),
-                    bytes.as_ref().into(),
-                ),
-            );
-        }
-
-        let state = self.get_block_state(&block_pos);
-        if let Some(data) = bedrock_chest_block_actor(state.id, block_pos)
-            .or_else(|| block_entity.bedrock_block_actor_data(state.id))
-        {
-            self.broadcast_to_chunk_bedrock(chunk_pos, &CBlockActorData::new(block_pos, data));
-        }
-
+        self.broadcast_block_entity(block_entity.as_ref(), block_entity_nbt.as_ref());
         self.block_entities
             .entry(chunk_pos)
             .or_default()
@@ -7414,6 +7628,54 @@ impl World {
             self.pending_block_entity_migrations
                 .push(block_pos.chunk_position());
         }
+    }
+
+    pub(crate) fn update_block_entity_nbt(
+        &self,
+        block_entity: &dyn BlockEntity,
+        update: impl Fn(&mut NbtCompound),
+    ) {
+        let position = block_entity.get_position();
+        let chunk_pos = position.chunk_position();
+        self.level.read_chunk_sync(&chunk_pos, |chunk| {
+            let Some(entities) = self.block_entities.get(&chunk_pos) else {
+                return;
+            };
+            if !entities
+                .get(&position)
+                .is_some_and(|current| std::ptr::addr_eq(current.as_ref(), block_entity))
+            {
+                return;
+            }
+            let mut pending = chunk
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(nbt) = pending.get_mut(&position) {
+                update(nbt);
+                chunk.mark_dirty(true);
+            }
+        });
+    }
+
+    // Called with the section write lock held before the new state becomes visible.
+    fn detach_replaced_block_entity(&self, chunk: &ChunkData, position: &BlockPos) {
+        let chunk_pos = position.chunk_position();
+        let mut entities = self.block_entities.entry(chunk_pos).or_default();
+        let mut pending = chunk
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let removed_live = entities.remove(position).is_some();
+        let removed_pending = pending.remove(position).is_some();
+        if removed_live || removed_pending {
+            self.custom_block_entity_data.remove(position);
+            chunk.mark_dirty(true);
+        }
+        drop(pending);
+        drop(entities);
+        self.block_entities
+            .remove_if(&chunk_pos, |_, entities| entities.is_empty());
     }
 
     pub fn remove_block_entity(&self, block_pos: &BlockPos) {
@@ -7483,26 +7745,41 @@ impl World {
     }
 
     fn migrate_pending_block_entities(&self, chunk_pos: Vector2<i32>) {
-        let positions: Vec<BlockPos> = self
-            .level
-            .read_chunk_sync(&chunk_pos, |chunk| {
-                chunk
-                    .pending_block_entities
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .keys()
-                    .copied()
-                    .collect()
-            })
-            .unwrap_or_default();
-        for pos in positions {
-            let already_loaded = self
-                .block_entities
-                .get(&chunk_pos)
-                .is_some_and(|m| m.contains_key(&pos));
-            if !already_loaded && let Some(entity) = self.get_block_entity(&pos) {
-                self.update_block_entity(&entity);
+        let Some(migrated) = self.level.read_chunk_sync(&chunk_pos, |chunk| {
+            let pending: Vec<_> = chunk
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .keys()
+                .copied()
+                .collect();
+            let legacy = chunk.legacy_block_entity_positions();
+            let checked_legacy = legacy.is_some();
+            let mut migrated = Vec::new();
+            for pos in pending.into_iter().chain(legacy.into_iter().flatten()) {
+                if pos.chunk_position() != chunk_pos || !self.is_in_build_limit(pos) {
+                    continue;
+                }
+                let already_loaded = self
+                    .block_entities
+                    .get(&chunk_pos)
+                    .is_some_and(|m| m.contains_key(&pos));
+                if !already_loaded
+                    && let Some(entity) = self.get_block_entity_in_chunk(chunk, &pos, true)
+                {
+                    migrated.push(entity);
+                }
             }
+            if checked_legacy {
+                chunk.finish_block_entity_recovery();
+            }
+            migrated
+        }) else {
+            return;
+        };
+        // Promotion preserves the persisted record and its custom data.
+        for entity in migrated {
+            self.broadcast_block_entity(entity.as_ref(), entity.chunk_data_nbt().as_ref());
         }
     }
 
@@ -7512,22 +7789,38 @@ impl World {
         let block_entity_nbt = block_entity.chunk_data_nbt();
 
         if let Some(nbt) = &block_entity_nbt {
+            let mut full_nbt = nbt.clone();
+            full_nbt.put_string("id", block_entity.resource_location().to_string());
+            full_nbt.put_int("x", block_pos.0.x);
+            full_nbt.put_int("y", block_pos.0.y);
+            full_nbt.put_int("z", block_pos.0.z);
+            if let Some(custom_data) = self.custom_block_entity_data.get(&block_pos)
+                && !custom_data.is_empty()
+            {
+                full_nbt.put_compound("PumpkinCustomData", custom_data.clone());
+            }
+            self.add_block_entity_nbt(block_pos, &full_nbt);
+        }
+
+        self.broadcast_block_entity(block_entity.as_ref(), block_entity_nbt.as_ref());
+        self.level.read_chunk_sync(&chunk_pos, |chunk| {
+            chunk.mark_dirty(true);
+        });
+    }
+
+    fn broadcast_block_entity(&self, block_entity: &dyn BlockEntity, nbt: Option<&NbtCompound>) {
+        let block_pos = block_entity.get_position();
+        let chunk_pos = block_pos.chunk_position();
+        if let Some(nbt) = nbt {
             let bytes = pumpkin_nbt::Nbt::from(nbt.clone()).write_unnamed();
             self.broadcast_to_chunk(
                 chunk_pos,
                 &CBlockEntityData::new(
-                    block_entity.get_position(),
+                    block_pos,
                     VarInt(block_entity.get_id() as i32),
                     bytes.as_ref().into(),
                 ),
             );
-            let mut full_nbt = nbt.clone();
-            full_nbt.put_string("id", block_entity.resource_location().to_string());
-            let pos = block_entity.get_position();
-            full_nbt.put_int("x", pos.0.x);
-            full_nbt.put_int("y", pos.0.y);
-            full_nbt.put_int("z", pos.0.z);
-            self.add_block_entity_nbt(block_pos, &full_nbt);
         }
 
         let state = self.get_block_state(&block_pos);
@@ -7536,10 +7829,6 @@ impl World {
         {
             self.broadcast_to_chunk_bedrock(chunk_pos, &CBlockActorData::new(block_pos, data));
         }
-
-        self.level.read_chunk_sync(&chunk_pos, |chunk| {
-            chunk.mark_dirty(true);
-        });
     }
 
     #[must_use]
@@ -8649,8 +8938,9 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        NaturalSpawnChunkCache, bedrock_block_breaking_rate, bedrock_chest_block_actor,
-        merge_entity_records, natural_spawn_chunk_count, spawn_list_for_tick,
+        BlockEntityLookup, NaturalSpawnChunkCache, bedrock_block_breaking_rate,
+        bedrock_chest_block_actor, merge_entity_records, natural_spawn_chunk_count,
+        spawn_list_for_tick,
     };
 
     fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
@@ -8666,6 +8956,641 @@ mod tests {
         data.iter()
             .filter_map(|record| record.get_string("id"))
             .collect()
+    }
+
+    #[tokio::test]
+    async fn free_creaking_game_event_listener_changes_the_island_plan()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{Entity, EntityBase, mob::creaking::CreakingEntity};
+        use crate::plugin::{
+            BoxFuture, EventRwHandler, PluginManager,
+            api::events::{
+                EventPriority, block::block_physics::BlockPhysicsEvent,
+                world::generic_game::GenericGameEvent,
+            },
+        };
+        use pumpkin_config::world::EntityIslandsConfig;
+        use pumpkin_data::entity::EntityType;
+        use pumpkin_util::math::vector3::Vector3;
+        use std::sync::Arc;
+
+        struct Listener;
+        impl EventRwHandler<BlockPhysicsEvent> for Listener {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<crate::server::Server>,
+                _event: &'a mut BlockPhysicsEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(std::future::ready(()))
+            }
+        }
+        impl EventRwHandler<GenericGameEvent> for Listener {
+            fn handle<'a>(
+                &'a self,
+                _server: &'a Arc<crate::server::Server>,
+                _event: &'a mut GenericGameEvent,
+            ) -> BoxFuture<'a, ()> {
+                Box::pin(std::future::ready(()))
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let entities = (0..16)
+            .map(|index| {
+                let entity = Entity::new(
+                    world.clone(),
+                    Vector3::new(f64::from(index) * 256.0, 64.0, 0.0),
+                    if index == 0 {
+                        &EntityType::CREAKING
+                    } else {
+                        &EntityType::PIG
+                    },
+                );
+                if index == 0 {
+                    CreakingEntity::new(entity) as Arc<dyn EntityBase>
+                } else {
+                    Arc::new(entity) as Arc<dyn EntityBase>
+                }
+            })
+            .collect::<Vec<_>>();
+        let tickable: Vec<_> = entities.iter().collect();
+        let config = EntityIslandsConfig::default();
+        let unrelated = PluginManager::new(Vec::new());
+        unrelated.register_blocking::<BlockPhysicsEvent, _>(
+            Arc::new(Listener),
+            EventPriority::Normal,
+            None,
+        );
+        let plan = world
+            .plan_entity_islands(&unrelated, &config, &entities, &tickable, &[])
+            .ok_or("separated free Creaking fixture must plan in parallel")?;
+        assert!(plan.islands.len() > 1);
+        let relevant = PluginManager::new(Vec::new());
+        relevant.register_blocking::<GenericGameEvent, _>(
+            Arc::new(Listener),
+            EventPriority::Normal,
+            None,
+        );
+        assert!(
+            world
+                .plan_entity_islands(&relevant, &config, &entities, &tickable, &[])
+                .is_none()
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn idle_linked_creaking_connects_attackers_to_remote_heart_readers()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{Entity, EntityBase, mob::creaking::CreakingEntity};
+        use crate::plugin::PluginManager;
+        use pumpkin_config::world::EntityIslandsConfig;
+        use pumpkin_data::entity::EntityType;
+        use pumpkin_util::math::vector3::Vector3;
+        use std::sync::Arc;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let position = Vector3::new(0.5, 64.0, 0.5);
+        let creaking =
+            CreakingEntity::new(Entity::new(world.clone(), position, &EntityType::CREAKING));
+        let mut entities = (0..16)
+            .map(|index| {
+                let x = match index {
+                    0 => position.x,
+                    1 => 50.5,
+                    _ => f64::from(index) * 256.0,
+                };
+                Arc::new(Entity::new(
+                    world.clone(),
+                    Vector3::new(x, position.y, position.z),
+                    &EntityType::PIG,
+                )) as Arc<dyn EntityBase>
+            })
+            .collect::<Vec<_>>();
+        entities.push(creaking.clone());
+        // An idle protector can still be hit by the first ticking entity.
+        let tickable: Vec<_> = entities[..16].iter().collect();
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            ..EntityIslandsConfig::default()
+        };
+        let plugins = PluginManager::new(Vec::new());
+        let joined = || -> Result<bool, &'static str> {
+            let plan = world
+                .plan_entity_islands(&plugins, &config, &entities, &tickable, &[])
+                .ok_or("fixture should have parallel islands")?;
+            Ok(plan
+                .islands
+                .iter()
+                .any(|island| island.contains(&0) && island.contains(&1)))
+        };
+        assert!(!joined()?);
+        creaking.set_transient(BlockPos::new(30, 64, 0));
+        assert!(joined()?);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn replacement_cleanup_preserves_an_entity_resolved_for_the_new_block()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+        use std::sync::Arc;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let position = BlockPos::new(8, 64, 8);
+        let chunk_pos = position.chunk_position();
+        let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+        world.level.loaded_chunks.insert(chunk_pos, chunk);
+
+        let heart = Block::CREAKING_HEART.default_state.id;
+        let chest = Block::CHEST.default_state.id;
+        assert!(
+            world
+                .write_block_state_if(&position, chest, BlockFlags::NOTIFY_ALL, |_| true)
+                .is_some()
+        );
+        let replaced = world
+            .write_block_state_if(&position, heart, BlockFlags::NOTIFY_ALL, |_| true)
+            .ok_or("missing fixture chunk")?;
+        assert_eq!(replaced.previous, chest);
+        let early_heart = world
+            .get_block_entity(&position)
+            .ok_or("missing early heart")?;
+        assert_eq!(early_heart.resource_location(), "minecraft:creaking_heart");
+
+        world.on_block_state_set(&position, replaced, heart, BlockFlags::NOTIFY_ALL);
+        let placed_heart = world
+            .get_block_entity(&position)
+            .ok_or("missing placed heart")?;
+        assert!(Arc::ptr_eq(&early_heart, &placed_heart));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn furnace_lookup_waits_for_placement() -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let position = BlockPos::new(8, 64, 8);
+        let chunk_pos = position.chunk_position();
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk_pos, ChunkData::empty_sync(chunk_pos.x, chunk_pos.y));
+        let state = Block::FURNACE.default_state.id;
+        let flags = BlockFlags::NOTIFY_ALL;
+        let change = world
+            .write_block_state_if(&position, state, flags, |_| true)
+            .ok_or("missing fixture chunk")?;
+        assert_eq!(change.previous, Block::AIR.default_state.id);
+
+        assert!(world.get_block_entity(&position).is_none());
+        world.on_block_state_set(&position, change, state, flags);
+        let furnace = world
+            .get_block_entity(&position)
+            .ok_or("missing placed furnace")?;
+        assert_eq!(furnace.resource_location(), "minecraft:furnace");
+        assert!(furnace.get_inventory().is_some());
+        let skipped_position = position.east();
+        assert_eq!(
+            world.set_block_state(
+                &skipped_position,
+                state,
+                BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+            ),
+            Block::AIR.default_state.id
+        );
+        let skipped_furnace = world
+            .block_entities
+            .get(&chunk_pos)
+            .and_then(|entities| entities.get(&skipped_position).cloned())
+            .ok_or("skipped placement did not initialize a furnace")?;
+        assert_eq!(skipped_furnace.resource_location(), "minecraft:furnace");
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn delayed_cleanup_preserves_a_newer_replacement()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::block::entities::barrel::BarrelBlockEntity;
+        use pumpkin_data::{item::Item, item_stack::ItemStack};
+        use pumpkin_inventory::Inventory;
+        use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+        use std::sync::Arc;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let position = BlockPos::new(8, 64, 8);
+        let chunk_pos = position.chunk_position();
+        let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+        world.level.loaded_chunks.insert(chunk_pos, chunk);
+        let heart = Block::CREAKING_HEART.default_state.id;
+        let chest = Block::CHEST.default_state.id;
+        let barrel = Block::BARREL.default_state.id;
+        assert!(
+            world
+                .write_block_state_if(&position, heart, BlockFlags::NOTIFY_ALL, |_| true)
+                .is_some()
+        );
+        let replaced = world
+            .write_block_state_if(&position, chest, BlockFlags::NOTIFY_ALL, |_| true)
+            .ok_or("missing fixture chunk")?;
+        assert_eq!(replaced.previous, heart);
+        assert_eq!(
+            world.set_block_state(&position, barrel, BlockFlags::NOTIFY_ALL),
+            chest
+        );
+        let newest = world.get_block_entity(&position).ok_or("missing barrel")?;
+        assert_eq!(newest.resource_location(), "minecraft:barrel");
+        let inventory = newest
+            .as_any()
+            .downcast_ref::<BarrelBlockEntity>()
+            .ok_or("wrong barrel type")?;
+        inventory.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
+
+        world.on_block_state_set(&position, replaced, chest, BlockFlags::NOTIFY_ALL);
+        assert_eq!(world.get_block_state_id(&position), barrel);
+        let retained = world
+            .get_block_entity(&position)
+            .ok_or("missing retained barrel")?;
+        assert!(Arc::ptr_eq(&newest, &retained));
+        let retained = retained
+            .as_any()
+            .downcast_ref::<BarrelBlockEntity>()
+            .ok_or("wrong retained type")?;
+        assert_eq!(retained.get_stack(0).get_item(), &Item::DIAMOND);
+        assert_eq!(retained.get_stack(0).item_count, 3);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn delayed_placement_preserves_a_same_state_barrel()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::block::entities::barrel::BarrelBlockEntity;
+        use pumpkin_data::{item::Item, item_stack::ItemStack};
+        use pumpkin_inventory::Inventory;
+        use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+        use std::sync::Arc;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let position = BlockPos::new(8, 64, 8);
+        let chunk_pos = position.chunk_position();
+        let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+        world.level.loaded_chunks.insert(chunk_pos, chunk);
+        let heart = Block::CREAKING_HEART.default_state.id;
+        let chest = Block::CHEST.default_state.id;
+        let barrel = Block::BARREL.default_state.id;
+        assert!(
+            world
+                .write_block_state_if(&position, heart, BlockFlags::NOTIFY_ALL, |_| true)
+                .is_some()
+        );
+        let replaced = world
+            .write_block_state_if(&position, barrel, BlockFlags::NOTIFY_ALL, |_| true)
+            .ok_or("missing fixture chunk")?;
+        assert_eq!(replaced.previous, heart);
+        assert_eq!(
+            world.set_block_state(&position, chest, BlockFlags::NOTIFY_ALL),
+            barrel
+        );
+        assert_eq!(
+            world.set_block_state(&position, barrel, BlockFlags::NOTIFY_ALL),
+            chest
+        );
+        let newest = world.get_block_entity(&position).ok_or("missing barrel")?;
+        assert_eq!(newest.resource_location(), "minecraft:barrel");
+        let inventory = newest
+            .as_any()
+            .downcast_ref::<BarrelBlockEntity>()
+            .ok_or("wrong barrel type")?;
+        inventory.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
+
+        world.on_block_state_set(&position, replaced, barrel, BlockFlags::NOTIFY_ALL);
+        assert_eq!(world.get_block_state_id(&position), barrel);
+        let retained = world
+            .get_block_entity(&position)
+            .ok_or("missing retained barrel")?;
+        assert!(Arc::ptr_eq(&newest, &retained));
+        let retained = retained
+            .as_any()
+            .downcast_ref::<BarrelBlockEntity>()
+            .ok_or("wrong retained type")?;
+        assert_eq!(retained.get_stack(0).get_item(), &Item::DIAMOND);
+        assert_eq!(retained.get_stack(0).item_count, 3);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn delayed_removal_does_not_retire_a_new_heart() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use crate::block::entities::creaking_heart::CreakingHeartBlockEntity;
+        use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let position = BlockPos::new(8, 64, 8);
+        let chunk_pos = position.chunk_position();
+        let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+        world.level.loaded_chunks.insert(chunk_pos, chunk);
+        let heart = Block::CREAKING_HEART.default_state.id;
+        let chest = Block::CHEST.default_state.id;
+        world.set_block_state(&position, heart, BlockFlags::NOTIFY_ALL);
+        let original = world
+            .get_block_entity(&position)
+            .ok_or("missing original heart")?;
+        let replaced = world
+            .write_block_state_if(&position, chest, BlockFlags::NOTIFY_ALL, |_| true)
+            .ok_or("missing fixture chunk")?;
+        assert_eq!(replaced.previous, heart);
+        assert_eq!(
+            world.set_block_state(&position, heart, BlockFlags::NOTIFY_ALL),
+            chest
+        );
+        let newest = world
+            .get_block_entity(&position)
+            .ok_or("missing new heart")?;
+        world.on_block_state_set(&position, replaced, chest, BlockFlags::NOTIFY_ALL);
+        let newest = newest
+            .as_any()
+            .downcast_ref::<CreakingHeartBlockEntity>()
+            .ok_or("wrong new type")?;
+        assert!(newest.destroy_protector(&world, None, None, None));
+        let original = original
+            .as_any()
+            .downcast_ref::<CreakingHeartBlockEntity>()
+            .ok_or("wrong original type")?;
+        assert!(!original.destroy_protector(&world, None, None, None));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn placement_initializes_a_block_after_its_properties_change()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_data::block_properties::BarrelLikeProperties;
+        use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let position = BlockPos::new(8, 64, 8);
+        let chunk_pos = position.chunk_position();
+        let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+        world.level.loaded_chunks.insert(chunk_pos, chunk);
+
+        let barrel = Block::BARREL.default_state.id;
+        let mut props = BarrelLikeProperties::from_state_id(barrel);
+        props.open = !props.open;
+        let updated = props.to_state_id(&Block::BARREL);
+        assert_ne!(updated, barrel);
+        let old = world
+            .write_block_state_if(&position, barrel, BlockFlags::NOTIFY_ALL, |_| true)
+            .ok_or("missing fixture chunk")?;
+        assert!(
+            world
+                .write_block_state_if(&position, updated, BlockFlags::NOTIFY_ALL, |_| true)
+                .is_some()
+        );
+        world.on_block_state_set(&position, old, barrel, BlockFlags::NOTIFY_ALL);
+
+        assert_eq!(world.get_block_state_id(&position), updated);
+        assert!(
+            world
+                .block_entities
+                .get(&chunk_pos)
+                .and_then(|entries| entries.get(&position).cloned())
+                .is_some_and(|entity| entity
+                    .as_any()
+                    .is::<crate::block::entities::barrel::BarrelBlockEntity>())
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn loaded_chunk_materializes_block_entities_from_block_state()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_world::chunk::{ChunkData, format::anvil::SingleChunkDataSerializer};
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk_pos = Vector2::new(0, 0);
+        let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+        let packed = BlockPos::new(0, 64, 0);
+        let missing = BlockPos::new(1, 64, 0);
+        let linked = BlockPos::new(2, 64, 0);
+        let protector = Uuid::from_u128(42);
+        for (position, block) in [
+            (packed, &Block::CREAKING_HEART),
+            (missing, &Block::CHEST),
+            (linked, &Block::CREAKING_HEART),
+        ] {
+            chunk.set_block_absolute_y(
+                position.0.x as usize,
+                position.0.y,
+                position.0.z as usize,
+                block.default_state.id,
+            );
+        }
+        {
+            let mut pending = chunk
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut dummy = record(None, "DUMMY");
+            dummy.put_int("x", packed.0.x);
+            dummy.put_int("y", packed.0.y);
+            dummy.put_int("z", packed.0.z);
+            dummy.put_bool("keepPacked", true);
+            let mut custom_data = NbtCompound::new();
+            custom_data.put_int("sentinel", 42);
+            dummy.put_compound("BukkitValues", custom_data);
+            pending.insert(packed, dummy);
+
+            let mut saved = record(None, "minecraft:creaking_heart");
+            saved.put_int("x", linked.0.x);
+            saved.put_int("y", linked.0.y);
+            saved.put_int("z", linked.0.z);
+            saved.put_uuid("creaking", protector);
+            pending.insert(linked, saved)
+        };
+        world.level.loaded_chunks.insert(chunk_pos, chunk.clone());
+        world.migrate_pending_block_entities(chunk_pos);
+        let migrated_only_pending = world
+            .block_entities
+            .get(&chunk_pos)
+            .is_some_and(|entities| {
+                entities.contains_key(&packed) && !entities.contains_key(&missing)
+            });
+        assert!(migrated_only_pending);
+
+        let packed_heart = world
+            .get_block_entity_nbt(&packed)
+            .ok_or("packed heart was not initialized")?;
+        assert_eq!(
+            packed_heart.get_string("id"),
+            Some("minecraft:creaking_heart")
+        );
+
+        let persisted = ChunkData::from_bytes(&chunk.to_pump_bytes()?, chunk_pos)?;
+        assert_eq!(
+            persisted
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&packed)
+                .and_then(|record| record.get_compound("PumpkinCustomData"))
+                .and_then(|custom| custom.get_int("sentinel")),
+            Some(42)
+        );
+
+        assert!(world.get_block_entity_nbt(&missing).is_none());
+        assert_eq!(
+            world
+                .get_block_entity_nbt(&linked)
+                .and_then(|nbt| nbt.get_uuid("creaking")),
+            Some(protector)
+        );
+
+        world.level.loaded_chunks.remove(&chunk_pos);
+        assert!(matches!(
+            world.get_block_entity_if_chunk_loaded(&linked),
+            BlockEntityLookup::Unloaded
+        ));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dense_legacy_block_entity_chunk_round_trips_in_pump_format()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_nbt::{Nbt, tag::NbtTag};
+        use pumpkin_world::chunk::{
+            ChunkData,
+            format::{
+                anvil::{SingleChunkDataSerializer, WORLD_DATA_VERSION},
+                pump::PumpFile,
+            },
+            io::{Dirtiable, FileIO, LoadedData, file_manager::ChunkFileManager},
+            palette::BlockPalette,
+        };
+        use std::sync::Arc;
+
+        // Sixteen full sections reach the old decoder limit. Recovery must save the next one too.
+        const FULL_SECTIONS: i32 = 17;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk_pos = Vector2::new(0, 0);
+        let mut heart = NbtCompound::new();
+        heart.put_string("Name", "minecraft:creaking_heart".into());
+        let mut block_states = NbtCompound::new();
+        block_states.put_list("palette", vec![NbtTag::Compound(heart)]);
+
+        let sections = (0..FULL_SECTIONS)
+            .map(|y| {
+                let mut section = NbtCompound::new();
+                section.put_int("Y", y);
+                section.put_compound("block_states", block_states.clone());
+                NbtTag::Compound(section)
+            })
+            .collect();
+        let mut legacy = NbtCompound::new();
+        legacy.put_int("DataVersion", WORLD_DATA_VERSION);
+        legacy.put_int("xPos", chunk_pos.x);
+        legacy.put_int("zPos", chunk_pos.y);
+        legacy.put_int("yPos", 0);
+        legacy.put_string("Status", "minecraft:full".into());
+        legacy.put_list("sections", sections);
+        let chunk = Arc::new(ChunkData::from_bytes(
+            &Nbt::from(legacy).write(),
+            chunk_pos,
+        )?);
+        assert!(
+            chunk
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+        );
+        assert!(!chunk.is_dirty());
+
+        world.level.loaded_chunks.insert(chunk_pos, chunk.clone());
+        world.migrate_pending_block_entities(chunk_pos);
+        assert!(chunk.is_dirty());
+
+        let level_folder = &world.level.level_folder;
+        let writer = ChunkFileManager::<PumpFile, ChunkData>::new(());
+        writer
+            .save_chunks(level_folder, vec![(chunk_pos, chunk)])
+            .await?;
+        writer.flush_all().await;
+        drop(writer);
+
+        let reader = ChunkFileManager::<PumpFile, ChunkData>::new(());
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+        reader.fetch_chunks(level_folder, &[chunk_pos], tx).await;
+        let reloaded = match rx.recv().await {
+            Some(LoadedData::Loaded(chunk)) => chunk,
+            Some(LoadedData::Error((_, error))) => return Err(error.into()),
+            _ => return Err("recovered Pump chunk is missing".into()),
+        };
+        assert!(reloaded.legacy_block_entity_positions().is_none());
+        let last = BlockPalette::SIZE as i32 - 1;
+        let last_heart = BlockPos::new(last, FULL_SECTIONS * BlockPalette::SIZE as i32 - 1, last);
+        let (record_count, has_last_heart) = {
+            let records = reloaded
+                .pending_block_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let last_id = records
+                .get(&last_heart)
+                .and_then(|record| record.get_string("id"));
+            (records.len(), last_id == Some("minecraft:creaking_heart"))
+        };
+        assert_eq!(record_count, FULL_SECTIONS as usize * BlockPalette::VOLUME);
+        assert!(has_last_heart, "missing recovered heart at {last_heart:?}");
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn bedrock_incremental_bed_update_preserves_block_actor_color()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::block::entities::bed::BedBlockEntity;
+        use pumpkin_world::chunk::ChunkData;
+        use std::sync::Arc;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk = ChunkData::empty_sync(0, 0);
+        let position = BlockPos::new(1, 64, 1);
+        let blue = Block::BLUE_BED.default_state.id;
+        chunk.set_block_absolute_y(1, 64, 1, blue);
+        world
+            .level
+            .loaded_chunks
+            .insert(position.chunk_position(), chunk.clone());
+        world.add_block_entity(Arc::new(BedBlockEntity::new(position)));
+
+        let actor = world
+            .bedrock_block_entity_data(blue, position)
+            .ok_or("Bedrock bed update did not have a block actor")?;
+        assert_eq!(actor.get_string("id"), Some("Bed"));
+        assert_eq!(actor.get_byte("color"), Some(11));
+        assert_eq!(world.bedrock_chunk_block_actors(&chunk), vec![actor]);
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[test]

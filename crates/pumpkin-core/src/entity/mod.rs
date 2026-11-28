@@ -1065,6 +1065,38 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         false
     }
 
+    /// Vanilla `Entity.push(Vec3)`, including a mob's push override.
+    fn push_by(&self, impulse: Vector3<f64>) {
+        if self.apply_push_impulse(impulse) {
+            let entity = self.get_entity();
+            entity.velocity_dirty.store(true, Ordering::SeqCst);
+            if self.get_player().is_some() {
+                entity
+                    .push_impulse
+                    .store(entity.push_impulse.load() + impulse);
+            }
+        }
+    }
+
+    fn accepts_push_impulses(&self) -> bool {
+        self.get_mob()
+            .is_none_or(mob::Mob::mob_accepts_push_impulses)
+    }
+
+    /// Applies a push. The caller handles velocity synchronization.
+    fn apply_push_impulse(&self, impulse: Vector3<f64>) -> bool {
+        if !self.accepts_push_impulses() {
+            return false;
+        }
+        let entity = self.get_entity();
+        entity.velocity.store(entity.velocity.load() + impulse);
+        true
+    }
+
+    fn can_use_portal(&self) -> bool {
+        self.get_mob().is_none_or(mob::Mob::mob_can_use_portal)
+    }
+
     /// Vanilla `LivingEntity.onClimbable`.
     fn on_climbable(&self) -> bool {
         self.get_living_entity()
@@ -1113,13 +1145,16 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             dz *= PUSH_STRENGTH;
 
             if !self_entity.has_passengers() && self.is_pushable() {
-                self_entity.push_by(Vector3::new(-dx, 0.0, -dz));
+                self.push_by(Vector3::new(-dx, 0.0, -dz));
             }
 
             // A Java client runs only the other side's `pushEntities` on its player, so
             // the pusher's own half stays off the Bedrock impulse
-            if !other_entity.has_passengers() && entity.is_pushable() {
-                other_entity.push_back_by(Vector3::new(dx, 0.0, dz));
+            if !other_entity.has_passengers()
+                && entity.is_pushable()
+                && entity.apply_push_impulse(Vector3::new(dx, 0.0, dz))
+            {
+                other_entity.velocity_dirty.store(true, Ordering::SeqCst);
             }
         }
     }
@@ -3075,22 +3110,6 @@ impl Entity {
         old
     }
 
-    /// Vanilla `Entity.push(Vec3)`. A player's pushes are also kept apart for Bedrock,
-    /// whose client doesn't predict them.
-    pub fn push_by(&self, impulse: Vector3<f64>) {
-        self.velocity.store(self.velocity.load() + impulse);
-        self.velocity_dirty.store(true, Ordering::SeqCst);
-        if self.entity_type == &EntityType::PLAYER {
-            self.push_impulse.store(self.push_impulse.load() + impulse);
-        }
-    }
-
-    /// `push_by` on the pusher in its own `pushEntities`, which stays off the Bedrock impulse.
-    pub fn push_back_by(&self, impulse: Vector3<f64>) {
-        self.velocity.store(self.velocity.load() + impulse);
-        self.velocity_dirty.store(true, Ordering::SeqCst);
-    }
-
     /// Vanilla `getKnownMovement`: a player's own client motion, otherwise the velocity.
     pub fn known_movement(&self) -> Vector3<f64> {
         if self.entity_type == &EntityType::PLAYER {
@@ -3837,7 +3856,10 @@ impl Entity {
         }
     }
 
-    pub fn try_use_portal(&self, portal_world: Arc<World>, pos: BlockPos) {
+    pub fn try_use_portal(&self, caller: &dyn EntityBase, portal_world: Arc<World>, pos: BlockPos) {
+        if !caller.can_use_portal() {
+            return;
+        }
         let mut portal_event =
             crate::plugin::api::events::entity::entity_portal::EntityPortalEvent::new(
                 self.entity_id,
@@ -4124,6 +4146,12 @@ impl Entity {
     }
     pub fn is_sneaking(&self) -> bool {
         self.sneaking.load(Ordering::Relaxed)
+    }
+
+    /// Vanilla `Entity.isDescending` uses the Shift input flag.
+    #[must_use]
+    pub fn is_descending(&self) -> bool {
+        self.is_sneaking()
     }
 
     #[must_use]
@@ -4898,7 +4926,7 @@ impl Entity {
         Vector3::new(pos.x, pos.y + self.get_eye_height(), pos.z)
     }
 
-    /// No visual-blocking block between the two eye positions (matching vanilla `ClipContext.Block.VISUAL`).
+    /// No colliding block between the two eye positions (vanilla's default sight check).
     #[must_use]
     pub fn has_line_of_sight(&self, other: &Self) -> bool {
         let from = self.get_eye_pos();
@@ -4912,7 +4940,7 @@ impl Entity {
             .clip(&pumpkin_world::clip::ClipContext::new(
                 from,
                 to,
-                pumpkin_world::clip::ClipBlock::Visual,
+                pumpkin_world::clip::ClipBlock::Collider,
                 pumpkin_world::clip::ClipFluid::None,
             ))
             .is_miss

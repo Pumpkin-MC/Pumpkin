@@ -438,6 +438,7 @@ pub trait PathNavigationTrait: Send + Sync {
     fn set_can_open_doors(&mut self, can_open: bool);
     fn set_can_pass_doors(&mut self, can_pass: bool);
     fn set_can_float(&mut self, can_float: bool);
+    fn set_home_distance_limit(&mut self, _home: BlockPos, _max_distance_squared: f64) {}
     fn can_float(&self) -> bool;
     fn can_navigate_ground(&self) -> bool;
     fn set_required_path_length(&mut self, length: f32);
@@ -1200,6 +1201,12 @@ impl GroundPathNavigation {
 }
 
 impl PathNavigationTrait for GroundPathNavigation {
+    fn set_home_distance_limit(&mut self, home: BlockPos, max_distance_squared: f64) {
+        if let EvaluatorKind::Walk(evaluator) = &mut self.inner.evaluator {
+            evaluator.home_distance_limit = Some((home, max_distance_squared));
+        }
+    }
+
     fn set_progress(&mut self, goal: NavigatorGoal) {
         self.inner.set_progress(goal);
     }

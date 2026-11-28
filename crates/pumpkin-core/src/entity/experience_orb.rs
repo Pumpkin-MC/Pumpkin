@@ -31,6 +31,11 @@ pub struct ExperienceOrbEntity {
 }
 
 impl ExperienceOrbEntity {
+    #[cfg(test)]
+    pub(crate) const fn experience_amount(&self) -> u32 {
+        self.amount
+    }
+
     const AIR_DRAG: f32 = 0.98;
     const DEFAULT_HEALTH: i32 = 5;
 

@@ -663,6 +663,8 @@ pub struct BlockState {
     pub collision_shapes: Vec<u16>,
     /// Indices into the global shapes array for outline (selection) shape segments.
     pub outline_shapes: Vec<u16>,
+    /// Visual shape segments, omitted when they match the collision shape.
+    pub visual_shapes: Option<Vec<u16>>,
     /// Opacity value for light propagation, if non-full.
     pub opacity: Option<u8>,
     /// Index into the global sound type array.
@@ -1122,6 +1124,21 @@ pub fn build() -> TokenStream {
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
+
+    let mut visual_shape_overrides = BTreeMap::<_, Vec<_>>::new();
+    for state in blocks_assets.blocks.iter().flat_map(|block| &block.states) {
+        if let Some(shapes) = &state.visual_shapes
+            && *shapes != state.collision_shapes
+        {
+            visual_shape_overrides
+                .entry(shapes.clone())
+                .or_default()
+                .push(state.id.0);
+        }
+    }
+    let visual_shape_arms = visual_shape_overrides.iter().map(|(shapes, states)| {
+        quote! { #(#states)|* => &[#(#shapes),*], }
+    });
 
     let shape_offset_arms = blocks_assets
         .blocks
@@ -1849,6 +1866,13 @@ pub fn build() -> TokenStream {
             const STATE_ID_TO_BEDROCK: &[u32] = &[
                 #block_state_to_bedrock_t
             ];
+
+            pub(crate) const fn visual_shape_ids(&self) -> &'static [u16] {
+                match self.id.as_u16() {
+                    #(#visual_shape_arms)*
+                    _ => self.collision_shapes,
+                }
+            }
 
             /// Get a [`BlockState`] from a [`BlockStateId`].
             /// If you need access to the block use `BlockState::from_id_with_block` instead.

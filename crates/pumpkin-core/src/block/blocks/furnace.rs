@@ -1,9 +1,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::block::entities::{
-    PropertyDelegate, furnace::FurnaceBlockEntity, furnace_like_block_entity::ExperienceContainer,
-};
+use crate::block::entities::{PropertyDelegate, furnace_like_block_entity::ExperienceContainer};
 use pumpkin_data::{
     BlockStateId, block_properties::FurnaceLikeProperties, screen::WindowType, translation,
 };
@@ -18,7 +16,7 @@ use pumpkin_macros::pumpkin_block;
 use crate::{
     block::{
         BlockBehaviour, BrokenArgs, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs,
-        NormalUseArgs, OnPlaceArgs, PlacedArgs, registry::BlockActionResult,
+        NormalUseArgs, OnPlaceArgs, registry::BlockActionResult,
     },
     entity::experience_orb::ExperienceOrbEntity,
 };
@@ -122,11 +120,6 @@ impl BlockBehaviour for FurnaceBlock {
         props.to_state_id(args.block)
     }
 
-    fn placed(&self, args: PlacedArgs<'_>) {
-        let furnace_block_entity = FurnaceBlockEntity::new(*args.position);
-        args.world.add_block_entity(Arc::new(furnace_block_entity));
-    }
-
     fn broken(&self, args: BrokenArgs<'_>) {
         // Extract and drop accumulated XP as orbs before removing the block entity
         if let Some(block_entity) = args.world.get_block_entity(args.position)
@@ -143,5 +136,89 @@ impl BlockBehaviour for FurnaceBlock {
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
         crate::block::container_comparator_output(&args)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn furnace_callback_preserves_the_registered_inventory()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::block::{
+            BlockBehaviour, BlockMetadata, PlacedArgs, blocks::furnace::FurnaceBlock,
+            registry::BlockRegistry,
+        };
+        use pumpkin_data::{Block, BlockId, item::Item, item_stack::ItemStack};
+        use pumpkin_util::math::position::BlockPos;
+        use pumpkin_world::chunk::ChunkData;
+        use std::sync::Arc;
+
+        struct ObservedFurnace;
+        impl BlockMetadata for ObservedFurnace {
+            fn ids() -> Box<[BlockId]> {
+                FurnaceBlock::ids()
+            }
+        }
+        impl BlockBehaviour for ObservedFurnace {
+            fn placed(&self, args: PlacedArgs<'_>) {
+                let world = args.world;
+                let position = args.position;
+                let before = world.get_block_entity(position);
+                assert!(before.as_ref().is_some_and(|entity| {
+                    entity.clone().get_inventory().is_some_and(|inventory| {
+                        inventory.set_stack(0, ItemStack::new(3, &Item::IRON_ORE));
+                        true
+                    })
+                }));
+                FurnaceBlock.placed(args);
+                let after = world.get_block_entity(position);
+                let same_instance = before
+                    .zip(after.clone())
+                    .is_some_and(|(registered, placed)| Arc::ptr_eq(&registered, &placed));
+                let retained_count = after
+                    .and_then(crate::block::entities::BlockEntity::get_inventory)
+                    .map(|inventory| inventory.get_stack(0))
+                    .filter(|stack| stack.get_item() == &Item::IRON_ORE)
+                    .map_or(0, |stack| stack.item_count);
+                assert_eq!(
+                    (same_instance, retained_count),
+                    (true, 3),
+                    "furnace placement must preserve the registered instance and its inventory"
+                );
+            }
+        }
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let position = BlockPos::new(8, 64, 8);
+        let chunk_pos = position.chunk_position();
+        let chunk = ChunkData::empty_sync(chunk_pos.x, chunk_pos.y);
+        let state = Block::FURNACE.default_state.id;
+        chunk.set_block_absolute_y(8, 64, 8, state);
+        world.level.loaded_chunks.insert(chunk_pos, chunk);
+        assert!(world.get_block_entity(&position).is_none());
+
+        let mut registry = BlockRegistry::default();
+        registry.register(ObservedFurnace);
+        registry.on_placed(
+            &world,
+            &Block::FURNACE,
+            state,
+            &position,
+            Block::AIR.default_state.id,
+            false,
+        );
+        let placed = world
+            .get_block_entity(&position)
+            .ok_or("missing placed furnace")?;
+        let inventory = placed.get_inventory().ok_or("missing placed inventory")?;
+        let stack = inventory.get_stack(0);
+        assert_eq!(
+            (stack.get_item(), stack.item_count),
+            (&Item::IRON_ORE, 3),
+            "the placement callback must run and retain the inserted stack"
+        );
+        world.level.shutdown().await;
+        Ok(())
     }
 }

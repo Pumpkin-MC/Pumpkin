@@ -159,6 +159,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:crafter_dispenses_crafting_remainders" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/crafter_dispenses_crafting_remainders.json"
         )),
+        "pumpkin:creaking_accepts_protected_hits" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/creaking_accepts_protected_hits.json"
+        )),
         "pumpkin:creeper_should_run_from_cat" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/creeper_should_run_from_cat.json"
         )),
@@ -730,6 +733,7 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:crafter_crafts_iron_ingot_from_nuggets",
         "pumpkin:crafter_crafts_sticks_from_two_planks",
         "pumpkin:crafter_dispenses_crafting_remainders",
+        "pumpkin:creaking_accepts_protected_hits",
         "pumpkin:creeper_should_run_from_cat",
         "pumpkin:daylight_detector_normal_and_inverted_signal",
         "pumpkin:detector_rail_activates_on_chest_minecart",

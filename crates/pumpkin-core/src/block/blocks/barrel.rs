@@ -7,7 +7,6 @@ use crate::block::{
     {BlockBehaviour, NormalUseArgs},
 };
 
-use crate::block::entities::barrel::BarrelBlockEntity;
 use crate::entity::EntityBase;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::BarrelLikeProperties;
@@ -84,8 +83,7 @@ impl BlockBehaviour for BarrelBlock {
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {
-        let barrel_block_entity = BarrelBlockEntity::new(*args.position);
-        args.world.add_block_entity(Arc::new(barrel_block_entity));
+        args.world.get_block_entity(args.position);
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {

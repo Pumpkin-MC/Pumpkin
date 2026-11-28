@@ -20,14 +20,37 @@ pub fn block_pos_to_tag(pos: BlockPos) -> NbtTag {
 }
 
 #[must_use]
-pub const fn block_pos_from_tag(tag: &NbtTag) -> Option<BlockPos> {
-    let NbtTag::IntArray(values) = tag else {
-        return None;
-    };
-    let &[x, y, z] = values.as_slice() else {
-        return None;
+pub fn block_pos_from_tag(tag: &NbtTag) -> Option<BlockPos> {
+    // BlockPos.CODEC accepts an int stream of at least three entries as a partial result.
+    let [x, y, z] = match tag {
+        NbtTag::IntArray(values) => *values.first_chunk::<3>()?,
+        NbtTag::ByteArray(values) => values.first_chunk::<3>()?.map(i32::from),
+        NbtTag::LongArray(values) => values.first_chunk::<3>()?.map(|value| value as i32),
+        NbtTag::List(values) => {
+            let [x, y, z, rest @ ..] = values.as_slice() else {
+                return None;
+            };
+            if rest.iter().any(|tag| int_stream_value(tag).is_none()) {
+                return None;
+            }
+            [
+                int_stream_value(x)?,
+                int_stream_value(y)?,
+                int_stream_value(z)?,
+            ]
+        }
+        _ => return None,
     };
     Some(BlockPos::new(x, y, z))
+}
+
+fn int_stream_value(tag: &NbtTag) -> Option<i32> {
+    // DynamicOps.getIntStream uses Number.intValue, which truncates floating-point values.
+    match *tag {
+        NbtTag::Float(value) => Some(value as i32),
+        NbtTag::Double(value) => Some(value as i32),
+        _ => tag.as_numeric_int(),
+    }
 }
 
 fn uuid_to_tag(uuid: Uuid) -> NbtTag {
@@ -219,6 +242,37 @@ mod tests {
         round_trip(&BLOCK_POS, &BlockPos::new(-3, 64, 900));
         round_trip(&GLOBAL_POS, &pos(1, 2, 3));
         round_trip(&GLOBAL_POS_LIST, &vec![pos(1, 2, 3), pos(4, 5, 6)]);
+    }
+
+    #[test]
+    fn block_pos_accepts_java_numeric_sequences() {
+        let expected = Some(BlockPos::new(-1, 64, 3));
+        assert_eq!(
+            block_pos_from_tag(&NbtTag::ByteArray(Box::new([-1, 64, 3]))),
+            expected,
+        );
+        assert_eq!(
+            block_pos_from_tag(&NbtTag::LongArray(vec![4_294_967_295, 64, 3])),
+            expected,
+        );
+        assert_eq!(
+            block_pos_from_tag(&NbtTag::List(vec![
+                NbtTag::Double(-1.5),
+                NbtTag::Short(64),
+                NbtTag::Int(3),
+                NbtTag::Byte(0),
+            ])),
+            expected,
+        );
+        assert_eq!(
+            block_pos_from_tag(&NbtTag::List(vec![
+                NbtTag::Int(-1),
+                NbtTag::Int(64),
+                NbtTag::Int(3),
+                NbtTag::String("not a number".into()),
+            ])),
+            None,
+        );
     }
 
     #[test]

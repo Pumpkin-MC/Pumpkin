@@ -97,13 +97,15 @@ fn transcode_payload(
     payload: Bytes,
     chunk_pos: Vector2<i32>,
     dst_format: RegionFormat,
-) -> Result<Bytes, ChunkReadingError> {
+) -> Result<Bytes, ChunkConversionError> {
     match dst_format {
         RegionFormat::Pump => {
             if !payload.starts_with(&PUMP_CHUNK_MAGIC)
                 && let Ok(chunk) = ChunkData::internal_from_bytes(&payload, chunk_pos)
             {
-                return Ok(chunk.internal_to_pump_bytes());
+                return Ok(chunk
+                    .internal_to_pump_bytes()
+                    .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?);
             }
         }
         RegionFormat::Anvil | RegionFormat::Linear => {

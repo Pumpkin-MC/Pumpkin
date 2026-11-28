@@ -1067,7 +1067,7 @@ impl HostCreakingHeartBlockEntity for PluginHostState {
         &mut self,
         res: Resource<CreakingHeartBlockEntity>,
     ) -> wasmtime::Result<Option<String>> {
-        Ok(self.get(&res)?.creaking_uuid.load().map(|u| u.to_string()))
+        Ok(self.get(&res)?.creaking_uuid().map(|u| u.to_string()))
     }
 
     fn drop(&mut self, rep: Resource<CreakingHeartBlockEntity>) -> wasmtime::Result<()> {

@@ -119,7 +119,7 @@ pub fn melee_attack(speed: f64) -> FoxGoal<MeleeAttackGoal> {
 }
 
 fn bite(mob: &dyn Mob, target: &dyn EntityBase) {
-    if mob.get_mob_entity().try_attack(mob.get_entity(), target) {
+    if mob.do_hurt_target(target) {
         mob.on_attack(target);
     }
     mob.get_entity().play_sound(Sound::EntityFoxBite);
@@ -517,7 +517,7 @@ impl Goal for PounceGoal {
             let offset = entity.pos.load() - target.get_entity().pos.load();
             let (x, y, z) = (offset.x as f32, offset.y as f32, offset.z as f32);
             if (x * x + y * y + z * z).sqrt() <= 2.0 {
-                if mob.get_mob_entity().try_attack(entity, target.as_ref()) {
+                if mob.do_hurt_target(target.as_ref()) {
                     mob.on_attack(target.as_ref());
                 }
                 return;

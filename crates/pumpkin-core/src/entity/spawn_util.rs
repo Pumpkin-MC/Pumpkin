@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection, BlockState,
     entity::EntityType,
     tag::{Block as BlockTag, Taggable},
 };
@@ -19,14 +19,18 @@ use crate::world::World;
 #[derive(Clone, Copy)]
 pub enum SpawnStrategy {
     OnTopOfCollider,
+    OnTopOfColliderNoLeaves,
     LegacyIronGolem,
 }
 
 impl SpawnStrategy {
     fn can_spawn_on(self, state: &BlockState, above_state: &BlockState) -> bool {
         match self {
-            Self::OnTopOfCollider => {
-                above_state.get_block_collision_shapes().next().is_none() && is_face_full_up(state)
+            Self::OnTopOfCollider | Self::OnTopOfColliderNoLeaves => {
+                above_state.get_block_collision_shapes().next().is_none()
+                    && (!matches!(self, Self::OnTopOfColliderNoLeaves)
+                        || !state.id.to_block().has_tag(&BlockTag::MINECRAFT_LEAVES))
+                    && state.is_collision_face_full(BlockDirection::Up)
             }
             Self::LegacyIronGolem => {
                 let block = Block::from_state_id(state.id);
@@ -51,17 +55,6 @@ impl SpawnStrategy {
             }
         }
     }
-}
-
-fn is_face_full_up(state: &BlockState) -> bool {
-    state.is_full_cube()
-        || state.get_block_collision_shapes().any(|shape| {
-            shape.max.y >= 1.0
-                && shape.min.x <= 0.0
-                && shape.min.z <= 0.0
-                && shape.max.x >= 1.0
-                && shape.max.z >= 1.0
-        })
 }
 
 #[expect(clippy::too_many_arguments)]
@@ -123,11 +116,17 @@ pub fn try_spawn_mob<T: Mob + 'static>(
             position,
             entity_type,
         ));
+        if check_collisions
+            && !world.no_entity_collision(Some(mob.as_ref()), mob.get_entity().bounding_box.load())
+        {
+            continue;
+        }
         if !mob.check_spawn_obstruction(world) {
             continue;
         }
-        world.spawn_entity(mob.clone() as Arc<dyn EntityBase>);
-        return Some(mob);
+        return world
+            .spawn_entity(mob.clone() as Arc<dyn EntityBase>)
+            .then_some(mob);
     }
 
     None
@@ -151,4 +150,23 @@ fn move_to_possible_spawn_position(
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::block_properties::{Half, WhiteWoolStairsLikeProperties};
+
+    use super::*;
+
+    #[test]
+    fn creaking_spawn_support_uses_the_whole_top_collision_face() {
+        let block = &Block::OAK_STAIRS;
+        let mut props = WhiteWoolStairsLikeProperties::from_state_id(block.default_state.id);
+        let strategy = SpawnStrategy::OnTopOfColliderNoLeaves;
+        let air = Block::AIR.default_state;
+        props.half = Half::Bottom;
+        assert!(!strategy.can_spawn_on(props.to_state_id(block).to_state(), air));
+        props.half = Half::Top;
+        assert!(strategy.can_spawn_on(props.to_state_id(block).to_state(), air));
+    }
 }

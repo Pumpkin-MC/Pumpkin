@@ -129,9 +129,7 @@ impl TridentItem {
             zd *= scale;
             // Java clients apply their own Riptide push and +1.2 Y lift locally; `push_by`
             // syncs velocity to watchers on Java and sends `SetActorMotion` on Bedrock.
-            player
-                .get_entity()
-                .push_by(Vector3::new(f64::from(xd), f64::from(yd), f64::from(zd)));
+            player.push_by(Vector3::new(f64::from(xd), f64::from(yd), f64::from(zd)));
         }
         player.start_auto_spin_attack(
             Self::SPIN_ATTACK_TICKS,
