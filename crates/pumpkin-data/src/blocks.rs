@@ -50,6 +50,10 @@ pub struct Block {
     pub experience: Option<Experience>,
     /// Loot table identifier, `None` when the block has no loot table.
     pub loot_table: Option<&'static str>,
+    /// Vanilla block set type, for doors, trapdoors, buttons and pressure plates.
+    pub block_set_type: Option<&'static crate::block_set_type::BlockSetType>,
+    /// Vanilla wood type, for fence gates and signs.
+    pub wood_type: Option<&'static crate::wood_type::WoodType>,
     /// State layout of each property, in vanilla order.
     pub property_slots: &'static [PropertySlot],
 }

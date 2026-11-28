@@ -926,6 +926,12 @@ pub struct Block {
     pub experience: Option<Experience>,
     /// Loot table identifier
     pub loot_table: Option<String>,
+    /// Vanilla block set type, for doors, trapdoors, buttons and pressure plates.
+    #[serde(default)]
+    pub block_set_type: Option<String>,
+    /// Vanilla wood type, for fence gates and signs.
+    #[serde(default)]
+    pub wood_type: Option<String>,
     /// Position-derived shape offset applied by vanilla, if any.
     shape_offset: Option<BlockShapeOffset>,
     /// Spawn floor predicate for this block, if any.
@@ -963,6 +969,18 @@ impl ToTokens for Block {
         } else {
             quote! { None }
         };
+        let block_set_type = if let Some(name) = &self.block_set_type {
+            let ident = format_ident!("{}", name.to_shouty_snake_case());
+            quote! { Some(&crate::block_set_type::BlockSetType::#ident) }
+        } else {
+            quote! { None }
+        };
+        let wood_type = if let Some(name) = &self.wood_type {
+            let ident = format_ident!("{}", name.to_shouty_snake_case());
+            quote! { Some(&crate::wood_type::WoodType::#ident) }
+        } else {
+            quote! { None }
+        };
         // flat states
         let first_state = Literal::usize_unsuffixed(self.states[0].id.0 as usize);
         let state_count = Literal::usize_unsuffixed(self.states.len());
@@ -993,6 +1011,8 @@ impl ToTokens for Block {
                 flammable: #flammable,
                 experience: #experience,
                 loot_table: #loot_table,
+                block_set_type: #block_set_type,
+                wood_type: #wood_type,
             }
         });
     }

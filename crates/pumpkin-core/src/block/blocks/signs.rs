@@ -858,17 +858,15 @@ fn get_wall_support_direction(block: &Block, state_id: BlockStateId) -> Option<B
 /// Helper to convert a regular sign to its wall variant.
 /// Returns the block ID of the wall variant, or the base block's ID if not found.
 fn get_sign_variant(base: &Block, is_hanging: bool) -> BlockId {
-    let base_name = base.name;
-    let wood_type = base_name
-        .strip_suffix("_hanging_sign")
-        .or_else(|| base_name.strip_suffix("_sign"))
-        .unwrap_or("oak");
+    let Some(wood_type) = base.wood_type else {
+        return base.id;
+    };
 
     let target_name = if is_hanging {
         // This is the variant that provides the "horizontal wooden post"
-        format!("{wood_type}_wall_hanging_sign")
+        format!("{}_wall_hanging_sign", wood_type.name)
     } else {
-        format!("{wood_type}_wall_sign")
+        format!("{}_wall_sign", wood_type.name)
     };
 
     pumpkin_data::Block::from_name(&target_name).map_or(base.id, |b| b.id)
@@ -954,5 +952,46 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn sign_sound_types_match_the_extracted_wood_type() {
+        for (block, expected) in [
+            (&Block::OAK_SIGN, "WOOD"),
+            (&Block::OAK_HANGING_SIGN, "HANGING_SIGN"),
+            (&Block::CHERRY_SIGN, "CHERRY_WOOD"),
+            (&Block::CHERRY_HANGING_SIGN, "CHERRY_WOOD_HANGING_SIGN"),
+        ] {
+            assert_eq!(
+                block.default_state.get_sound_type().name,
+                expected,
+                "{} block sound",
+                block.name
+            );
+            let wood_sound = block.wood_type.map(|wood_type| {
+                if block.name.contains("hanging") {
+                    wood_type.hanging_sign_sound_type
+                } else {
+                    wood_type.sound_type
+                }
+            });
+            assert_eq!(wood_sound, Some(expected), "{} wood type", block.name);
+        }
+    }
+
+    #[test]
+    fn wall_variant_uses_the_extracted_wood_type() {
+        assert_eq!(
+            get_sign_variant(&Block::OAK_SIGN, false),
+            Block::OAK_WALL_SIGN.id
+        );
+        assert_eq!(
+            get_sign_variant(&Block::BAMBOO_SIGN, false),
+            Block::BAMBOO_WALL_SIGN.id
+        );
+        assert_eq!(
+            get_sign_variant(&Block::CHERRY_HANGING_SIGN, true),
+            Block::CHERRY_WALL_HANGING_SIGN.id
+        );
     }
 }

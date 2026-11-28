@@ -1,5 +1,5 @@
+use pumpkin_data::block_set_type::PressurePlateSensitivity;
 use pumpkin_data::sound::Sound;
-use pumpkin_data::tag::Taggable;
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockState, BlockStateId,
     tag::{self},
@@ -90,8 +90,7 @@ impl PressurePlate for PressurePlateBlock {
 
     fn calculate_redstone_output(&self, world: &World, block: &Block, pos: &BlockPos) -> u8 {
         let aabb = detection_box_at(pos);
-        let require_living = block == &Block::STONE_PRESSURE_PLATE
-            || block == &Block::POLISHED_BLACKSTONE_PRESSURE_PLATE;
+        let require_living = requires_living_entity(block);
         let has_entity = world.get_entities_at_box(&aabb).iter().any(|e| {
             !e.get_entity().is_spectator()
                 && !e.is_ignoring_block_triggers()
@@ -109,17 +108,59 @@ impl PressurePlate for PressurePlateBlock {
         props.to_state_id(block)
     }
 
-    fn click_sounds(&self, block: &Block) -> (Sound, Sound) {
-        if block.has_tag(&tag::Block::MINECRAFT_WOODEN_PRESSURE_PLATES) {
+    fn click_sounds(&self, block: &Block) -> (Option<Sound>, Option<Sound>) {
+        block.block_set_type.map_or((None, None), |set_type| {
             (
-                Sound::BlockWoodenPressurePlateClickOn,
-                Sound::BlockWoodenPressurePlateClickOff,
+                Some(set_type.pressure_plate_click_on),
+                Some(set_type.pressure_plate_click_off),
             )
-        } else {
+        })
+    }
+}
+
+fn requires_living_entity(block: &Block) -> bool {
+    block.block_set_type.is_some_and(|set_type| {
+        set_type.pressure_plate_sensitivity == PressurePlateSensitivity::Mobs
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pressure_plate_sensitivity_comes_from_the_block_set_type() {
+        assert!(requires_living_entity(&Block::STONE_PRESSURE_PLATE));
+        assert!(requires_living_entity(
+            &Block::POLISHED_BLACKSTONE_PRESSURE_PLATE
+        ));
+        assert!(!requires_living_entity(&Block::OAK_PRESSURE_PLATE));
+        assert!(!requires_living_entity(&Block::CHERRY_PRESSURE_PLATE));
+        assert!(!requires_living_entity(&Block::CRIMSON_PRESSURE_PLATE));
+    }
+
+    #[test]
+    fn click_sound_comes_from_the_block_set_type() {
+        assert_eq!(
+            PressurePlateBlock.click_sounds(&Block::STONE_PRESSURE_PLATE),
             (
-                Sound::BlockStonePressurePlateClickOn,
-                Sound::BlockStonePressurePlateClickOff,
+                Some(Sound::BlockStonePressurePlateClickOn),
+                Some(Sound::BlockStonePressurePlateClickOff),
             )
-        }
+        );
+        assert_eq!(
+            PressurePlateBlock.click_sounds(&Block::CHERRY_PRESSURE_PLATE),
+            (
+                Some(Sound::BlockCherryWoodPressurePlateClickOn),
+                Some(Sound::BlockCherryWoodPressurePlateClickOff),
+            )
+        );
+        assert_eq!(
+            PressurePlateBlock.click_sounds(&Block::BAMBOO_PRESSURE_PLATE),
+            (
+                Some(Sound::BlockBambooWoodPressurePlateClickOn),
+                Some(Sound::BlockBambooWoodPressurePlateClickOff),
+            )
+        );
     }
 }
