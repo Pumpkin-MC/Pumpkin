@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering::Relaxed},
+};
 
 use pumpkin_data::{
     Block, BlockState, BlockStateId,
@@ -11,10 +14,13 @@ use pumpkin_data::{
     sound::Sound,
     tag::{Tag, Taggable},
 };
-use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{
+    boundingbox::BoundingBox, position::BlockPos, vector2::Vector2, vector3::Vector3,
+};
 use pumpkin_world::chunk::ChunkData;
+use pumpkin_world::world::BlockAccessor;
 use rand::seq::SliceRandom;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 
 use crate::{
     block::{ExplodeArgs, collect_loot},
@@ -176,6 +182,189 @@ impl ExplosionDamageCalculator for SimpleExplosionDamageCalculator {
     fn get_knockback_multiplier(&self, _entity: &dyn EntityBase) -> f32 {
         self.knockback_multiplier.unwrap_or(1.0)
     }
+}
+
+/// The loaded chunks around an explosion, looked up once. Its rays and exposure checks read
+/// blocks through them instead of finding the chunk in the level for every block.
+pub(crate) struct ExplosionChunks<'w> {
+    world: &'w World,
+    min_x: i32,
+    min_z: i32,
+    width: i32,
+    depth: i32,
+    chunks: Vec<Option<Arc<ChunkData>>>,
+    cache: Option<BlockCache>,
+}
+
+/// Block states read during one pass, in a cube around the explosion. Each cell holds the
+/// pass stamp in its high half and the state in its low half: a cell from an earlier pass is
+/// stale, so starting a pass forgets everything without clearing the cube. A pass is a stretch
+/// in which nothing can change a block: the ray march, or one entity's exposure.
+struct BlockCache {
+    origin: [i32; 3],
+    side: i32,
+    cells: Vec<AtomicU32>,
+    stamp: AtomicU32,
+}
+
+impl BlockCache {
+    /// Cubes past this side read the chunks directly, rather than allocate a large cube.
+    const MAX_SIDE: i32 = 64;
+
+    fn new(center: Vector3<f64>, radius: f64) -> Option<Self> {
+        let radius = radius.ceil() as i32;
+        let side = 2 * radius + 1;
+        if side > Self::MAX_SIDE {
+            return None;
+        }
+        let at = |v: f64| v.floor() as i32 - radius;
+        Some(Self {
+            origin: [at(center.x), at(center.y), at(center.z)],
+            side,
+            cells: (0..side * side * side).map(|_| AtomicU32::new(0)).collect(),
+            stamp: AtomicU32::new(1),
+        })
+    }
+
+    fn cell(&self, position: &BlockPos) -> Option<&AtomicU32> {
+        let offset = |axis: usize, v: i32| {
+            let d = v - self.origin[axis];
+            (0..self.side).contains(&d).then_some(d)
+        };
+        let x = offset(0, position.0.x)?;
+        let y = offset(1, position.0.y)?;
+        let z = offset(2, position.0.z)?;
+        self.cells
+            .get(((y * self.side + z) * self.side + x) as usize)
+    }
+
+    fn next_pass(&self) {
+        let stamp = self.stamp.load(Relaxed) + 1;
+        if stamp > u32::from(u16::MAX) {
+            for cell in &self.cells {
+                cell.store(0, Relaxed);
+            }
+            self.stamp.store(1, Relaxed);
+        } else {
+            self.stamp.store(stamp, Relaxed);
+        }
+    }
+}
+
+impl<'w> ExplosionChunks<'w> {
+    /// The chunks within `radius` blocks of `center`, horizontally.
+    pub(crate) fn around(world: &'w World, center: Vector3<f64>, radius: f64) -> Self {
+        let chunk_of = |v: f64| (v.floor() as i32) >> 4;
+        let (min_x, max_x) = (chunk_of(center.x - radius), chunk_of(center.x + radius));
+        let (min_z, max_z) = (chunk_of(center.z - radius), chunk_of(center.z + radius));
+        let (width, depth) = (max_x - min_x + 1, max_z - min_z + 1);
+        let mut chunks = Vec::with_capacity((width * depth).max(0) as usize);
+        for z in min_z..=max_z {
+            for x in min_x..=max_x {
+                chunks.push(
+                    world
+                        .level
+                        .read_chunk_sync(&Vector2::new(x, z), std::clone::Clone::clone),
+                );
+            }
+        }
+        Self {
+            world,
+            min_x,
+            min_z,
+            width,
+            depth,
+            chunks,
+            cache: BlockCache::new(center, radius),
+        }
+    }
+
+    /// Starts a pass: blocks may have changed since the previous one, so none of its reads
+    /// are reused.
+    fn next_pass(&self) {
+        if let Some(cache) = &self.cache {
+            cache.next_pass();
+        }
+    }
+
+    /// The block state at `position`, air outside the build limit and in unloaded chunks,
+    /// like `World::get_block_state_id`.
+    fn state_id(&self, position: &BlockPos) -> BlockStateId {
+        let Some((cache, cell)) = self
+            .cache
+            .as_ref()
+            .and_then(|cache| Some((cache, cache.cell(position)?)))
+        else {
+            return self.read_state_id(position);
+        };
+        let stamp = cache.stamp.load(Relaxed);
+        let cached = cell.load(Relaxed);
+        if cached >> 16 == stamp {
+            return BlockStateId::new_or_air(cached as u16);
+        }
+        let id = self.read_state_id(position);
+        cell.store(stamp << 16 | u32::from(id.as_u16()), Relaxed);
+        id
+    }
+
+    fn read_state_id(&self, position: &BlockPos) -> BlockStateId {
+        if !self.world.is_in_build_limit(*position) {
+            return Block::AIR.default_state.id;
+        }
+        let (chunk, relative) = position.chunk_and_chunk_relative_position();
+        let (dx, dz) = (chunk.x - self.min_x, chunk.y - self.min_z);
+        if !(0..self.width).contains(&dx) || !(0..self.depth).contains(&dz) {
+            return self.world.get_block_state_id(position);
+        }
+        self.chunks[(dz * self.width + dx) as usize]
+            .as_ref()
+            .and_then(|chunk| {
+                chunk.section.get_block_absolute_y(
+                    relative.x as usize,
+                    position.0.y,
+                    relative.z as usize,
+                )
+            })
+            .unwrap_or(Block::AIR.default_state.id)
+    }
+}
+
+impl BlockAccessor for ExplosionChunks<'_> {
+    fn get_block(&self, position: &BlockPos) -> &'static Block {
+        Block::from_state_id(self.state_id(position))
+    }
+
+    fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
+        BlockState::from_id(self.state_id(position))
+    }
+
+    fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
+        self.state_id(position)
+    }
+
+    fn get_block_and_state(&self, position: &BlockPos) -> (&'static Block, &'static BlockState) {
+        BlockState::from_id_with_block(self.state_id(position))
+    }
+}
+
+/// How a block slows a ray down.
+#[derive(Clone, Copy)]
+enum RayResistance {
+    /// Air without fluid: the ray only pays its step and never explodes it.
+    Empty,
+    /// A block the calculator gives no resistance: free, but it can explode.
+    Free,
+    Resists(f32),
+}
+
+/// What a ray learned about the block it is in, reused while its steps stay in that block.
+struct RayCell {
+    pos: BlockPos,
+    block: &'static Block,
+    resistance: RayResistance,
+    protects_rail: bool,
+    /// Already in the exploded positions, from an earlier step of this ray.
+    added: bool,
 }
 
 pub struct Explosion<'a> {
@@ -354,20 +543,34 @@ impl<'a> Explosion<'a> {
     }
 
     /// Vanilla `calculateExplodedPositions`, shuffled like `interactWithBlocks`.
-    #[allow(clippy::too_many_lines)]
-    fn get_blocks_to_destroy(&self, world: &World) -> Vec<BlockPos> {
-        let mut positions = FxHashSet::default();
+    fn get_blocks_to_destroy(&self, world: &World, blocks: &ExplosionChunks<'_>) -> Vec<BlockPos> {
+        // TODO: vanilla rolls from `level.random`; same odds, not seed-reproducible.
+        let positions = self.exploded_positions(world, blocks, rand::random::<f32>);
+        let mut positions: Vec<_> = positions.into_iter().collect();
+        // TODO: vanilla shuffles with `level.random`, same odds, not seed-reproducible.
+        positions.shuffle(&mut rand::rng());
+        positions
+    }
 
-        let mut chunk_cache: FxHashMap<
-            pumpkin_util::math::vector2::Vector2<i32>,
-            Option<Arc<ChunkData>>,
-        > = FxHashMap::default();
+    /// The ray march of `calculateExplodedPositions`; `ray_roll` gives each ray's random draw.
+    ///
+    /// A ray takes steps of 0.3, about three per block. A step in the block the previous step
+    /// was in costs what that one did (blocks don't change while rays march), so the block,
+    /// its fluid and its resistance are read once per block, not once per step, as in Horizon.
+    fn exploded_positions(
+        &self,
+        world: &World,
+        blocks: &ExplosionChunks<'_>,
+        mut ray_roll: impl FnMut() -> f32,
+    ) -> FxHashSet<BlockPos> {
+        let mut positions = FxHashSet::default();
 
         let default_calc = DefaultExplosionDamageCalculator;
         let calc: &dyn ExplosionDamageCalculator = match &self.damage_calculator {
             Some(c) => c.as_ref(),
             None => &default_calc,
         };
+        blocks.next_pass();
 
         for x in 0..16 {
             for y in 0..16 {
@@ -389,9 +592,9 @@ impl<'a> Explosion<'a> {
                     let mut pos_y = self.pos.y;
                     let mut pos_z = self.pos.z;
 
-                    // TODO: vanilla rolls from `level.random`; same odds, not seed-reproducible.
-                    let random_val = rand::random::<f32>();
+                    let random_val = ray_roll();
                     let mut h = self.power * random_val.mul_add(0.6, 0.7);
+                    let mut cell: Option<RayCell> = None;
 
                     while h > 0.0 {
                         let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
@@ -400,61 +603,25 @@ impl<'a> Explosion<'a> {
                             break;
                         }
 
-                        let (chunk_pos, relative) = block_pos.chunk_and_chunk_relative_position();
-
-                        let chunk_opt = chunk_cache.entry(chunk_pos).or_insert_with(|| {
-                            world
-                                .level
-                                .read_chunk_sync(&chunk_pos, std::clone::Clone::clone)
+                        if cell.as_ref().is_some_and(|cell| cell.pos != block_pos) {
+                            cell = None;
+                        }
+                        let cell = cell.get_or_insert_with(|| {
+                            self.explosion_cell(world, blocks, calc, block_pos)
                         });
 
-                        let state_id = if let Some(chunk) = chunk_opt {
-                            chunk
-                                .section
-                                .get_block_absolute_y(
-                                    relative.x as usize,
-                                    block_pos.0.y,
-                                    relative.z as usize,
-                                )
-                                .unwrap_or(Block::AIR.default_state.id)
-                        } else {
-                            Block::AIR.default_state.id
-                        };
-
-                        let (block, state) = BlockState::from_id_with_block(state_id);
-
-                        let (_fluid, fluid_state) = Fluid::fluid_state_of(state_id);
-
-                        if !state.is_air() || !fluid_state.is_empty {
-                            let protects_rail = self.protects_rail(world, &block_pos, block);
-                            let resistance = if protects_rail {
-                                Some(0.0)
-                            } else {
-                                calc.get_block_explosion_resistance(
-                                    self,
-                                    world,
-                                    &block_pos,
-                                    block,
-                                    &fluid_state,
-                                )
-                            };
-
-                            // The exploding entity adjusts resistance
-                            // unless the explosion brought its own calculator.
-                            let resistance = match (self.source, &self.damage_calculator) {
-                                (Some(source), None) => resistance
-                                    .map(|r| source.get_block_explosion_resistance(block, r)),
-                                _ => resistance,
-                            };
-                            if let Some(resistance) = resistance {
+                        if !matches!(cell.resistance, RayResistance::Empty) {
+                            if let RayResistance::Resists(resistance) = cell.resistance {
                                 h -= (resistance + 0.3) * 0.3;
                             }
 
                             if h > 0.0
-                                && !protects_rail
-                                && calc.should_block_explode(self, world, &block_pos, block, h)
+                                && !cell.added
+                                && !cell.protects_rail
+                                && calc.should_block_explode(self, world, &block_pos, cell.block, h)
                             {
                                 positions.insert(block_pos);
+                                cell.added = true;
                             }
                         }
 
@@ -466,13 +633,58 @@ impl<'a> Explosion<'a> {
                 }
             }
         }
-        let mut positions: Vec<_> = positions.into_iter().collect();
-        // TODO: vanilla shuffles with `level.random`, same odds, not seed-reproducible.
-        positions.shuffle(&mut rand::rng());
+
         positions
     }
 
-    fn damage_entities(&self, world: &Arc<World>) {
+    /// Reads the block a ray step is in: its resistance to this explosion and whether the
+    /// rails rule spares it.
+    fn explosion_cell(
+        &self,
+        world: &World,
+        blocks: &ExplosionChunks<'_>,
+        calc: &dyn ExplosionDamageCalculator,
+        block_pos: BlockPos,
+    ) -> RayCell {
+        let state_id = blocks.state_id(&block_pos);
+        let (block, state) = BlockState::from_id_with_block(state_id);
+        let (_fluid, fluid_state) = Fluid::fluid_state_of(state_id);
+
+        if state.is_air() && fluid_state.is_empty {
+            return RayCell {
+                pos: block_pos,
+                block,
+                resistance: RayResistance::Empty,
+                protects_rail: false,
+                added: false,
+            };
+        }
+
+        let protects_rail = self.protects_rail(world, &block_pos, block);
+        let resistance = if protects_rail {
+            Some(0.0)
+        } else {
+            calc.get_block_explosion_resistance(self, world, &block_pos, block, &fluid_state)
+        };
+
+        // The exploding entity adjusts resistance
+        // unless the explosion brought its own calculator.
+        let resistance = match (self.source, &self.damage_calculator) {
+            (Some(source), None) => {
+                resistance.map(|r| source.get_block_explosion_resistance(block, r))
+            }
+            _ => resistance,
+        };
+        RayCell {
+            pos: block_pos,
+            block,
+            resistance: resistance.map_or(RayResistance::Free, RayResistance::Resists),
+            protects_rail,
+            added: false,
+        }
+    }
+
+    fn damage_entities(&self, world: &Arc<World>, blocks: &ExplosionChunks<'_>) {
         // Explosion is too small
         if self.power < 1.0e-5 {
             return;
@@ -530,7 +742,9 @@ impl<'a> Explosion<'a> {
             let exposure = if !should_damage && knockback_multiplier == 0.0 {
                 0.0
             } else {
-                Self::calculate_exposure(&self.pos, entity, world) as f64
+                // Hurting or pushing the previous entity may have changed blocks.
+                blocks.next_pass();
+                Self::calculate_exposure(&self.pos, entity, blocks) as f64
             };
 
             // No exposure still deals the formula's flat 1 damage, like vanilla.
@@ -614,7 +828,7 @@ impl<'a> Explosion<'a> {
     fn calculate_exposure(
         explosion_pos: &Vector3<f64>,
         entity: &Entity,
-        world: &Arc<World>,
+        blocks: &(impl BlockAccessor + ?Sized),
     ) -> f32 {
         let bbox = entity.bounding_box.load();
 
@@ -644,14 +858,16 @@ impl<'a> Explosion<'a> {
 
                     let vec3d = Vector3::new(n + offset_x, o, p + offset_z);
 
-                    if world
-                        .clip(&pumpkin_world::clip::ClipContext::new(
+                    if pumpkin_world::clip::clip(
+                        blocks,
+                        &pumpkin_world::clip::ClipContext::new(
                             vec3d,
                             *explosion_pos,
                             pumpkin_world::clip::ClipBlock::Collider,
                             pumpkin_world::clip::ClipFluid::None,
-                        ))
-                        .is_miss
+                        ),
+                    )
+                    .is_miss
                     {
                         visible_points += 1;
                     }
@@ -680,8 +896,11 @@ impl<'a> Explosion<'a> {
         );
         // Vanilla collects the positions before `hurtEntities`: a crystal set off by the damage
         // must not change which blocks this explosion breaks. `Keep` counts them too, for the packet.
-        let blocks = self.get_blocks_to_destroy(world);
-        self.damage_entities(world);
+        // Covers the rays (at most 1.74 × power long) and the entity search box (2 × power + 1).
+        let chunks = ExplosionChunks::around(world, self.pos, f64::from(self.power) * 2.0 + 2.0);
+        let blocks = self.get_blocks_to_destroy(world, &chunks);
+        self.damage_entities(world, &chunks);
+        drop(chunks);
 
         match self.block_interaction {
             BlockInteraction::Keep => blocks.len() as u32,
@@ -880,6 +1099,164 @@ mod tests {
 
         let counts: Vec<_> = drops.iter().map(|(_, stack)| stack.item_count).collect();
         assert_eq!(counts, [10, 60]);
+    }
+
+    /// The pre-cache ray march, one block read per 0.3 step, kept as the reference.
+    fn stepwise_positions(
+        explosion: &Explosion<'_>,
+        world: &crate::world::World,
+        mut ray_roll: impl FnMut() -> f32,
+    ) -> rustc_hash::FxHashSet<BlockPos> {
+        use pumpkin_data::BlockState;
+        let mut positions = rustc_hash::FxHashSet::default();
+        let calc = super::DefaultExplosionDamageCalculator;
+        for x in 0..16 {
+            for y in 0..16 {
+                for z in 0..16 {
+                    if x > 0 && x < 15 && y > 0 && y < 15 && z > 0 && z < 15 {
+                        continue;
+                    }
+                    let mut dir_x = f64::from(x) / 7.5 - 1.0;
+                    let mut dir_y = f64::from(y) / 7.5 - 1.0;
+                    let mut dir_z = f64::from(z) / 7.5 - 1.0;
+                    let length = (dir_x * dir_x + dir_y * dir_y + dir_z * dir_z).sqrt();
+                    dir_x /= length;
+                    dir_y /= length;
+                    dir_z /= length;
+                    let (mut pos_x, mut pos_y, mut pos_z) =
+                        (explosion.pos.x, explosion.pos.y, explosion.pos.z);
+                    let mut h = explosion.power * ray_roll().mul_add(0.6, 0.7);
+                    while h > 0.0 {
+                        let block_pos = BlockPos::floored(pos_x, pos_y, pos_z);
+                        if !world.is_in_build_limit(block_pos) {
+                            break;
+                        }
+                        let state_id = world.get_block_state_id(&block_pos);
+                        let (block, state) = BlockState::from_id_with_block(state_id);
+                        let (_fluid, fluid_state) = Fluid::fluid_state_of(state_id);
+                        if !state.is_air() || !fluid_state.is_empty {
+                            let protects_rail = explosion.protects_rail(world, &block_pos, block);
+                            let resistance = if protects_rail {
+                                Some(0.0)
+                            } else {
+                                calc.get_block_explosion_resistance(
+                                    explosion,
+                                    world,
+                                    &block_pos,
+                                    block,
+                                    &fluid_state,
+                                )
+                            };
+                            if let Some(resistance) = resistance {
+                                h -= (resistance + 0.3) * 0.3;
+                            }
+                            if h > 0.0
+                                && !protects_rail
+                                && calc.should_block_explode(explosion, world, &block_pos, block, h)
+                            {
+                                positions.insert(block_pos);
+                            }
+                        }
+                        pos_x += dir_x * 0.3;
+                        pos_y += dir_y * 0.3;
+                        pos_z += dir_z * 0.3;
+                        h -= 0.225_000_01;
+                    }
+                }
+            }
+        }
+        positions
+    }
+
+    /// Reading each block once per ray, not once per step, explodes exactly the same blocks.
+    #[tokio::test]
+    async fn cached_ray_march_matches_the_stepwise_march() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use crate::world::BlockFlags;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        for cx in -2..=1 {
+            for cz in -2..=1 {
+                world.level.loaded_chunks.insert(
+                    Vector2::new(cx, cz),
+                    pumpkin_world::chunk::ChunkData::empty_sync(cx, cz),
+                );
+            }
+        }
+        // A deterministic mix of air, weak, strong and fluid blocks, rails included.
+        let palette = [
+            Block::AIR.default_state.id,
+            Block::AIR.default_state.id,
+            Block::AIR.default_state.id,
+            Block::STONE.default_state.id,
+            Block::OAK_PLANKS.default_state.id,
+            Block::GLASS.default_state.id,
+            Block::OBSIDIAN.default_state.id,
+            Block::WATER.default_state.id,
+            Block::TNT.default_state.id,
+            Block::RAIL.default_state.id,
+            Block::DIRT.default_state.id,
+        ];
+        let mut seed = 7u64;
+        let mut next = move || {
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            (seed >> 33) as u32
+        };
+        for x in -9..9 {
+            for y in 56..74 {
+                for z in -9..9 {
+                    let state = palette[next() as usize % palette.len()];
+                    world.set_block_state(&BlockPos::new(x, y, z), state, BlockFlags::FORCE_STATE);
+                }
+            }
+        }
+
+        for (power, rails) in [(4.0, false), (4.0, true), (2.0, false), (6.0, false)] {
+            let center = Vector3::new(0.37, 64.81, -0.52);
+            let mut explosion = Explosion::new(power, center, BlockInteraction::Destroy);
+            if rails {
+                explosion = explosion.preserving_rails();
+            }
+            let rolls: Vec<f32> = (0..1352).map(|_| (next() % 1000) as f32 / 1000.0).collect();
+            let mut cached_rolls = rolls.iter().copied();
+            let mut stepwise_rolls = rolls.iter().copied();
+            let chunks =
+                super::ExplosionChunks::around(&world, center, f64::from(power) * 2.0 + 2.0);
+            let cached = explosion
+                .exploded_positions(&world, &chunks, || cached_rolls.next().unwrap_or(0.5));
+            let stepwise =
+                stepwise_positions(&explosion, &world, || stepwise_rolls.next().unwrap_or(0.5));
+            assert!(!stepwise.is_empty());
+            assert_eq!(cached, stepwise, "power {power}, rails {rails}");
+
+            // Exposure through the cached chunks sees what a clip through the world sees.
+            for _ in 0..40 {
+                let at = Vector3::new(
+                    f64::from(next() % 1400) / 100.0 - 7.0,
+                    f64::from(next() % 1400) / 100.0 + 57.0,
+                    f64::from(next() % 1400) / 100.0 - 7.0,
+                );
+                let body = crate::entity::Entity::new(
+                    world.clone(),
+                    at,
+                    &pumpkin_data::entity::EntityType::ZOMBIE,
+                );
+                chunks.next_pass();
+                let through_cache = Explosion::calculate_exposure(&center, &body, &chunks);
+                let through_world = Explosion::calculate_exposure(&center, &body, world.as_ref());
+                assert_eq!(
+                    through_cache.to_bits(),
+                    through_world.to_bits(),
+                    "at {at:?}"
+                );
+            }
+        }
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test]
