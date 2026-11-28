@@ -10,3 +10,14 @@ pub struct StriderTemperatureChangeEvent {
     /// Whether the strider is now shivering.
     pub is_shivering: bool,
 }
+
+impl StriderTemperatureChangeEvent {
+    #[must_use]
+    pub const fn new(entity_id: i32, is_shivering: bool) -> Self {
+        Self {
+            entity_id,
+            is_shivering,
+            cancelled: false,
+        }
+    }
+}

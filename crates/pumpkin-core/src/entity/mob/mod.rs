@@ -1679,6 +1679,17 @@ pub trait Mob: EntityBase + Send + Sync {
         1.0
     }
 
+    fn mob_can_add_passenger(&self, _passenger: &dyn EntityBase) -> bool {
+        !self.get_entity().has_passengers()
+    }
+
+    fn mob_dismount_location_for_passenger(
+        &self,
+        _passenger: &dyn EntityBase,
+    ) -> Option<Vector3<f64>> {
+        None
+    }
+
     fn mob_is_stepping_carefully(&self) -> bool {
         self.get_entity().is_sneaking()
     }
@@ -1997,6 +2008,14 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_is_pushed_by_fluids(&self) -> bool {
         true
+    }
+
+    fn can_stand_on_fluid(&self, _fluid: &pumpkin_data::fluid::Fluid) -> bool {
+        false
+    }
+
+    fn liquid_collision_shape(&self) -> Option<BoundingBox> {
+        None
     }
 
     fn pushes_entities(&self) -> bool {
@@ -2434,6 +2453,10 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn as_zombie(&self) -> Option<&zombie::ZombieEntityBase> {
+        None
+    }
+
+    fn as_strider(&self) -> Option<&crate::entity::passive::strider::StriderEntity> {
         None
     }
 
@@ -2962,6 +2985,14 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 }
 impl<T: Mob + Send + 'static> EntityBase for T {
+    fn can_add_passenger(&self, passenger: &dyn EntityBase) -> bool {
+        self.mob_can_add_passenger(passenger)
+    }
+
+    fn dismount_location_for_passenger(&self, passenger: &dyn EntityBase) -> Option<Vector3<f64>> {
+        self.mob_dismount_location_for_passenger(passenger)
+    }
+
     fn is_stepping_carefully(&self) -> bool {
         self.mob_is_stepping_carefully()
     }

@@ -58,11 +58,13 @@ pub fn find_safe_dismount_location(
     Some(position)
 }
 
-fn is_block_floor_valid(block_floor_height: f64) -> bool {
+#[must_use]
+pub fn is_block_floor_valid(block_floor_height: f64) -> bool {
     block_floor_height.is_finite() && block_floor_height < 1.0
 }
 
-fn can_dismount_to(world: &World, bounding_box: &BoundingBox) -> bool {
+#[must_use]
+pub fn can_dismount_to(world: &World, bounding_box: &BoundingBox) -> bool {
     if !world.is_space_empty(*bounding_box) {
         return false;
     }
@@ -75,7 +77,8 @@ fn can_dismount_to(world: &World, bounding_box: &BoundingBox) -> bool {
         && border.contains(bounding_box.max.x - 1.0E-5, bounding_box.max.z - 1.0E-5)
 }
 
-fn block_floor_height(world: &World, pos: &BlockPos) -> f64 {
+#[must_use]
+pub fn block_floor_height(world: &World, pos: &BlockPos) -> f64 {
     if let Some(shape_max) = non_climbable_shape_max_y(world, pos) {
         return shape_max;
     }
@@ -84,6 +87,24 @@ fn block_floor_height(world: &World, pos: &BlockPos) -> f64 {
         Some(below_max) if below_max >= 1.0 => below_max - 1.0,
         _ => f64::NEG_INFINITY,
     }
+}
+
+#[must_use]
+pub fn get_collision_horizontal_escape_vector(
+    collider_width: f64,
+    colliding_width: f64,
+    direction_degrees: f32,
+) -> Vector3<f64> {
+    let distance = (collider_width + colliding_width + f64::from(1.0e-5f32)) / 2.0;
+    let rad = direction_degrees.to_radians();
+    let dir_x = -rad.sin();
+    let dir_z = rad.cos();
+    let max_axis = dir_x.abs().max(dir_z.abs());
+    Vector3::new(
+        f64::from(dir_x) * distance / f64::from(max_axis),
+        0.0,
+        f64::from(dir_z) * distance / f64::from(max_axis),
+    )
 }
 
 fn non_climbable_shape_max_y(world: &World, pos: &BlockPos) -> Option<f64> {

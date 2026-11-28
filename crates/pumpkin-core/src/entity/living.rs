@@ -2129,11 +2129,13 @@ impl LivingEntity {
     fn travel(&self, caller: &dyn EntityBase) -> f64 {
         let should_swim_in_fluids = caller.get_player().is_none_or(|player| !player.is_flying());
         let touching_water = self.entity.touching_water.load(SeqCst);
-        // Strider is the only entity that has canWalkOnFluid = false
-        if self.entity.is_in_liquid()
-            && should_swim_in_fluids
-            && self.entity.entity_type != &EntityType::STRIDER
-        {
+        let can_stand_on_fluid = || {
+            caller.get_mob().is_some_and(|mob| {
+                let world = self.entity.world.load();
+                mob.can_stand_on_fluid(world.get_fluid(&self.entity.block_pos.load()))
+            })
+        };
+        if self.entity.is_in_liquid() && should_swim_in_fluids && !can_stand_on_fluid() {
             self.travel_in_fluid(caller, touching_water)
         } else {
             self.travel_in_air(caller)

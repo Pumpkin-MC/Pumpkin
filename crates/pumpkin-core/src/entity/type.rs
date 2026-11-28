@@ -606,14 +606,7 @@ pub fn check_spawn_rules(
 
     // Strider
     if id == EntityType::STRIDER.id {
-        let mut check_pos = *pos;
-        while world
-            .get_fluid(&check_pos)
-            .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_LAVA)
-        {
-            check_pos = check_pos.up();
-        }
-        return world.get_block(&check_pos).is_air();
+        return StriderEntity::check_strider_spawn_rules(entity_type, world, pos, reason);
     }
 
     // Bat
