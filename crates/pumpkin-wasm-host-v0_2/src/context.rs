@@ -736,7 +736,10 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
     }
 
     fn get_data_folder(&mut self, _context: Resource<WitContext>) -> wasmtime::Result<String> {
-        Ok("data".to_string())
+        Ok(self
+            .native_data_folder
+            .clone()
+            .unwrap_or_else(|| "data".to_string()))
     }
 
     fn get_server(&mut self, context: Resource<WitContext>) -> wasmtime::Result<Resource<Server>> {

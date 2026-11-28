@@ -113,9 +113,11 @@ pub async fn run(options: DedicatedServerOptions) {
     }
     print_support_links_and_warning();
 
-    let plugin_loaders: Vec<Arc<dyn PluginLoader>> = vec![Arc::new(WasmPluginLoader::new(
+    let wasm_loader = Arc::new(WasmPluginLoader::new(
         config.advanced.plugins.verify_signatures,
-    ))];
+    ));
+    let native_wit_loader = Arc::new(wasm_loader.native_wit_loader());
+    let plugin_loaders: Vec<Arc<dyn PluginLoader>> = vec![wasm_loader, native_wit_loader];
 
     let pumpkin_server = PumpkinServer::new(
         config.basic,

@@ -1,10 +1,29 @@
 #![allow(clippy::empty_enums)]
 
-use wasmtime::component::bindgen;
+macro_rules! define_v0_2_bindings {
+    (
+        imports: { $($imports:tt)* },
+    ) => {
+        wasmtime::component::bindgen!({
+            path: "../pumpkin-plugin-wit/v0.2",
+            world: "plugin",
+            imports: { $($imports)* },
+            exports: { default: async | store | trappable },
+        });
 
-bindgen!({
-    path: "../pumpkin-plugin-wit/v0.2",
-    world: "plugin",
+        pub mod native {
+            pumpkin_native_wit::bindgen!({
+                path: "../pumpkin-plugin-wit/v0.2",
+                world: "plugin",
+                concurrent: true,
+                store_data: pumpkin_wasm_host_common::state::PluginHostState,
+                imports: { $($imports)* },
+            });
+        }
+    };
+}
+
+define_v0_2_bindings! {
     imports: {
         "pumpkin:plugin/command@0.2.0.[method]command-sender.has-permission": async | store | trappable,
         "pumpkin:plugin/datapack@0.2.0.[method]datapack-manager.disable-pack": async | store | trappable,
@@ -163,5 +182,4 @@ bindgen!({
         "pumpkin:plugin/world@0.2.0.[method]living-entity.set-equipment": async | trappable,
         default: trappable,
     },
-    exports: { default: async | store | trappable },
-});
+}

@@ -16,6 +16,7 @@ pumpkin-config.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }
 pumpkin-inventory.workspace = true
 pumpkin-macros.workspace = true
+pumpkin-native-wit.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-protocol = { workspace = true, features = ["default"] }
 pumpkin-util.workspace = true

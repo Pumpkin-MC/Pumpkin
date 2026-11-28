@@ -14,6 +14,8 @@ members = [
     "crates/pumpkin-inventory",
     "crates/pumpkin-macros",
     "crates/pumpkin-nbt",
+    "crates/pumpkin-native-wit",
+    "crates/pumpkin-native-wit-macro",
     "crates/pumpkin-plugin-api",
     "crates/pumpkin-plugin-api-v0_2",
     "crates/pumpkin-plugin-runtime",
@@ -221,6 +223,8 @@ pumpkin-gametest = { path = "crates/pumpkin-gametest", default-features = false 
 pumpkin-inventory = { path = "crates/pumpkin-inventory", default-features = false }
 pumpkin-macros = { path = "crates/pumpkin-macros", default-features = false }
 pumpkin-nbt = { path = "crates/pumpkin-nbt", default-features = false }
+pumpkin-native-wit = { path = "crates/pumpkin-native-wit", default-features = false }
+pumpkin-native-wit-macro = { path = "crates/pumpkin-native-wit-macro", default-features = false }
 pumpkin-plugin-api = { path = "crates/pumpkin-plugin-api", default-features = false }
 pumpkin-plugin-runtime = { path = "crates/pumpkin-plugin-runtime", default-features = false }
 pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
@@ -259,9 +263,9 @@ notify = { version = "8.2.2", default-features = false, features = ["macos_fseve
 sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
-wasmtime = { version = "51.0.0", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
-wasmtime-wasi = { version = "51.0.0", default-features = false, features = ["p2", "p3"] }
-wasmtime-wasi-http = { version = "51.0.0", default-features = false, features = ["p2", "p3", "default-send-request"] }
+wasmtime = { version = "50.0.1", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
+wasmtime-wasi = { version = "50.0.1", default-features = false, features = ["p2", "p3"] }
+wasmtime-wasi-http = { version = "50.0.1", default-features = false, features = ["p2", "p3", "default-send-request"] }
 
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.12", default-features = false }
@@ -269,7 +273,12 @@ axum = { version = "0.8.9", default-features = false, features = ["http1", "toki
 subtle = { version = "2.6", default-features = false }
 webrtc = { version = "0.21.1" }
 async-trait = "0.1"
-wit-bindgen = { version = "0.63", default-features = false, features = ["macros"] }
+wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "d276c62bb6dff9efc2b1cb2024ab4b5d29a7d364", default-features = false, features = ["macros"] }
+wit-bindgen-core = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "d276c62bb6dff9efc2b1cb2024ab4b5d29a7d364", default-features = false }
+wit-component = { version = "0.263.0", default-features = false }
+wit-parser = { version = "0.263.0", default-features = false, features = ["decoding"] }
+object = { version = "0.40.0", default-features = false, features = ["read_core", "elf", "macho", "pe"] }
+anyhow = { version = "1.0.104", default-features = false, features = ["std"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }

@@ -11,6 +11,7 @@ doctest = false
 
 [dependencies]
 pumpkin-core.workspace = true
+pumpkin-native-wit.workspace = true
 pumpkin-wasm-host-common.workspace = true
 pumpkin-config.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }

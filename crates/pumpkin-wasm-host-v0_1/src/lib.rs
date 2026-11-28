@@ -3,13 +3,17 @@
 // Not warn event sending macros
 #![allow(unused_labels, deprecated)]
 
+use std::path::Path;
+
 use crate::bindings::PluginPre;
 use pumpkin_core::plugin::PluginMetadata;
 use pumpkin_wasm_host_common::{
-    concurrent_store::LegacySyncReentry, plugin::PluginInitError, state::PluginHostState,
+    concurrent_store::{LegacyGuestScope, LegacySyncReentry},
+    plugin::PluginInitError,
+    state::PluginHostState,
 };
-use wasmtime::component::{HasSelf, InstancePre, Linker};
-use wasmtime::{Engine, Store};
+use wasmtime::component::{HasSelf, InstancePre, Linker, Resource};
+use wasmtime::{AsContextMut, Engine, Store};
 
 mod bindings;
 
@@ -46,7 +50,262 @@ pub mod text;
 pub mod uuid;
 pub mod world;
 
-pub use crate::bindings::{Plugin, pumpkin};
+pub use crate::bindings::pumpkin;
+
+/// Loaded v0.1 guest plugin exports, backed by either a WebAssembly component or a native `cdylib`.
+pub enum Plugin {
+    Wasm(Box<bindings::Plugin>),
+    Native(bindings::native::Plugin),
+}
+
+impl Plugin {
+    #[must_use]
+    pub const fn is_native(&self) -> bool {
+        matches!(self, Self::Native(_))
+    }
+
+    #[must_use]
+    pub fn native_library(
+        &self,
+    ) -> Option<std::sync::Arc<pumpkin_native_wit::libloading::Library>> {
+        match self {
+            Self::Wasm(_) => None,
+            Self::Native(plugin) => Some(plugin.library()),
+        }
+    }
+
+    pub async fn call_on_load(
+        &self,
+        guest: &mut LegacyGuestScope<'_, PluginHostState>,
+        context: Resource<pumpkin::plugin::context::Context>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        match self {
+            Self::Wasm(plugin) => guest
+                .call(plugin.func_on_load(), (context,))
+                .await
+                .map(|(result,)| result),
+            Self::Native(plugin) => guest.call_native(|store| plugin.call_on_load(store, context)),
+        }
+    }
+
+    pub async fn call_on_unload(
+        &self,
+        guest: &mut LegacyGuestScope<'_, PluginHostState>,
+        context: Resource<pumpkin::plugin::context::Context>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        match self {
+            Self::Wasm(plugin) => guest
+                .call(plugin.func_on_unload(), (context,))
+                .await
+                .map(|(result,)| result),
+            Self::Native(plugin) => {
+                guest.call_native(|store| plugin.call_on_unload(store, context))
+            }
+        }
+    }
+
+    pub async fn call_handle_ipc_message(
+        &self,
+        guest: &mut LegacyGuestScope<'_, PluginHostState>,
+        sender: String,
+        message: Vec<u8>,
+    ) -> wasmtime::Result<Result<Vec<u8>, String>> {
+        match self {
+            Self::Wasm(plugin) => {
+                let function = *plugin.func_handle_ipc_message().func();
+                guest
+                    .call_func::<(String, Vec<u8>), (Result<Vec<u8>, String>,)>(
+                        function,
+                        (sender, message),
+                    )
+                    .await
+                    .map(|(result,)| result)
+            }
+            Self::Native(plugin) => {
+                guest.call_native(|store| plugin.call_handle_ipc_message(store, &sender, &message))
+            }
+        }
+    }
+
+    pub async fn call_handle_task(
+        &self,
+        guest: &mut LegacyGuestScope<'_, PluginHostState>,
+        handler_id: u32,
+        server: Resource<pumpkin::plugin::server::Server>,
+    ) -> wasmtime::Result<()> {
+        match self {
+            Self::Wasm(plugin) => {
+                guest
+                    .call(plugin.func_handle_task(), (handler_id, server))
+                    .await
+            }
+            Self::Native(plugin) => {
+                guest.call_native(|store| plugin.call_handle_task(store, handler_id, server))
+            }
+        }
+    }
+
+    pub async fn call_handle_event(
+        &self,
+        guest: &mut LegacyGuestScope<'_, PluginHostState>,
+        event_id: u32,
+        server: Resource<pumpkin::plugin::server::Server>,
+        event: pumpkin::plugin::event::Event,
+    ) -> wasmtime::Result<pumpkin::plugin::event::Event> {
+        match self {
+            Self::Wasm(plugin) => {
+                let function = *plugin.func_handle_event().func();
+                guest
+                    .call_func::<(
+                        u32,
+                        Resource<pumpkin::plugin::server::Server>,
+                        pumpkin::plugin::event::Event,
+                    ), (pumpkin::plugin::event::Event,)>(
+                        function, (event_id, server, event)
+                    )
+                    .await
+                    .map(|(returned,)| returned)
+            }
+            Self::Native(plugin) => {
+                guest.call_native(|store| plugin.call_handle_event(store, event_id, server, &event))
+            }
+        }
+    }
+
+    pub async fn call_handle_command(
+        &self,
+        guest: &mut LegacyGuestScope<'_, PluginHostState>,
+        command_id: u32,
+        sender: Resource<pumpkin::plugin::command::CommandSender>,
+        server: Resource<pumpkin::plugin::server::Server>,
+        args: Resource<pumpkin::plugin::command::ConsumedArgs>,
+    ) -> wasmtime::Result<Result<i32, pumpkin::plugin::command::CommandError>> {
+        match self {
+            Self::Wasm(plugin) => guest
+                .call(
+                    plugin.func_handle_command(),
+                    (command_id, sender, server, args),
+                )
+                .await
+                .map(|(result,)| result),
+            Self::Native(plugin) => guest.call_native(|store| {
+                plugin.call_handle_command(store, command_id, sender, server, args)
+            }),
+        }
+    }
+
+    pub async fn call_handle_command_suggestion(
+        &self,
+        guest: &mut LegacyGuestScope<'_, PluginHostState>,
+        handler_id: u32,
+        sender: Resource<pumpkin::plugin::command::CommandSender>,
+        server: Resource<pumpkin::plugin::server::Server>,
+        request: pumpkin::plugin::command::SuggestionRequest,
+    ) -> wasmtime::Result<pumpkin::plugin::command::CommandSuggestions> {
+        match self {
+            Self::Wasm(plugin) => {
+                let function = *plugin.func_handle_command_suggestion().func();
+                guest
+                    .call_func::<(
+                        u32,
+                        Resource<pumpkin::plugin::command::CommandSender>,
+                        Resource<pumpkin::plugin::server::Server>,
+                        pumpkin::plugin::command::SuggestionRequest,
+                    ), (pumpkin::plugin::command::CommandSuggestions,)>(
+                        function,
+                        (handler_id, sender, server, request),
+                    )
+                    .await
+                    .map(|(response,)| response)
+            }
+            Self::Native(plugin) => guest.call_native(|store| {
+                plugin.call_handle_command_suggestion(store, handler_id, sender, server, &request)
+            }),
+        }
+    }
+
+    pub async fn call_handle_ai_goal_start(
+        &self,
+        guest: &mut LegacyGuestScope<'_, PluginHostState>,
+        goal_id: u32,
+        server: Resource<pumpkin::plugin::server::Server>,
+        entity: Resource<pumpkin::plugin::world::Entity>,
+    ) -> wasmtime::Result<()> {
+        match self {
+            Self::Wasm(plugin) => {
+                guest
+                    .call(
+                        plugin.func_handle_ai_goal_start(),
+                        (goal_id, server, entity),
+                    )
+                    .await
+            }
+            Self::Native(plugin) => guest.call_native(|store| {
+                plugin.call_handle_ai_goal_start(store, goal_id, server, entity)
+            }),
+        }
+    }
+
+    pub async fn call_handle_ai_goal_tick(
+        &self,
+        guest: &mut LegacyGuestScope<'_, PluginHostState>,
+        goal_id: u32,
+        server: Resource<pumpkin::plugin::server::Server>,
+        entity: Resource<pumpkin::plugin::world::Entity>,
+    ) -> wasmtime::Result<()> {
+        match self {
+            Self::Wasm(plugin) => {
+                guest
+                    .call(plugin.func_handle_ai_goal_tick(), (goal_id, server, entity))
+                    .await
+            }
+            Self::Native(plugin) => guest.call_native(|store| {
+                plugin.call_handle_ai_goal_tick(store, goal_id, server, entity)
+            }),
+        }
+    }
+
+    pub async fn call_handle_ai_goal_stop(
+        &self,
+        guest: &mut LegacyGuestScope<'_, PluginHostState>,
+        goal_id: u32,
+        server: Resource<pumpkin::plugin::server::Server>,
+        entity: Resource<pumpkin::plugin::world::Entity>,
+    ) -> wasmtime::Result<()> {
+        match self {
+            Self::Wasm(plugin) => {
+                guest
+                    .call(plugin.func_handle_ai_goal_stop(), (goal_id, server, entity))
+                    .await
+            }
+            Self::Native(plugin) => guest.call_native(|store| {
+                plugin.call_handle_ai_goal_stop(store, goal_id, server, entity)
+            }),
+        }
+    }
+
+    pub async fn call_handle_generate_phase(
+        &self,
+        guest: &mut LegacyGuestScope<'_, PluginHostState>,
+        generator_id: u32,
+        phase: pumpkin::plugin::world::GenerationPhase,
+        chunk: Resource<pumpkin::plugin::world::ChunkBuffer>,
+    ) -> wasmtime::Result<()> {
+        match self {
+            Self::Wasm(plugin) => {
+                guest
+                    .call(
+                        plugin.func_handle_generate_phase(),
+                        (generator_id, phase, chunk),
+                    )
+                    .await
+            }
+            Self::Native(plugin) => guest.call_native(|store| {
+                plugin.call_handle_generate_phase(store, generator_id, phase, chunk)
+            }),
+        }
+    }
+}
 
 mod resource_with {
     use super::pumpkin::plugin;
@@ -364,7 +623,7 @@ impl pumpkin::plugin::potions::Host for PluginHostState {}
 impl pumpkin::plugin::entity_statuses::Host for PluginHostState {}
 
 pub fn add_to_linker(linker: &mut Linker<PluginHostState>) -> wasmtime::Result<()> {
-    Plugin::add_to_linker::<_, HasSelf<_>>(linker, |state: &mut PluginHostState| state)?;
+    bindings::Plugin::add_to_linker::<_, HasSelf<_>>(linker, |state: &mut PluginHostState| state)?;
     Ok(())
 }
 
@@ -414,5 +673,50 @@ pub async fn init_plugin(
         .permissions
         .clone_from(&metadata.permissions);
 
-    Ok((plugin, store, metadata))
+    Ok((Plugin::Wasm(Box::new(plugin)), store, metadata))
+}
+
+/// Loads and initializes a native (`cdylib`) plugin implementing the v0.1 WIT world.
+///
+/// Loading a native dynamic library executes its OS-level initializers inside the host process,
+/// so callers should only pass trusted plugin libraries configured by the server administrator.
+pub async fn init_native_plugin(
+    engine: &Engine,
+    path: &Path,
+    legacy_sync_reentry: &LegacySyncReentry,
+) -> Result<(Plugin, Store<PluginHostState>, PluginMetadata), PluginInitError> {
+    // SAFETY: Caller vouches that `path` is a trusted native plugin configured by the server
+    // administrator; `bindings::native::Plugin::new` verifies the exported WIT metadata and all
+    // required symbols before returning.
+    let plugin =
+        unsafe { bindings::native::Plugin::new(path) }.map_err(PluginInitError::ApiMismatch)?;
+
+    let mut store = Store::new(engine, PluginHostState::new());
+    store.limiter(|state| &mut state.limits);
+
+    legacy_sync_reentry
+        .scope_bootstrap(async { plugin.call_init_plugin(store.as_context_mut()) })
+        .await
+        .map_err(PluginInitError::CallInitPluginFailed)?;
+
+    let metadata = legacy_sync_reentry
+        .scope_bootstrap(async { plugin.call_get_metadata(store.as_context_mut()) })
+        .await
+        .map_err(PluginInitError::CallGetMetadataFailed)?;
+
+    let metadata = PluginMetadata {
+        name: metadata.name,
+        version: metadata.version,
+        authors: metadata.authors,
+        description: metadata.description,
+        dependencies: metadata.dependencies,
+        permissions: metadata.permissions,
+    };
+
+    store
+        .data_mut()
+        .permissions
+        .clone_from(&metadata.permissions);
+
+    Ok((Plugin::Native(plugin), store, metadata))
 }

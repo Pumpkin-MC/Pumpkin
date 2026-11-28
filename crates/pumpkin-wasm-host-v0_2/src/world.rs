@@ -2713,10 +2713,7 @@ impl WasmChunkGenerator {
             proto_chunk: Arc::clone(&shared_proto_chunk),
         };
 
-        let function = {
-            let plugin = self.plugin.instance::<crate::Plugin>();
-            plugin.func_handle_generate_phase()
-        };
+        let plugin = Arc::clone(&self.plugin);
         let generator_id = self.generator_id;
         let run = async {
             let result = self
@@ -2729,8 +2726,14 @@ impl WasmChunkGenerator {
                             let rep = resource.rep();
                             Ok::<_, wasmtime::Error>((resource, rep))
                         })?;
-                        let result = guest
-                            .call(function, (generator_id, phase, buffer_resource))
+                        let result = plugin
+                            .instance::<crate::Plugin>()
+                            .call_handle_generate_phase(
+                                &mut guest,
+                                generator_id,
+                                phase,
+                                buffer_resource,
+                            )
                             .await;
                         guest.with(|mut store| {
                             let _ = store.data_mut().resource_table.delete::<ChunkBuffer>(

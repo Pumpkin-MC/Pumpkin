@@ -134,6 +134,8 @@ pub struct PluginHostState {
     pub permissions: Vec<String>,
     pub name: Option<String>,
     pub marketplace_metadata: Option<crate::signature::PumpkinMetadata>,
+    /// Host filesystem data folder path for native WIT plugins (which do not run inside a WASI preopen).
+    pub native_data_folder: Option<String>,
 }
 
 impl Default for PluginHostState {
@@ -160,6 +162,7 @@ impl PluginHostState {
             permissions: Vec::new(),
             name: None,
             marketplace_metadata: None,
+            native_data_folder: None,
         }
     }
 

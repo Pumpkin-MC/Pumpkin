@@ -1,6 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::{any::Any, fs, net::SocketAddr, path::Path, sync::Arc};
+use std::{
+    any::Any,
+    fs,
+    net::SocketAddr,
+    path::Path,
+    sync::{Arc, LazyLock},
+};
 use wasmtime::{Cache, CacheConfig, Engine, component::Component, component::Linker};
 use wasmtime_wasi::{FsPerms, WasiCtxBuilder, sockets::SocketAddrUse};
 
@@ -255,6 +261,201 @@ impl PluginRuntime {
     }
 }
 
+/// Shared lightweight Wasmtime engine used purely to back sequential v0.1 `Store<PluginHostState>`
+/// for native WIT plugins (no WebAssembly modules are compiled on it).
+static NATIVE_STORE_ENGINE: LazyLock<Engine> = LazyLock::new(Engine::default);
+
+/// Shared lightweight Wasmtime engine with concurrency support used purely to back concurrent v0.2
+/// `Store<PluginHostState>` for native WIT plugins.
+#[cfg(feature = "v0_2")]
+static NATIVE_CONCURRENT_ENGINE: LazyLock<Engine> = LazyLock::new(|| {
+    let mut config = wasmtime::Config::new();
+    config.wasm_component_model(true);
+    config.wasm_component_model_async(true);
+    config.concurrency_support(true);
+    Engine::new(&config).expect("failed to construct concurrent Wasmtime engine for native WIT")
+});
+
+#[cfg(feature = "v0_2")]
+struct StoreHandleConcurrentRunner(
+    pumpkin_plugin_runtime::StoreHandle<PluginHostState, LegacySyncReentry>,
+);
+
+#[cfg(feature = "v0_2")]
+impl pumpkin_native_wit::ConcurrentStoreRunner<PluginHostState> for StoreHandleConcurrentRunner {
+    fn run_with_accessor(
+        &self,
+        op: pumpkin_native_wit::BoxedAccessorOp<PluginHostState>,
+    ) -> wasmtime::Result<Box<dyn Any + Send>> {
+        self.0
+            .run_with_accessor_blocking(move |accessor| op(accessor))
+    }
+}
+
+async fn init_native_v0_1_plugin(
+    path: &Path,
+    legacy_sync_reentry: &LegacySyncReentry,
+    task_scheduler: Arc<TaskScheduler>,
+    store_spawner: Arc<dyn RuntimeSpawner>,
+) -> Result<(Arc<WasmPlugin>, PluginMetadata), PluginInitError> {
+    let (plugin, store, metadata) =
+        pumpkin_wasm_host_v0_1::init_native_plugin(&NATIVE_STORE_ENGINE, path, legacy_sync_reentry)
+            .await?;
+
+    let store = concurrent_store::start_legacy_store(
+        store,
+        legacy_sync_reentry.clone(),
+        store_spawner,
+        StoreMode::Sequential,
+    )
+    .await
+    .map_err(PluginInitError::InstantiationFailed)?;
+
+    let wasm_plugin = Arc::new(WasmPlugin {
+        plugin_instance: Arc::new(plugin) as Arc<dyn Any + Send + Sync>,
+        api_version: PluginApiVersion::V0_1,
+        binding_language: Some("native-wit".to_string()),
+        store,
+        task_scheduler,
+    });
+    let weak_plugin = Arc::downgrade(&wasm_plugin);
+    wasm_plugin
+        .store
+        .call(move |state| {
+            state.plugin = Some(weak_plugin);
+        })
+        .await
+        .map_err(PluginInitError::InstantiationFailed)?;
+
+    Ok((wasm_plugin, metadata))
+}
+
+#[cfg(feature = "v0_2")]
+async fn init_native_v0_2_plugin(
+    path: &Path,
+    legacy_sync_reentry: &LegacySyncReentry,
+    task_scheduler: Arc<TaskScheduler>,
+    store_spawner: Arc<dyn RuntimeSpawner>,
+) -> Result<(Arc<WasmPlugin>, PluginMetadata), PluginInitError> {
+    let (plugin, store) =
+        pumpkin_wasm_host_v0_2::load_native_plugin(&NATIVE_CONCURRENT_ENGINE, path)?;
+    let plugin = Arc::new(plugin);
+
+    let store = concurrent_store::start_legacy_store(
+        store,
+        legacy_sync_reentry.clone(),
+        store_spawner,
+        StoreMode::Concurrent,
+    )
+    .await
+    .map_err(PluginInitError::InstantiationFailed)?;
+
+    plugin.attach_concurrent_store(Arc::new(StoreHandleConcurrentRunner(store.handle())));
+
+    let wasm_plugin = Arc::new(WasmPlugin {
+        plugin_instance: Arc::clone(&plugin) as Arc<dyn Any + Send + Sync>,
+        api_version: PluginApiVersion::V0_2,
+        binding_language: Some("native-wit".to_string()),
+        store,
+        task_scheduler,
+    });
+    let weak_plugin = Arc::downgrade(&wasm_plugin);
+    wasm_plugin
+        .store
+        .call(move |state| {
+            state.plugin = Some(weak_plugin);
+        })
+        .await
+        .map_err(PluginInitError::InstantiationFailed)?;
+
+    let plugin_init = Arc::clone(&plugin);
+    wasm_plugin
+        .store
+        .call_guest(move |mut guest| {
+            Box::pin(async move { plugin_init.call_init_plugin(&mut guest).await })
+        })
+        .await
+        .map_err(PluginInitError::CallInitPluginFailed)?;
+
+    let plugin_meta = Arc::clone(&plugin);
+    let metadata = wasm_plugin
+        .store
+        .call_guest(move |mut guest| {
+            Box::pin(async move { plugin_meta.call_get_metadata(&mut guest).await })
+        })
+        .await
+        .map_err(PluginInitError::CallGetMetadataFailed)?;
+
+    let perms = metadata.permissions.clone();
+    wasm_plugin
+        .store
+        .call(move |state| {
+            state.permissions = perms;
+        })
+        .await
+        .map_err(PluginInitError::InstantiationFailed)?;
+
+    Ok((wasm_plugin, metadata))
+}
+
+/// Loads and initializes a native (`cdylib`) WIT plugin into the shared `WasmPlugin` runtime.
+pub async fn init_native_plugin<P: AsRef<Path>>(
+    path: P,
+    legacy_sync_reentry: &LegacySyncReentry,
+    task_scheduler: Arc<TaskScheduler>,
+    store_spawner: Arc<dyn RuntimeSpawner>,
+) -> Result<(Arc<WasmPlugin>, PluginMetadata), PluginInitError> {
+    let path = path.as_ref();
+    let api_version = match pumpkin_native_wit::detect_native_wit_world_version(path) {
+        Some(version) if version.starts_with("0.1.") => PluginApiVersion::V0_1,
+        Some(version) if version.starts_with("0.2.") => v0_2_api_version(&version)?,
+        Some(version) => return Err(PluginInitError::UnsupportedApiVersion(version)),
+        None => PluginApiVersion::V0_1,
+    };
+
+    let (wasm_plugin, metadata) = match api_version {
+        PluginApiVersion::V0_1 => {
+            init_native_v0_1_plugin(path, legacy_sync_reentry, task_scheduler, store_spawner)
+                .await?
+        }
+        #[cfg(feature = "v0_2")]
+        PluginApiVersion::V0_2 => {
+            init_native_v0_2_plugin(path, legacy_sync_reentry, task_scheduler, store_spawner)
+                .await?
+        }
+        #[cfg(not(feature = "v0_2"))]
+        PluginApiVersion::V0_2 => return Err(PluginInitError::ApiMismatch(v0_2_disabled())),
+    };
+
+    tracing::debug!(
+        wasm_plugin_api = match api_version {
+            PluginApiVersion::V0_1 => "0.1",
+            PluginApiVersion::V0_2 => "0.2",
+        },
+        wasm_plugin_language = "native-wit",
+        wasm_plugin_policy = LegacySyncReentry::NAME,
+        "Loaded native WIT plugin"
+    );
+
+    Ok((wasm_plugin, metadata))
+}
+
+/// Returns the shared native library handle if `plugin` was loaded through the native WIT host.
+#[must_use]
+pub fn native_library(plugin: &WasmPlugin) -> Option<Arc<pumpkin_native_wit::libloading::Library>> {
+    match plugin.api_version {
+        PluginApiVersion::V0_1 => plugin
+            .instance::<pumpkin_wasm_host_v0_1::Plugin>()
+            .native_library(),
+        #[cfg(feature = "v0_2")]
+        PluginApiVersion::V0_2 => plugin
+            .instance::<pumpkin_wasm_host_v0_2::Plugin>()
+            .native_library(),
+        #[cfg(not(feature = "v0_2"))]
+        PluginApiVersion::V0_2 => None,
+    }
+}
+
 fn maybe_verify_wasm_plugin<T, F>(
     wasm_bytes: &[u8],
     path_str: &str,
@@ -468,19 +669,40 @@ pub async fn on_load(
         }
     }
 
-    let may_write_data = has_permission(permissions::FS_WRITE_DATA);
-    let may_read_data = has_permission(permissions::FS_READ_DATA);
-    if may_read_data || may_write_data {
-        builder.preopened_dir(
-            context.get_data_folder(),
-            "data",
-            if may_write_data {
-                FsPerms::ReadWrite
-            } else {
-                FsPerms::ReadOnly
-            },
-        )?;
-    }
+    let is_native = match wasm_plugin.api_version {
+        PluginApiVersion::V0_1 => {
+            guest_exports::<pumpkin_wasm_host_v0_1::Plugin>(&wasm_plugin.plugin_instance)
+                .is_ok_and(pumpkin_wasm_host_v0_1::Plugin::is_native)
+        }
+        #[cfg(feature = "v0_2")]
+        PluginApiVersion::V0_2 => {
+            guest_exports::<pumpkin_wasm_host_v0_2::Plugin>(&wasm_plugin.plugin_instance)
+                .is_ok_and(pumpkin_wasm_host_v0_2::Plugin::is_native)
+        }
+        #[cfg(not(feature = "v0_2"))]
+        PluginApiVersion::V0_2 => false,
+    };
+
+    let native_data_folder = if is_native {
+        let data_folder = context.get_data_folder();
+        let _ = fs::create_dir_all(&data_folder);
+        Some(data_folder.to_string_lossy().into_owned())
+    } else {
+        let may_write_data = has_permission(permissions::FS_WRITE_DATA);
+        let may_read_data = has_permission(permissions::FS_READ_DATA);
+        if may_read_data || may_write_data {
+            builder.preopened_dir(
+                context.get_data_folder(),
+                "data",
+                if may_write_data {
+                    FsPerms::ReadWrite
+                } else {
+                    FsPerms::ReadOnly
+                },
+            )?;
+        }
+        None
+    };
 
     let max_memory_mb = plugin_override
         .and_then(|o| o.max_memory_mb)
@@ -508,6 +730,7 @@ pub async fn on_load(
                     store.data_mut().wasi_http_hooks.allow_outbound = allow_http_outbound;
                     store.data_mut().server = Some(server);
                     store.data_mut().name = Some(name);
+                    store.data_mut().native_data_folder = native_data_folder;
                 });
 
                 match api_version {
@@ -516,10 +739,7 @@ pub async fn on_load(
                             guest_exports::<pumpkin_wasm_host_v0_1::Plugin>(&plugin_instance)?;
                         let context_res = guest.with(|mut store| store.data_mut().add(context))?;
 
-                        guest
-                            .call(plugin.func_on_load(), (context_res,))
-                            .await
-                            .map(|(result,)| result)
+                        plugin.call_on_load(&mut guest, context_res).await
                     }
                     #[cfg(feature = "v0_2")]
                     PluginApiVersion::V0_2 => {
@@ -527,10 +747,7 @@ pub async fn on_load(
                             guest_exports::<pumpkin_wasm_host_v0_2::Plugin>(&plugin_instance)?;
                         let context_res = guest.with(|mut store| store.data_mut().add(context))?;
 
-                        guest
-                            .call(plugin.func_on_load(), (context_res,))
-                            .await
-                            .map(|(result,)| result)
+                        plugin.call_on_load(&mut guest, context_res).await
                     }
                     #[cfg(not(feature = "v0_2"))]
                     PluginApiVersion::V0_2 => Err(v0_2_disabled()),
@@ -569,10 +786,7 @@ pub async fn on_unload(
                             Ok::<_, wasmtime::Error>((resource, rep))
                         })?;
 
-                        let result = guest
-                            .call(plugin.func_on_unload(), (context_res,))
-                            .await
-                            .map(|(result,)| result);
+                        let result = plugin.call_on_unload(&mut guest, context_res).await;
 
                         guest.with(|mut store| {
                             let _ = store.data_mut().resource_table.delete::<Arc<Context>>(
@@ -592,10 +806,7 @@ pub async fn on_unload(
                             Ok::<_, wasmtime::Error>((resource, rep))
                         })?;
 
-                        let result = guest
-                            .call(plugin.func_on_unload(), (context_res,))
-                            .await
-                            .map(|(result,)| result);
+                        let result = plugin.call_on_unload(&mut guest, context_res).await;
 
                         guest.with(|mut store| {
                             let _ = store.data_mut().resource_table.delete::<Arc<Context>>(
@@ -620,33 +831,32 @@ pub async fn handle_ipc_message(
 ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
     let sender = sender.to_owned();
     let message = message.to_owned();
-    let function = match wasm_plugin.api_version {
-        PluginApiVersion::V0_1 => {
-            *guest_exports::<pumpkin_wasm_host_v0_1::Plugin>(&wasm_plugin.plugin_instance)?
-                .func_handle_ipc_message()
-                .func()
-        }
-        #[cfg(feature = "v0_2")]
-        PluginApiVersion::V0_2 => {
-            *guest_exports::<pumpkin_wasm_host_v0_2::Plugin>(&wasm_plugin.plugin_instance)?
-                .func_handle_ipc_message()
-                .func()
-        }
-        #[cfg(not(feature = "v0_2"))]
-        PluginApiVersion::V0_2 => return Err(v0_2_disabled()),
-    };
+    let plugin_instance = wasm_plugin.plugin_instance.clone();
+    let api_version = wasm_plugin.api_version;
 
     wasm_plugin
         .store
         .call_guest(move |mut context| {
             Box::pin(async move {
-                context
-                    .call_func::<(String, Vec<u8>), (Result<Vec<u8>, String>,)>(
-                        function,
-                        (sender, message),
-                    )
-                    .await
-                    .map(|(result,)| result)
+                match api_version {
+                    PluginApiVersion::V0_1 => {
+                        let plugin =
+                            guest_exports::<pumpkin_wasm_host_v0_1::Plugin>(&plugin_instance)?;
+                        plugin
+                            .call_handle_ipc_message(&mut context, sender, message)
+                            .await
+                    }
+                    #[cfg(feature = "v0_2")]
+                    PluginApiVersion::V0_2 => {
+                        let plugin =
+                            guest_exports::<pumpkin_wasm_host_v0_2::Plugin>(&plugin_instance)?;
+                        plugin
+                            .call_handle_ipc_message(&mut context, sender, message)
+                            .await
+                    }
+                    #[cfg(not(feature = "v0_2"))]
+                    PluginApiVersion::V0_2 => Err(v0_2_disabled()),
+                }
             })
         })
         .await

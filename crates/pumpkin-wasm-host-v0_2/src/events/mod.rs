@@ -1718,35 +1718,35 @@ pub(super) fn consume_world(
 impl DynEventHandler for WasmPluginEventHandler {
     fn handle_dyn<'a>(&'a self, server: &'a Arc<Server>, event: QueuedEvent) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            type ServerResource = Resource<crate::pumpkin::plugin::server::Server>;
-
             let server = Arc::clone(server);
             let handler_id = self.handler_id;
-            let function = *self
+            let plugin = Arc::clone(&self.plugin);
+            let result = self
                 .plugin
-                .instance::<crate::Plugin>()
-                .func_handle_event()
-                .func();
-            let result = self.plugin.store.call_guest(move |mut guest| {
-                Box::pin(async move {
-                    let owned = guest.with(|mut store| store.data_mut().add::<WasmEvent>(Some(event)))?;
-                    let server_resource = guest.with(|mut store| store.data_mut().add(server));
-                    let result = match server_resource {
-                        Ok(server) => {
-                            let borrow = Resource::new_borrow(owned.rep());
-                            guest.call_func::<(u32, ServerResource, Resource<WasmEvent>), ()>(
-                                function, (handler_id, server, borrow)
-                            ).await
+                .store
+                .call_guest(move |mut guest| {
+                    Box::pin(async move {
+                        let owned =
+                            guest.with(|mut store| store.data_mut().add::<WasmEvent>(Some(event)))?;
+                        let server_resource = guest.with(|mut store| store.data_mut().add(server));
+                        let result = match server_resource {
+                            Ok(server) => {
+                                let borrow = Resource::new_borrow(owned.rep());
+                                plugin
+                                    .instance::<crate::Plugin>()
+                                    .call_handle_event(&mut guest, handler_id, server, borrow)
+                                    .await
+                            }
+                            Err(error) => Err(error),
+                        };
+                        let cleanup = guest.with(|mut store| store.data_mut().drop(owned));
+                        if let Err(error) = &cleanup {
+                            tracing::error!(handler_id, %error, "Failed to remove Wasm event resource");
                         }
-                        Err(error) => Err(error),
-                    };
-                    let cleanup = guest.with(|mut store| store.data_mut().drop(owned));
-                    if let Err(error) = &cleanup {
-                        tracing::error!(handler_id, %error, "Failed to remove Wasm event resource");
-                    }
-                    result.and(cleanup)
+                        result.and(cleanup)
+                    })
                 })
-            }).await;
+                .await;
             if let Err(error) = result {
                 tracing::error!(handler_id, %error, "Wasm event dispatch failed");
             }

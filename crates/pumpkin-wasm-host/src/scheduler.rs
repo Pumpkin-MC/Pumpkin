@@ -40,8 +40,8 @@ fn run_task(server: &Arc<Server>, task: &ScheduledTask) {
                                 let rep = resource.rep();
                                 Ok::<_, wasmtime::Error>((resource, rep))
                             })?;
-                            let result = guest
-                                .call(instance.func_handle_task(), (handler_id, server_resource))
+                            let result = instance
+                                .call_handle_task(&mut guest, handler_id, server_resource)
                                 .await;
                             guest.with(|mut store| {
                                 let _ = store.data_mut().resource_table.delete::<Arc<Server>>(
@@ -59,8 +59,8 @@ fn run_task(server: &Arc<Server>, task: &ScheduledTask) {
                                 let rep = resource.rep();
                                 Ok::<_, wasmtime::Error>((resource, rep))
                             })?;
-                            let result = guest
-                                .call(instance.func_handle_task(), (handler_id, server_resource))
+                            let result = instance
+                                .call_handle_task(&mut guest, handler_id, server_resource)
                                 .await;
                             guest.with(|mut store| {
                                 let _ = store.data_mut().resource_table.delete::<Arc<Server>>(

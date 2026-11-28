@@ -312,11 +312,13 @@ impl Default for PluginManager {
 }
 
 impl PluginManager {
-    /// Create a new plugin manager with the native loader and the given extra loaders
+    /// Create a new plugin manager with the given extra loaders and the native fallback loader
     #[must_use]
     pub fn new(extra_loaders: Vec<Arc<dyn PluginLoader>>) -> Self {
-        let mut loaders: Vec<Arc<dyn PluginLoader>> = vec![Arc::new(NativePluginLoader)];
-        loaders.extend(extra_loaders);
+        // Place extra loaders (such as `WasmPluginLoader` and `NativeWitPluginLoader`) ahead of
+        // the legacy Rust-ABI `NativePluginLoader`, which matches any OS shared library extension.
+        let mut loaders: Vec<Arc<dyn PluginLoader>> = extra_loaders;
+        loaders.push(Arc::new(NativePluginLoader));
         Self {
             plugins: SyncRwLock::new(Vec::new()),
             loaders: RwLock::new(loaders),
