@@ -4,16 +4,25 @@ use std::sync::atomic::Ordering::Relaxed;
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::Block;
+use pumpkin_data::block_properties::{
+    CaveVinesLikeProperties, CaveVinesPlantLikeProperties, NetherWartLikeProperties,
+};
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::sound::Sound;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{rot_lerp, signum};
+use pumpkin_world::chunk::ChunkHeightmapType;
+use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
-use super::{FoxEntity, as_fox};
+use super::{FoxEntity, as_fox, is_alertable};
 use crate::entity::EntityBase;
 use crate::entity::ai::goal::melee_attack::MeleeAttackGoal;
+use crate::entity::ai::goal::move_to_block::MoveToBlockGoal;
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::goal::{Controls, Goal, GoalReach, to_goal_ticks};
 use crate::entity::ai::pathfinder::NavigatorGoal;
@@ -21,6 +30,7 @@ use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use crate::entity::mob::neutral::find_by_uuid;
 use crate::plugin::api::events::entity::entity_target::TargetReason;
+use crate::world::World;
 
 type FoxCheck = fn(&FoxEntity) -> bool;
 
@@ -122,7 +132,7 @@ fn bite(mob: &dyn Mob, target: &dyn EntityBase) {
     if mob.get_mob_entity().try_attack(mob.get_entity(), target) {
         mob.on_attack(target);
     }
-    mob.get_entity().play_sound(Sound::EntityFoxBite);
+    mob.play_entity_sound(Sound::EntityFoxBite, 1.0, 1.0);
 }
 
 fn look_at(mob: &dyn Mob, target: &Arc<dyn EntityBase>, max_yaw: f32, max_pitch: f32) {
@@ -245,13 +255,16 @@ impl Goal for DefendTrustedTargetGoal {
             self.attacker.as_ref().and_then(Weak::upgrade),
             TargetReason::TargetAttackedOwner,
         );
+        if self.track_target_goal.was_cancelled() {
+            return;
+        }
         if let Some(trusted) = self.trusted.as_ref().and_then(Weak::upgrade)
             && let Some(living) = trusted.get_living_entity()
         {
             self.timestamp = living.get_last_hurt_by_mob_timestamp();
         }
         if let Some(fox) = as_fox(mob) {
-            fox.get_entity().play_sound(Sound::EntityFoxAggro);
+            fox.play_entity_sound(Sound::EntityFoxAggro, 1.0, 1.0);
             fox.set_defending(true);
             fox.set_sleeping(false);
         }
@@ -533,6 +546,688 @@ impl Goal for PounceGoal {
             mob.set_mob_target(None, TargetReason::Unknown);
             fox.set_faceplanted(true);
         }
+    }
+
+    fn controls(&self) -> Controls {
+        Controls::MOVE | Controls::JUMP
+    }
+}
+
+/// Vanilla `SeekShelterGoal`: flees rain/thunder or bright sun when far from a village.
+pub struct FoxSeekShelterGoal {
+    speed_modifier: f64,
+    wanted: Option<Vector3<f64>>,
+    interval: i32,
+}
+
+impl FoxSeekShelterGoal {
+    #[must_use]
+    pub const fn new(speed_modifier: f64) -> Self {
+        Self {
+            speed_modifier,
+            wanted: None,
+            interval: to_goal_ticks(100),
+        }
+    }
+
+    fn find_hide_pos(mob: &dyn Mob) -> Option<Vector3<f64>> {
+        let mob_pos = mob.get_entity().block_pos.load();
+        let world = mob.get_entity().world.load();
+        let mut rng = rand::rng();
+
+        for _ in 0..10 {
+            let offset_x = rng.random_range(-10..=10);
+            let offset_y = rng.random_range(-3..=3);
+            let offset_z = rng.random_range(-10..=10);
+            let check_pos = BlockPos::new(
+                mob_pos.0.x + offset_x,
+                mob_pos.0.y + offset_y,
+                mob_pos.0.z + offset_z,
+            );
+
+            if !world.can_see_sky(&check_pos) {
+                let block_at = world.get_block_state(&check_pos);
+                let block_below = world.get_block_state(&check_pos.down());
+                if !block_at.is_solid() && !block_at.is_liquid() && block_below.is_solid() {
+                    return Some(Vector3::new(
+                        f64::from(check_pos.0.x) + 0.5,
+                        f64::from(check_pos.0.y),
+                        f64::from(check_pos.0.z) + 0.5,
+                    ));
+                }
+            }
+        }
+        None
+    }
+
+    fn is_near_village(mob: &dyn Mob, world: &World) -> bool {
+        let block_pos = mob.get_entity().block_pos.load();
+        world.is_village(&block_pos)
+    }
+}
+
+impl Goal for FoxSeekShelterGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(fox) = as_fox(mob) else {
+            return false;
+        };
+        if fox.is_sleeping() || mob.get_mob_entity().get_target().is_some() {
+            return false;
+        }
+        let entity = fox.get_entity();
+        let world = entity.world.load();
+        let pos = entity.block_pos.load();
+        if super::is_thundering(&world) && world.can_see_sky(&pos) {
+            self.wanted = Self::find_hide_pos(mob);
+            return self.wanted.is_some();
+        }
+        if self.interval > 0 {
+            self.interval -= 1;
+            return false;
+        }
+        self.interval = to_goal_ticks(100);
+        if world.is_bright_outside()
+            && world.can_see_sky(&pos)
+            && !Self::is_near_village(mob, &world)
+        {
+            self.wanted = Self::find_hide_pos(mob);
+            return self.wanted.is_some();
+        }
+        false
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        let is_sleeping = as_fox(mob).is_some_and(FoxEntity::is_sleeping);
+        !is_sleeping && mob.get_mob_entity().get_target().is_none() && !mob.is_navigator_idle()
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        if let Some(target) = self.wanted {
+            let entity = mob.get_entity();
+            mob.navigate_to(entity.pos.load(), target, self.speed_modifier);
+        }
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        mob.stop_navigation();
+        self.wanted = None;
+    }
+
+    fn controls(&self) -> Controls {
+        Controls::MOVE
+    }
+}
+
+/// Vanilla `Fox.FoxSleepGoal`: curls up when sheltered during daytime with no alertable entity nearby.
+pub struct SleepGoal {
+    countdown: i32,
+}
+
+impl Default for SleepGoal {
+    fn default() -> Self {
+        Self {
+            countdown: rand::rng().random_range(0..to_goal_ticks(140)),
+        }
+    }
+}
+
+impl SleepGoal {
+    fn has_shelter(fox: &FoxEntity, world: &World) -> bool {
+        let entity = fox.get_entity();
+        let pos = entity.pos.load();
+        let head_y = (pos.y + f64::from(entity.height())).floor() as i32;
+        let top_y = world.get_heightmap_height(
+            ChunkHeightmapType::MotionBlocking,
+            pos.x.floor() as i32,
+            pos.z.floor() as i32,
+        );
+        head_y < top_y
+    }
+
+    fn can_sleep(&mut self, fox: &FoxEntity, world: &World) -> bool {
+        if self.countdown > 0 {
+            self.countdown -= 1;
+            return false;
+        }
+        if fox.mob_entity.get_target().is_some() {
+            return false;
+        }
+        if !world.is_bright_outside() || !Self::has_shelter(fox, world) {
+            return false;
+        }
+        let pos = fox.get_entity().block_pos.load();
+        let block_here = world.get_block_state(&pos).id.to_block();
+        if block_here.id == Block::POWDER_SNOW.id {
+            return false;
+        }
+        if is_alertable(fox, world) {
+            return false;
+        }
+        true
+    }
+}
+
+impl Goal for SleepGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(fox) = as_fox(mob) else {
+            return false;
+        };
+        if fox.mob_entity.get_target().is_some() {
+            return false;
+        }
+        let entity = fox.get_entity();
+        if entity.is_in_water() {
+            return false;
+        }
+        let world = entity.world.load();
+        let input = fox.mob_entity.living_entity.movement_input.load();
+        if input.x.abs() > 1e-4 || input.z.abs() > 1e-4 {
+            return false;
+        }
+
+        self.can_sleep(fox, &world) || fox.is_sleeping()
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        let Some(fox) = as_fox(mob) else {
+            return false;
+        };
+        if fox.get_entity().is_in_water() {
+            return false;
+        }
+        let world = fox.get_entity().world.load();
+        self.can_sleep(fox, &world)
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        if let Some(fox) = as_fox(mob) {
+            fox.set_sitting(false);
+            fox.set_crouching(false);
+            fox.set_interested(false);
+            fox.mob_entity
+                .living_entity
+                .jumping
+                .store(false, std::sync::atomic::Ordering::SeqCst);
+            fox.set_sleeping(true);
+            mob.stop_navigation();
+        }
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.countdown = rand::rng().random_range(0..to_goal_ticks(140));
+        if let Some(fox) = as_fox(mob) {
+            fox.clear_states();
+        }
+    }
+
+    fn controls(&self) -> Controls {
+        Controls::MOVE | Controls::LOOK | Controls::JUMP
+    }
+}
+
+/// Vanilla `PerchAndSearchGoal`: sits and looks around for threats.
+#[derive(Default)]
+pub struct PerchAndSearchGoal {
+    rel_x: f64,
+    rel_z: f64,
+    look_time: i32,
+    looks_remaining: i32,
+}
+
+impl PerchAndSearchGoal {
+    fn reset_look(&mut self) {
+        let rnd = 2.0 * std::f64::consts::PI * rand::rng().random::<f64>();
+        self.rel_x = rnd.cos();
+        self.rel_z = rnd.sin();
+        self.look_time = to_goal_ticks(80 + rand::rng().random_range(0..20));
+    }
+}
+
+impl Goal for PerchAndSearchGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(fox) = as_fox(mob) else {
+            return false;
+        };
+        if fox.is_sleeping()
+            || fox.is_pouncing()
+            || fox.is_crouching()
+            || fox.get_entity().is_in_water()
+            || mob.get_mob_entity().get_target().is_some()
+            || mob
+                .get_mob_entity()
+                .living_entity
+                .get_last_hurt_by_mob_id()
+                .is_some()
+            || !mob.is_navigator_idle()
+            || rand::random::<f32>() >= 0.02
+        {
+            return false;
+        }
+
+        let world = fox.get_entity().world.load();
+        !is_alertable(fox, &world)
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        let Some(fox) = as_fox(mob) else {
+            return false;
+        };
+        self.looks_remaining > 0
+            && !fox.get_entity().is_in_water()
+            && !fox.is_sleeping()
+            && mob.get_mob_entity().get_target().is_none()
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        self.reset_look();
+        self.looks_remaining = 2 + rand::rng().random_range(0..3);
+        if let Some(fox) = as_fox(mob) {
+            fox.set_sitting(true);
+        }
+        mob.stop_navigation();
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        if let Some(fox) = as_fox(mob) {
+            fox.set_sitting(false);
+        }
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.look_time -= 1;
+        if self.look_time <= 0 {
+            self.looks_remaining -= 1;
+            self.reset_look();
+        }
+
+        let entity = mob.get_entity();
+        let pos = entity.pos.load();
+        let eye_y = entity.get_eye_pos().y;
+        let look_target = Vector3::new(pos.x + self.rel_x * 5.0, eye_y, pos.z + self.rel_z * 5.0);
+
+        let mut look = mob
+            .get_mob_entity()
+            .look_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        look.look_at_position(mob, look_target);
+    }
+
+    fn controls(&self) -> Controls {
+        Controls::MOVE | Controls::LOOK
+    }
+}
+
+/// Vanilla `FoxSearchForItemsGoal`: runs towards nearby dropped items on the ground.
+#[derive(Default)]
+pub struct FoxSearchForItemsGoal {
+    target_item: Option<Weak<dyn EntityBase>>,
+    update_countdown_ticks: i32,
+    try_ticks: i32,
+    cooldown_ticks: i32,
+}
+
+impl Goal for FoxSearchForItemsGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if self.cooldown_ticks > 0 {
+            self.cooldown_ticks -= 1;
+            return false;
+        }
+        let Some(fox) = as_fox(mob) else {
+            return false;
+        };
+        let mouth_item = fox.get_mouth_item();
+        if !mouth_item.is_empty() {
+            return false;
+        }
+        if fox.mob_entity.get_target().is_some()
+            || !fox.can_move()
+            || !fox.mob_entity.can_pick_up_loot()
+        {
+            return false;
+        }
+        let entity = fox.get_entity();
+        let world = entity.world.load();
+        if !world.level_info.load().game_rules.mob_griefing {
+            return false;
+        }
+        if rand::rng().random_range(0..to_goal_ticks(10)) != 0 {
+            return false;
+        }
+
+        let pos = entity.pos.load();
+        let aabb = pumpkin_util::math::boundingbox::BoundingBox::new(
+            Vector3::new(pos.x - 8.0, pos.y - 8.0, pos.z - 8.0),
+            Vector3::new(pos.x + 8.0, pos.y + 8.0, pos.z + 8.0),
+        );
+        let nearby = world.get_entities_at_box(&aabb);
+        let mut closest: Option<(f64, Weak<dyn EntityBase>)> = None;
+
+        for candidate in nearby {
+            let Some(item) = candidate.get_item_entity() else {
+                continue;
+            };
+            if item.get_pickup_delay() > 0 || !item.get_entity().is_alive() {
+                continue;
+            }
+            let stack = item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            if stack.is_empty() || !fox.can_hold_item(&stack) {
+                continue;
+            }
+            let dist_sq = pos.squared_distance_to_vec(&item.get_entity().pos.load());
+            if dist_sq <= 64.0 {
+                match &closest {
+                    Some((best, _)) if dist_sq >= *best => {}
+                    _ => closest = Some((dist_sq, Arc::downgrade(&candidate))),
+                }
+            }
+        }
+
+        self.target_item = closest.map(|(_, item)| item);
+        self.target_item.is_some()
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        if self.try_ticks >= 120 {
+            return false;
+        }
+        let Some(fox) = as_fox(mob) else {
+            return false;
+        };
+        let mouth_item = fox.get_mouth_item();
+        if !mouth_item.is_empty()
+            || !fox.can_move()
+            || !fox.mob_entity.can_pick_up_loot()
+            || !fox
+                .get_entity()
+                .world
+                .load()
+                .level_info
+                .load()
+                .game_rules
+                .mob_griefing
+        {
+            return false;
+        }
+        let Some(target) = self.target_item.as_ref().and_then(Weak::upgrade) else {
+            return false;
+        };
+        if !target.get_entity().is_alive() {
+            return false;
+        }
+        target.get_item_entity().is_some_and(|item_ent| {
+            if item_ent.get_pickup_delay() > 0 {
+                return false;
+            }
+            let stack = item_ent
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            fox.can_hold_item(&stack)
+        })
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        self.update_countdown_ticks = 0;
+        self.try_ticks = 0;
+        if let Some(fox) = as_fox(mob) {
+            fox.clear_states();
+        }
+        if let Some(target) = self.target_item.as_ref().and_then(Weak::upgrade) {
+            let fox_pos = mob.get_entity().pos.load();
+            let item_pos = target.get_entity().pos.load();
+            mob.navigate_to(fox_pos, item_pos, 1.2);
+            self.update_countdown_ticks = 10;
+        }
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.try_ticks += 1;
+        let Some(fox) = as_fox(mob) else {
+            return;
+        };
+        let Some(target) = self.target_item.as_ref().and_then(Weak::upgrade) else {
+            return;
+        };
+
+        let fox_pos = mob.get_entity().pos.load();
+        let item_pos = target.get_entity().pos.load();
+        let dist = fox_pos.squared_distance_to_vec(&item_pos).sqrt();
+
+        if dist <= 1.5 {
+            let world = mob.get_entity().world.load_full();
+            fox.pick_up_item_stack(target.as_ref(), &world);
+            self.target_item = None;
+            self.cooldown_ticks = 0;
+        } else {
+            self.update_countdown_ticks = (self.update_countdown_ticks - 1).max(0);
+            if mob.is_navigator_idle() || self.update_countdown_ticks <= 0 {
+                self.update_countdown_ticks = 10;
+                mob.navigate_to(fox_pos, item_pos, 1.2);
+            }
+        }
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        mob.stop_navigation();
+        if self.try_ticks >= 120 {
+            self.cooldown_ticks = to_goal_ticks(100);
+        }
+        self.target_item = None;
+        self.update_countdown_ticks = 0;
+        self.try_ticks = 0;
+    }
+
+    fn controls(&self) -> Controls {
+        Controls::MOVE
+    }
+}
+
+/// Vanilla `FoxEatBerriesGoal`: finds sweet berry bushes or cave vines, approaches, and picks them.
+pub struct FoxEatBerriesGoal {
+    move_to_block: MoveToBlockGoal,
+    ticks_waited: i32,
+}
+
+impl FoxEatBerriesGoal {
+    #[must_use]
+    pub fn new(speed: f64) -> Self {
+        let move_to_block = MoveToBlockGoal::new(
+            speed,
+            12,
+            1,
+            Box::new(|world, pos| {
+                let state = world.get_block_state(&pos);
+                let block_id = state.id.to_block().id;
+                if block_id == Block::SWEET_BERRY_BUSH.id {
+                    let props =
+                        NetherWartLikeProperties::from_state_id(world.get_block_state_id(&pos));
+                    props.age >= 2
+                } else if block_id == Block::CAVE_VINES.id {
+                    CaveVinesLikeProperties::from_state_id(world.get_block_state_id(&pos)).berries
+                } else if block_id == Block::CAVE_VINES_PLANT.id {
+                    CaveVinesPlantLikeProperties::from_state_id(world.get_block_state_id(&pos))
+                        .berries
+                } else {
+                    false
+                }
+            }),
+        )
+        .with_accepted_distance(2.0)
+        .with_recalculate_interval(100);
+
+        Self {
+            move_to_block,
+            ticks_waited: 0,
+        }
+    }
+
+    fn give_or_drop(fox: &FoxEntity, world: &Arc<World>, pos: &BlockPos, item: &'static Item) {
+        if fox.get_mouth_item().is_empty() {
+            fox.set_mouth_item(ItemStack::new(1, item));
+            fox.mob_entity
+                .set_guaranteed_drop(&EquipmentSlot::MAIN_HAND);
+            fox.ticks_since_eaten
+                .store(0, std::sync::atomic::Ordering::Relaxed);
+        } else {
+            world.drop_stack(pos, ItemStack::new(1, item));
+        }
+    }
+
+    fn harvest_berries(
+        fox: &FoxEntity,
+        world: &Arc<World>,
+        pos: &BlockPos,
+        target_vec: &Vector3<f64>,
+    ) {
+        if !world.level_info.load().game_rules.mob_griefing {
+            return;
+        }
+        let state_id = world.get_block_state_id(pos);
+        let block = Block::from_state_id(state_id);
+        if block.id == Block::SWEET_BERRY_BUSH.id {
+            let mut props = NetherWartLikeProperties::from_state_id(state_id);
+            if props.age >= 2 {
+                let count: u8 = 1 + rand::rng().random_range(0..=1) + u8::from(props.age == 3);
+                let mut remaining: u8 = count;
+
+                if fox.get_mouth_item().is_empty() {
+                    fox.set_mouth_item(ItemStack::new(1, &Item::SWEET_BERRIES));
+                    fox.mob_entity
+                        .set_guaranteed_drop(&EquipmentSlot::MAIN_HAND);
+                    fox.ticks_since_eaten
+                        .store(0, std::sync::atomic::Ordering::Relaxed);
+                    remaining = remaining.saturating_sub(1);
+                }
+
+                if remaining > 0 {
+                    world.drop_stack(pos, ItemStack::new(remaining, &Item::SWEET_BERRIES));
+                }
+
+                props.age = 1;
+                world.set_block_state(
+                    pos,
+                    props.to_state_id(&Block::SWEET_BERRY_BUSH),
+                    BlockFlags::NOTIFY_ALL,
+                );
+            }
+
+            world.play_sound(
+                Sound::BlockSweetBerryBushPickBerries,
+                SoundCategory::Blocks,
+                target_vec,
+            );
+        } else if block.id == Block::CAVE_VINES.id {
+            let mut props = CaveVinesLikeProperties::from_state_id(state_id);
+            if props.berries {
+                props.berries = false;
+                world.set_block_state(
+                    pos,
+                    props.to_state_id(&Block::CAVE_VINES),
+                    BlockFlags::NOTIFY_ALL,
+                );
+                Self::give_or_drop(fox, world, pos, &Item::GLOW_BERRIES);
+            }
+
+            world.play_sound(
+                Sound::BlockCaveVinesPickBerries,
+                SoundCategory::Blocks,
+                target_vec,
+            );
+        } else if block.id == Block::CAVE_VINES_PLANT.id {
+            let mut props = CaveVinesPlantLikeProperties::from_state_id(state_id);
+            if props.berries {
+                props.berries = false;
+                world.set_block_state(
+                    pos,
+                    props.to_state_id(&Block::CAVE_VINES_PLANT),
+                    BlockFlags::NOTIFY_ALL,
+                );
+                Self::give_or_drop(fox, world, pos, &Item::GLOW_BERRIES);
+            }
+
+            world.play_sound(
+                Sound::BlockCaveVinesPickBerries,
+                SoundCategory::Blocks,
+                target_vec,
+            );
+        }
+    }
+}
+
+impl Goal for FoxEatBerriesGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let Some(fox) = as_fox(mob) else {
+            return false;
+        };
+        if !fox.can_move() || mob.get_mob_entity().get_target().is_some() {
+            return false;
+        }
+        let world = mob.get_entity().world.load();
+        if !world.level_info.load().game_rules.mob_griefing {
+            return false;
+        }
+        self.move_to_block.can_start(mob)
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        let Some(fox) = as_fox(mob) else {
+            return false;
+        };
+        let world = mob.get_entity().world.load();
+        if !world.level_info.load().game_rules.mob_griefing {
+            return false;
+        }
+        fox.can_move()
+            && mob.get_mob_entity().get_target().is_none()
+            && self.ticks_waited < 40
+            && self.move_to_block.should_continue(mob)
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        self.ticks_waited = 0;
+        if let Some(fox) = as_fox(mob) {
+            fox.clear_states();
+        }
+        self.move_to_block.start(mob);
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.ticks_waited = 0;
+        self.move_to_block.stop(mob);
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.move_to_block.tick(mob);
+        let Some(fox) = as_fox(mob) else {
+            return;
+        };
+
+        if self.move_to_block.is_reached_target() {
+            mob.stop_navigation();
+            self.ticks_waited += 1;
+            if self.ticks_waited >= 40 {
+                let entity = mob.get_entity();
+                let target_vec = Vector3::new(
+                    f64::from(self.move_to_block.target_pos.0.x) + 0.5,
+                    f64::from(self.move_to_block.target_pos.0.y),
+                    f64::from(self.move_to_block.target_pos.0.z) + 0.5,
+                );
+                let world = entity.world.load_full();
+                Self::harvest_berries(fox, &world, &self.move_to_block.target_pos, &target_vec);
+            }
+        } else if rand::random::<f32>() < 0.05 {
+            fox.play_entity_sound(Sound::EntityFoxSniff, 1.0, 1.0);
+        }
+    }
+
+    fn should_run_every_tick(&self) -> bool {
+        true
     }
 
     fn controls(&self) -> Controls {
