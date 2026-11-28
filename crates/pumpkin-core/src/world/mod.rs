@@ -6107,7 +6107,10 @@ impl World {
             if Block::from_state_id(current_state) == new_block {
                 if flags.contains(BlockFlags::SKIP_BLOCK_ADDED_CALLBACK) {
                     if new_block.default_state.block_entity_type != u16::MAX {
-                        self.get_block_entity(position);
+                        self.level
+                            .read_chunk_sync(&position.chunk_position(), |chunk| {
+                                self.get_block_entity_in_chunk(chunk, position, true);
+                            });
                     }
                 } else {
                     self.on_block_placed(
@@ -7418,7 +7421,7 @@ impl World {
         let chunk_pos = block_pos.chunk_position();
         self.level
             .read_chunk_sync(&chunk_pos, |chunk| {
-                self.get_block_entity_in_chunk(chunk, block_pos)
+                self.get_block_entity_in_chunk(chunk, block_pos, false)
             })
             .map_or(BlockEntityLookup::Unloaded, BlockEntityLookup::Loaded)
     }
@@ -7427,6 +7430,7 @@ impl World {
         &self,
         chunk: &ChunkData,
         block_pos: &BlockPos,
+        initialize: bool,
     ) -> Option<Arc<dyn BlockEntity>> {
         let relative = block_pos.chunk_relative_position();
         chunk
@@ -7435,7 +7439,19 @@ impl World {
                 relative.x as usize,
                 relative.y,
                 relative.z as usize,
-                |state| self.resolve_block_entity(chunk, block_pos, state, true),
+                |state| {
+                    // Creaking can resolve a state-only home after loading a chunk.
+                    // Other blocks keep Pumpkin's existing placement and migration
+                    // lifecycle until their callbacks can reuse an early instance.
+                    let recover_missing_heart =
+                        Block::from_state_id(state) == &Block::CREAKING_HEART;
+                    self.resolve_block_entity(
+                        chunk,
+                        block_pos,
+                        state,
+                        initialize || recover_missing_heart,
+                    )
+                },
             )
             .flatten()
     }
@@ -7748,7 +7764,8 @@ impl World {
                     .block_entities
                     .get(&chunk_pos)
                     .is_some_and(|m| m.contains_key(&pos));
-                if !already_loaded && let Some(entity) = self.get_block_entity_in_chunk(chunk, &pos)
+                if !already_loaded
+                    && let Some(entity) = self.get_block_entity_in_chunk(chunk, &pos, true)
                 {
                     migrated.push(entity);
                 }
@@ -9094,23 +9111,68 @@ mod tests {
         let chest = Block::CHEST.default_state.id;
         assert!(
             world
-                .write_block_state_if(&position, heart, BlockFlags::NOTIFY_ALL, |_| true)
+                .write_block_state_if(&position, chest, BlockFlags::NOTIFY_ALL, |_| true)
                 .is_some()
         );
         let replaced = world
-            .write_block_state_if(&position, chest, BlockFlags::NOTIFY_ALL, |_| true)
+            .write_block_state_if(&position, heart, BlockFlags::NOTIFY_ALL, |_| true)
             .ok_or("missing fixture chunk")?;
-        assert_eq!(replaced.previous, heart);
-        let early_chest = world
+        assert_eq!(replaced.previous, chest);
+        let early_heart = world
             .get_block_entity(&position)
-            .ok_or("missing early chest")?;
-        assert_eq!(early_chest.resource_location(), "minecraft:chest");
+            .ok_or("missing early heart")?;
+        assert_eq!(early_heart.resource_location(), "minecraft:creaking_heart");
 
-        world.on_block_state_set(&position, replaced, chest, BlockFlags::NOTIFY_ALL);
-        let placed_chest = world
+        world.on_block_state_set(&position, replaced, heart, BlockFlags::NOTIFY_ALL);
+        let placed_heart = world
             .get_block_entity(&position)
-            .ok_or("missing placed chest")?;
-        assert!(Arc::ptr_eq(&early_chest, &placed_chest));
+            .ok_or("missing placed heart")?;
+        assert!(Arc::ptr_eq(&early_heart, &placed_heart));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn furnace_lookup_waits_for_placement() -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_world::{chunk::ChunkData, world::BlockFlags};
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let position = BlockPos::new(8, 64, 8);
+        let chunk_pos = position.chunk_position();
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk_pos, ChunkData::empty_sync(chunk_pos.x, chunk_pos.y));
+        let state = Block::FURNACE.default_state.id;
+        let flags = BlockFlags::NOTIFY_ALL;
+        let change = world
+            .write_block_state_if(&position, state, flags, |_| true)
+            .ok_or("missing fixture chunk")?;
+        assert_eq!(change.previous, Block::AIR.default_state.id);
+
+        assert!(world.get_block_entity(&position).is_none());
+        world.on_block_state_set(&position, change, state, flags);
+        let furnace = world
+            .get_block_entity(&position)
+            .ok_or("missing placed furnace")?;
+        assert_eq!(furnace.resource_location(), "minecraft:furnace");
+        assert!(furnace.get_inventory().is_some());
+        let skipped_position = position.east();
+        assert_eq!(
+            world.set_block_state(
+                &skipped_position,
+                state,
+                BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+            ),
+            Block::AIR.default_state.id
+        );
+        let skipped_furnace = world
+            .block_entities
+            .get(&chunk_pos)
+            .and_then(|entities| entities.get(&skipped_position).cloned())
+            .ok_or("skipped placement did not initialize a furnace")?;
+        assert_eq!(skipped_furnace.resource_location(), "minecraft:furnace");
         world.level.shutdown().await;
         Ok(())
     }
@@ -9392,10 +9454,7 @@ mod tests {
             Some(42)
         );
 
-        let restored_chest = world
-            .get_block_entity_nbt(&missing)
-            .ok_or("missing chest was not initialized")?;
-        assert_eq!(restored_chest.get_string("id"), Some("minecraft:chest"));
+        assert!(world.get_block_entity_nbt(&missing).is_none());
         assert_eq!(
             world
                 .get_block_entity_nbt(&linked)
