@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:dispenser_lava_bucket_places_and_picks_up",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

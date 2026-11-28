@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:item_entities_merge",
+  "max_ticks": 80,
+  "setup_ticks": 0
+}

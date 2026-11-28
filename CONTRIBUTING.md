@@ -141,6 +141,10 @@ Run the affected package checks, boot the server, and test visible behavior with
 
 For performance claims, compare the same build profile and scenario before and after. Keep the population, seed, view distance, player position and warmup consistent. Choose relevant cases from small populations, dense and spread groups, mixed mob types, and spawn/remove churn. Wait for the fixture to settle, and discard runs affected by unrelated machine load.
 
+##### Function tests
+
+When you change gameplay behavior, a function test can set up a small world and check the result automatically. See [Integration testing](INTEGRATION_TESTING.md) to add one.
+
 ### Additional Information
 
 We encourage you to comment on existing issues and pull requests to share your thoughts and provide feedback.

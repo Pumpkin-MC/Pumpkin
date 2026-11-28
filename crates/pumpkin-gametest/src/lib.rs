@@ -1,30 +1,35 @@
 pub mod block_based;
+pub mod context;
+pub mod entity;
 pub mod error;
-pub mod helper;
 pub mod manager;
 pub mod model;
 pub mod runner;
+pub mod selector;
 pub mod structure;
 pub mod world;
 
 pub use block_based::BlockBasedTest;
-pub use error::{GameTestError, GameTestResult};
-pub use helper::{
-    GameTestFunction, GameTestHelper, GameTestSequence, get_test_function,
-    register_flaky_function_test, register_function_test, register_test_function,
-    registered_test_definitions,
+pub use context::{
+    GameTestContext, GameTestFunction, GameTestSequence, get_test_function, register_test_function,
 };
+pub use entity::GameTestEntity;
+pub use error::{GameTestError, GameTestResult};
 pub use manager::{
-    GameTestBatchReport, GameTestManager, GameTestReporter, GameTestRetryOptions, GameTestRunner,
+    GameTestBatchReport, GameTestManager, GameTestOutcome, GameTestOutcomeStatus, GameTestReporter,
+    GameTestRetryOptions, GameTestRunner, RecordingGameTestReporter, VERIFY_TEST_BATCH_SIZE,
 };
 pub use model::{GameTestDefinition, GameTestRotation, TestType};
 pub use runner::{GameTestSession, GameTestState, TestRunner};
+pub use selector::resource_selector_matches;
 pub use structure::{
-    GameTestPosition, GameTestStructureBlock, GameTestStructureTemplate, TestBlockMode,
-    TestStructureInstance, clear_structure_area, encase_structure, place_structure,
-    place_structure_with_controller_rotation, remove_barriers,
+    GameTestPosition, GameTestStructureBlock, GameTestStructureEntity, GameTestStructureTemplate,
+    TestBlockMode, TestStructureInstance, clear_placed_test, clear_structure_area,
+    encase_structure, place_existing_structure, place_structure, place_structure_block_entity,
+    place_structure_with_controller_rotation,
+    place_structure_with_controller_rotation_and_entities, remove_barriers,
 };
-pub use world::GameTestWorld;
+pub use world::{GameTestWorld, SimulatedPlayer};
 
 #[cfg(test)]
 mod tests {
@@ -45,13 +50,19 @@ mod tests {
     #[derive(Default)]
     struct InMemoryTestWorld {
         blocks: Mutex<HashMap<BlockPos, BlockStateId>>,
+        fail_block_state_at: Mutex<Option<BlockPos>>,
         test_blocks_triggered: Mutex<HashMap<BlockPos, bool>>,
         test_block_messages: Mutex<HashMap<BlockPos, String>>,
         instance_state: Mutex<InstanceState>,
+        spawned_entities: Mutex<Vec<NbtCompound>>,
     }
 
     #[async_trait]
     impl GameTestWorld for InMemoryTestWorld {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
         async fn block_state_id(&self, position: &BlockPos) -> BlockStateId {
             self.blocks
                 .lock()
@@ -67,6 +78,18 @@ mod tests {
             block_state_id: BlockStateId,
             _flags: BlockFlags,
         ) -> GameTestResult<()> {
+            if block_state_id != Block::AIR.default_state.id
+                && self
+                    .fail_block_state_at
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .as_ref()
+                    == Some(position)
+            {
+                return Err(GameTestError::World(
+                    "Test block placement failed".to_string(),
+                ));
+            }
             self.blocks
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -96,6 +119,14 @@ mod tests {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(*position, message.to_owned());
             }
+            Ok(())
+        }
+
+        async fn spawn_structure_entity(&self, nbt: &NbtCompound) -> GameTestResult<()> {
+            self.spawned_entities
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(nbt.clone());
             Ok(())
         }
 
@@ -197,6 +228,140 @@ mod tests {
     }
 
     #[test]
+    fn cancelled_optional_request_does_not_fail_required_summary() {
+        let report = GameTestBatchReport::new(Arc::new(SilentReporter), 1);
+        report.cancel_before_start("test", false);
+        assert!(report.is_done());
+        assert_eq!(report.failed_required(), 0);
+        assert_eq!(report.failed_optional(), 1);
+    }
+
+    #[tokio::test]
+    async fn failed_structure_placement_keeps_bounds_for_cleanup() -> GameTestResult<()> {
+        let world = Arc::new(InMemoryTestWorld::default());
+        let first_block = BlockPos::new(0, 66, 1);
+        let failed_block = BlockPos::new(1, 66, 1);
+        *world
+            .fail_block_state_at
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(failed_block);
+        let template = Arc::new(GameTestStructureTemplate::new(
+            [2, 1, 1],
+            vec![
+                GameTestStructureBlock {
+                    position: [0, 0, 0],
+                    state: Block::STONE.default_state.id,
+                    nbt: None,
+                    test_mode: None,
+                },
+                GameTestStructureBlock {
+                    position: [1, 0, 0],
+                    state: Block::GOLD_BLOCK.default_state.id,
+                    nbt: None,
+                    test_mode: None,
+                },
+            ],
+        )?);
+        let definition = GameTestDefinition {
+            instance_type: TestType::BlockBased,
+            environment: serde_json::Value::String("minecraft:default".to_string()),
+            dimension: "minecraft:overworld".to_string(),
+            function: None,
+            structure: "test:partial".to_string(),
+            max_ticks: 20,
+            setup_ticks: 0,
+            required: true,
+            rotation: GameTestRotation::None,
+            manual_only: false,
+            max_attempts: 1,
+            required_successes: 1,
+            sky_access: false,
+            padding: 0,
+        };
+        let test = BlockBasedTest::new("test:partial", definition);
+        let mut session = GameTestSession::new(test, world.clone(), template, 0, 0);
+
+        session.tick().await;
+        assert!(matches!(&session.state, GameTestState::Failed { .. }));
+        assert_eq!(
+            world.block_state_id(&first_block).await,
+            Block::STONE.default_state.id
+        );
+        assert_eq!(
+            world.block_state_id(&BlockPos::new(0, 65, 0)).await,
+            Block::TEST_INSTANCE_BLOCK.default_state.id
+        );
+
+        session.clear_placement().await?;
+        assert_eq!(
+            world.block_state_id(&first_block).await,
+            Block::AIR.default_state.id
+        );
+        assert_eq!(
+            world.block_state_id(&BlockPos::new(0, 65, 0)).await,
+            Block::AIR.default_state.id
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn clearing_sky_access_test_preserves_open_ceiling() -> GameTestResult<()> {
+        let world = InMemoryTestWorld::default();
+        let controller = BlockPos::new(0, 65, 0);
+        let origin = BlockPos::new(0, 66, 1);
+        let placement = TestStructureInstance::new(
+            controller,
+            origin,
+            [3, 1, 3],
+            [3, 1, 3],
+            GameTestRotation::None,
+        );
+        let ceiling = BlockPos::new(1, 67, 2);
+        let shell = BlockPos::new(1, 65, 2);
+        world
+            .set_block_state(
+                &controller,
+                Block::TEST_INSTANCE_BLOCK.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            )
+            .await?;
+        world
+            .set_block_state(
+                &origin,
+                Block::STONE.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            )
+            .await?;
+        world
+            .set_block_state(
+                &ceiling,
+                Block::BARRIER.default_state.id,
+                BlockFlags::NOTIFY_ALL,
+            )
+            .await?;
+        encase_structure(&world, &placement, true).await?;
+
+        clear_placed_test(&world, &placement, 0, true).await?;
+        assert_eq!(
+            world.block_state_id(&ceiling).await,
+            Block::BARRIER.default_state.id
+        );
+        assert_eq!(
+            world.block_state_id(&shell).await,
+            Block::AIR.default_state.id
+        );
+        assert_eq!(
+            world.block_state_id(&origin).await,
+            Block::AIR.default_state.id
+        );
+        assert_eq!(
+            world.block_state_id(&controller).await,
+            Block::AIR.default_state.id
+        );
+        Ok(())
+    }
+
+    #[test]
     fn parses_modern_structure_palette_nbt_and_empty_ids() {
         let mut modern_entry = NbtCompound::new();
         modern_entry.put_string("id", "minecraft:test_block".to_string());
@@ -252,6 +417,7 @@ mod tests {
         let definition = GameTestDefinition {
             instance_type: TestType::Function,
             environment: serde_json::Value::String("minecraft:default".to_string()),
+            dimension: "minecraft:overworld".to_string(),
             function: Some("test:seq".to_string()),
             structure: "minecraft:empty_3x3x3".to_string(),
             max_ticks: 10,
@@ -265,16 +431,14 @@ mod tests {
             padding: 0,
         };
 
-        let func: Arc<dyn GameTestFunction> = Arc::new(|helper: GameTestHelper| async move {
+        let func: Arc<dyn GameTestFunction> = Arc::new(|test: GameTestContext| async move {
             let pos = BlockPos::new(1, 1, 1);
-            helper
-                .start_sequence()
-                .then_execute(move |helper| async move {
-                    helper.set_block_default(&pos, &Block::REDSTONE_BLOCK).await
+            test.start_sequence()
+                .then_execute(move |test| async move {
+                    test.set_block_default(&pos, &Block::REDSTONE_BLOCK).await
                 })
-                .then_execute_after(2, move |helper| async move {
-                    helper
-                        .assert_block_present(&pos, &Block::REDSTONE_BLOCK)
+                .then_execute_after(2, move |test| async move {
+                    test.assert_block_present(&pos, &Block::REDSTONE_BLOCK)
                         .await
                 })
                 .then_succeed();
@@ -299,6 +463,41 @@ mod tests {
     }
 
     #[tokio::test]
+    #[expect(clippy::expect_used, reason = "unit test fixtures")]
+    async fn resolves_plugin_function_from_test_instance_id() {
+        let definition: GameTestDefinition = serde_json::from_str(
+            r#"{
+                "type": "minecraft:function",
+                "environment": "minecraft:default",
+                "structure": "minecraft:empty",
+                "function": "example_plugin:custom_callback",
+                "max_ticks": 10
+            }"#,
+        )
+        .expect("valid function test instance");
+        register_test_function(
+            "example_plugin:custom_callback",
+            |test: GameTestContext| async move {
+                test.succeed();
+                Ok(())
+            },
+        );
+
+        let world: Arc<dyn GameTestWorld> = Arc::new(InMemoryTestWorld::default());
+        let template =
+            Arc::new(GameTestStructureTemplate::empty([1, 1, 1]).expect("empty template"));
+        let test = BlockBasedTest::new("example_plugin:custom_instance", definition);
+        let mut session = GameTestSession::new(test, world, template, 0, 0);
+        for _ in 0..8 {
+            session.tick().await;
+            if session.state.is_finished() {
+                break;
+            }
+        }
+        assert!(matches!(session.state, GameTestState::Passed { .. }));
+    }
+
+    #[tokio::test]
     async fn retries_flaky_test_until_required_successes_reached() {
         let attempts = Arc::new(Mutex::new(0u32));
         let world: Arc<dyn GameTestWorld> = Arc::new(InMemoryTestWorld::default());
@@ -308,6 +507,7 @@ mod tests {
         let definition = GameTestDefinition {
             instance_type: TestType::Function,
             environment: serde_json::Value::String("minecraft:default".to_string()),
+            dimension: "minecraft:overworld".to_string(),
             function: Some("test:flaky".to_string()),
             structure: "minecraft:empty".to_string(),
             max_ticks: 5,
@@ -322,7 +522,7 @@ mod tests {
         };
 
         let attempts_clone = attempts.clone();
-        let func: Arc<dyn GameTestFunction> = Arc::new(move |helper: GameTestHelper| {
+        let func: Arc<dyn GameTestFunction> = Arc::new(move |test: GameTestContext| {
             let attempts = attempts_clone.clone();
             async move {
                 let current = {
@@ -333,9 +533,9 @@ mod tests {
                     *guard
                 };
                 if current == 1 {
-                    Err(helper.fail("First attempt fails"))
+                    Err(test.fail("First attempt fails"))
                 } else {
-                    helper.succeed();
+                    test.succeed();
                     Ok(())
                 }
             }
@@ -363,5 +563,233 @@ mod tests {
         assert!(report.is_done());
         assert!(report.all_required_passed());
         assert_eq!(report.failed_required(), 0);
+        assert_eq!(report.total_runs(), 3);
+        let outcomes = report.outcomes();
+        assert_eq!(outcomes.len(), 1);
+        assert_eq!(outcomes[0].id, "test:flaky");
+        assert_eq!(outcomes[0].status, GameTestOutcomeStatus::Passed);
+        assert_eq!(outcomes[0].attempts, 3);
+        assert_eq!(outcomes[0].successes, 2);
+        assert!(outcomes[0].error.is_none());
+    }
+
+    #[tokio::test]
+    async fn stopping_test_clears_placement_and_records_one_cancellation() -> GameTestResult<()> {
+        let world = Arc::new(InMemoryTestWorld::default());
+        let template = Arc::new(GameTestStructureTemplate::new(
+            [1, 1, 1],
+            vec![GameTestStructureBlock {
+                position: [0, 0, 0],
+                state: Block::STONE.default_state.id,
+                nbt: None,
+                test_mode: None,
+            }],
+        )?);
+        let definition = GameTestDefinition {
+            instance_type: TestType::BlockBased,
+            environment: serde_json::Value::String("minecraft:default".to_string()),
+            dimension: "minecraft:overworld".to_string(),
+            function: None,
+            structure: "test:stop".to_string(),
+            max_ticks: 20,
+            setup_ticks: 0,
+            required: true,
+            rotation: GameTestRotation::None,
+            manual_only: false,
+            max_attempts: 1,
+            required_successes: 1,
+            sky_access: false,
+            padding: 0,
+        };
+        let test = BlockBasedTest::new("test:stop", definition);
+        let session = GameTestSession::new(test, world.clone(), template, 0, 0);
+        let reporter: Arc<dyn GameTestReporter> = Arc::new(SilentReporter);
+        let report = Arc::new(GameTestBatchReport::new(reporter.clone(), 1));
+        let mut runner = GameTestRunner::new();
+        runner.enqueue(GameTestManager::new(
+            session,
+            GameTestRetryOptions::no_retries(),
+            report.clone(),
+            reporter,
+        ));
+
+        runner.tick().await;
+        assert_eq!(runner.active_len(), 1);
+        assert!(!report.is_done());
+        assert_eq!(
+            world.block_state_id(&BlockPos::new(0, 66, 1)).await,
+            Block::STONE.default_state.id
+        );
+        assert!(
+            world
+                .blocks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .values()
+                .any(|state| *state == Block::BARRIER.default_state.id)
+        );
+
+        assert!(runner.cancel_and_clear().await.is_empty());
+        assert!(runner.cancel_and_clear().await.is_empty());
+        assert!(runner.is_empty());
+        assert!(report.is_done());
+        assert_eq!(report.remaining_tests(), 0);
+        assert_eq!(report.total_runs(), 1);
+        let outcomes = report.outcomes();
+        assert_eq!(outcomes.len(), 1);
+        assert_eq!(outcomes[0].id, "test:stop");
+        assert_eq!(outcomes[0].status, GameTestOutcomeStatus::Cancelled);
+        assert_eq!(outcomes[0].attempts, 0);
+        assert!(
+            world
+                .blocks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .values()
+                .all(|state| *state == Block::AIR.default_state.id)
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn places_rotated_structure_entity_with_transformed_nbt() -> GameTestResult<()> {
+        let mut entity_nbt = NbtCompound::new();
+        entity_nbt.put_string("id", "minecraft:armor_stand".to_string());
+        entity_nbt.put_string("UUID", "old-uuid".to_string());
+        entity_nbt.put("block_pos", NbtTag::IntArray(vec![0, 1, 1]));
+        entity_nbt.put(
+            "Rotation",
+            NbtTag::List(vec![NbtTag::Float(45.0), NbtTag::Float(10.0)]),
+        );
+
+        let mut entity = NbtCompound::new();
+        entity.put(
+            "pos",
+            NbtTag::List(vec![
+                NbtTag::Double(0.25),
+                NbtTag::Double(1.0),
+                NbtTag::Double(1.5),
+            ]),
+        );
+        entity.put(
+            "blockPos",
+            NbtTag::List(vec![NbtTag::Int(0), NbtTag::Int(1), NbtTag::Int(1)]),
+        );
+        entity.put_compound("nbt", entity_nbt);
+
+        let mut root = NbtCompound::new();
+        root.put_int("DataVersion", CURRENT_MC_DATA_VERSION);
+        root.put(
+            "size",
+            NbtTag::List(vec![NbtTag::Int(3), NbtTag::Int(2), NbtTag::Int(4)]),
+        );
+        root.put("palette", NbtTag::List(Vec::new()));
+        root.put("blocks", NbtTag::List(Vec::new()));
+        root.put("entities", NbtTag::List(vec![NbtTag::Compound(entity)]));
+
+        let template = GameTestStructureTemplate::from_nbt(&root)?;
+        let world = InMemoryTestWorld::default();
+        place_structure_with_controller_rotation(
+            &world,
+            &template,
+            "test:entity",
+            GameTestRotation::Clockwise90,
+            GameTestRotation::None,
+            GameTestPosition::new(10, Some(70), 20),
+            0,
+        )
+        .await?;
+        let entities = world
+            .spawned_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(entities.len(), 1);
+        let placed = &entities[0];
+        assert_eq!(placed.get_string("id"), Some("minecraft:armor_stand"));
+        assert!(placed.get("UUID").is_none());
+        assert_eq!(
+            placed.get("block_pos"),
+            Some(&NbtTag::IntArray(vec![12, 72, 21]))
+        );
+        assert_eq!(
+            placed.get_list("Pos"),
+            Some(
+                &[
+                    NbtTag::Double(12.5),
+                    NbtTag::Double(72.0),
+                    NbtTag::Double(21.25)
+                ][..]
+            )
+        );
+        assert_eq!(
+            placed.get_list("Rotation"),
+            Some(&[NbtTag::Float(135.0), NbtTag::Float(10.0)][..])
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn reruns_follow_completion_order_after_the_current_wave() {
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let world: Arc<dyn GameTestWorld> = Arc::new(InMemoryTestWorld::default());
+        #[expect(clippy::expect_used, reason = "unit test fixture")]
+        let template =
+            Arc::new(GameTestStructureTemplate::empty([1, 1, 1]).expect("1x1x1 empty template"));
+        let reporter: Arc<dyn GameTestReporter> = Arc::new(SilentReporter);
+        let report = Arc::new(GameTestBatchReport::new(reporter.clone(), 2));
+        let mut runner = GameTestRunner::new();
+
+        for (index, (name, setup_ticks)) in [("slow", 2), ("fast", 0)].into_iter().enumerate() {
+            let definition = GameTestDefinition {
+                instance_type: TestType::Function,
+                environment: serde_json::Value::String("minecraft:default".to_string()),
+                dimension: "minecraft:overworld".to_string(),
+                function: Some(format!("test:{name}")),
+                structure: "minecraft:empty".to_string(),
+                max_ticks: 10,
+                setup_ticks,
+                required: true,
+                rotation: GameTestRotation::None,
+                manual_only: false,
+                max_attempts: 1,
+                required_successes: 1,
+                sky_access: false,
+                padding: 0,
+            };
+            let calls = calls.clone();
+            let function: Arc<dyn GameTestFunction> = Arc::new(move |test: GameTestContext| {
+                let calls = calls.clone();
+                async move {
+                    calls
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .push(name);
+                    test.succeed();
+                    Ok(())
+                }
+            });
+            let test =
+                BlockBasedTest::new(format!("test:{name}"), definition).with_function(function);
+            let session =
+                GameTestSession::new(test, world.clone(), template.clone(), index as i32 * 8, 0);
+            runner.enqueue(GameTestManager::new(
+                session,
+                GameTestRetryOptions::new(2, false),
+                report.clone(),
+                reporter.clone(),
+            ));
+        }
+
+        for _ in 0..30 {
+            runner.tick().await;
+            if runner.is_empty() {
+                break;
+            }
+        }
+        assert!(report.is_done());
+        let calls = calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(calls.as_slice(), ["fast", "slow", "fast", "slow"]);
     }
 }

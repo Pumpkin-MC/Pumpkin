@@ -71,17 +71,26 @@ impl CommandExecutor for ForceloadAddExecutor {
             ));
         }
 
-        {
-            let mut forced = world
-                .forced_chunks
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            for x in min_x..=max_x {
-                for z in min_z..=max_z {
-                    forced.insert(Vector2::new(x, z));
+        let mut forced = world
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut chunk_loading = world
+            .level
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for x in min_x..=max_x {
+            for z in min_z..=max_z {
+                let pos = Vector2::new(x, z);
+                if forced.insert(pos) {
+                    chunk_loading.add_force_ticket(pos);
                 }
             }
         }
+        chunk_loading.send_change();
+        drop(chunk_loading);
+        drop(forced);
 
         world.update_active_chunks();
 
@@ -154,17 +163,26 @@ impl CommandExecutor for ForceloadRemoveExecutor {
             ));
         }
 
-        {
-            let mut forced = world
-                .forced_chunks
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            for x in min_x..=max_x {
-                for z in min_z..=max_z {
-                    forced.remove(&Vector2::new(x, z));
+        let mut forced = world
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut chunk_loading = world
+            .level
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for x in min_x..=max_x {
+            for z in min_z..=max_z {
+                let pos = Vector2::new(x, z);
+                if forced.remove(&pos) {
+                    chunk_loading.remove_force_ticket(pos);
                 }
             }
         }
+        chunk_loading.send_change();
+        drop(chunk_loading);
+        drop(forced);
 
         world.update_active_chunks();
 
@@ -213,7 +231,15 @@ impl CommandExecutor for ForceloadRemoveAllExecutor {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let count = forced.len();
-            forced.clear();
+            let mut chunk_loading = world
+                .level
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for pos in forced.drain() {
+                chunk_loading.remove_force_ticket(pos);
+            }
+            chunk_loading.send_change();
             count
         };
 

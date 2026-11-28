@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:redstone_repeater_delay_4_ticks",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:dispenser_armor_stand_spawns_entity",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

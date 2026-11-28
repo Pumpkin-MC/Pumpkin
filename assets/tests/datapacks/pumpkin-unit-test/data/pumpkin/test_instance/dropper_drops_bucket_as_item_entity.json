@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:dropper_drops_bucket_as_item_entity",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:redstone_wire_corner_south_west",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

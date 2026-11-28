@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:brewing_returns_glass_bottle_from_dragon_breath",
+  "max_ticks": 430,
+  "setup_ticks": 0
+}

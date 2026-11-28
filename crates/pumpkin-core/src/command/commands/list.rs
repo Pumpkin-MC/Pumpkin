@@ -28,8 +28,13 @@ struct ListCommandExecutor(ListMode);
 
 impl CommandExecutor for ListCommandExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let players: Vec<Arc<Player>> = context.server().get_all_players();
-        let players_len = players.len();
+        let players: Vec<Arc<Player>> = context
+            .server()
+            .get_all_players()
+            .into_iter()
+            .filter(|player| player.client.visible_in_list())
+            .collect();
+        let online_count = players.len();
 
         let list = match self.0 {
             ListMode::Names => get_player_names(&players),
@@ -39,7 +44,8 @@ impl CommandExecutor for ListCommandExecutor {
         let max_players = context.source.output.as_player().map_or_else(
             || context.server().advanced_config.networking.java.max_players,
             |player| match player.client.as_ref() {
-                crate::net::ClientPlatform::Java(_) => {
+                crate::net::ClientPlatform::Java(_)
+                | crate::net::ClientPlatform::SimulatedPlayer(_) => {
                     context.server().advanced_config.networking.java.max_players
                 }
                 crate::net::ClientPlatform::Bedrock(_) => {
@@ -58,7 +64,7 @@ impl CommandExecutor for ListCommandExecutor {
                 COMMANDS_LIST_PLAYERS,
                 COMMANDS_LIST_PLAYERS,
                 [
-                    TextComponent::text(players_len.to_string()),
+                    TextComponent::text(online_count.to_string()),
                     TextComponent::text(max_players.to_string()),
                     list,
                 ],
@@ -66,7 +72,7 @@ impl CommandExecutor for ListCommandExecutor {
             false,
         );
 
-        Ok(players_len as i32)
+        Ok(online_count as i32)
     }
 }
 

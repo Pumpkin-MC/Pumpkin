@@ -193,8 +193,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: debug-${{ runner.os }}-${{ runner.arch }}
-      - name: Run pumpkin-tester (headless bots + Mojang GameTests)
-        run: cargo run -p pumpkin-tester
+      - name: Run pumpkin-headless-client-bot
+        run: cargo run -p pumpkin-headless-client-bot
 
   test_android:
     name: Test on Android AArch64

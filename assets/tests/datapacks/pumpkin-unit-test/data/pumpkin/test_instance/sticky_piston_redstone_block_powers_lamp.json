@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:sticky_piston_redstone_block_powers_lamp",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

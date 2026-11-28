@@ -27,7 +27,7 @@ members = [
     "crates/pumpkin-world",
     "tools/pumpkin-codegen",
     "tools/pumpkin-fuzzer",
-    "tools/pumpkin-tester",
+    "tools/pumpkin-headless-client-bot",
 ]
 
 # [workspace.lints.rust]
@@ -191,6 +191,7 @@ aes = { version = "0.9", default-features = false }
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
 cfb8 = { version = "0.9", default-features = false }
+clap = { version = "4.6.7", default-features = false, features = ["derive", "std", "help", "usage", "error-context"] }
 colored = { version = "3.1", default-features = false }
 console-subscriber = { version = "0.5.0", default-features = false }
 crc32c = { version = "0.6.9", default-features = false }
@@ -258,9 +259,9 @@ notify = { version = "8.2.2", default-features = false, features = ["macos_fseve
 sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh64"] }
 
-wasmtime = { version = "50.0.1", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
-wasmtime-wasi = { version = "50.0.1", default-features = false, features = ["p2", "p3"] }
-wasmtime-wasi-http = { version = "50.0.1", default-features = false, features = ["p2", "p3", "default-send-request"] }
+wasmtime = { version = "51.0.0", default-features = false, features = ["runtime", "component-model", "component-model-async", "async", "cache", "cranelift", "gc", "gc-drc", "threads", "std"] }
+wasmtime-wasi = { version = "51.0.0", default-features = false, features = ["p2", "p3"] }
+wasmtime-wasi-http = { version = "51.0.0", default-features = false, features = ["p2", "p3", "default-send-request"] }
 
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.12", default-features = false }

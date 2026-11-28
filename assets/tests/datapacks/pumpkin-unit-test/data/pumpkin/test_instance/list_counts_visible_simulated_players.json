@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:list_counts_visible_simulated_players",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

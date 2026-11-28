@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:target_block_projectile_hit",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

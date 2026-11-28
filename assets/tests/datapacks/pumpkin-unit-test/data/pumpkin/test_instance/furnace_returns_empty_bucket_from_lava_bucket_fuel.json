@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:furnace_returns_empty_bucket_from_lava_bucket_fuel",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

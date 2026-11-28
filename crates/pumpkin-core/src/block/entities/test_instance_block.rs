@@ -171,14 +171,7 @@ impl TestInstanceData {
         if let Some(ref test) = self.test {
             nbt.put_string("test", test.clone());
         }
-        nbt.put(
-            "size",
-            NbtTag::IntArray(vec![
-                self.size[0].clamp(0, MAX_TEST_STRUCTURE_SIZE),
-                self.size[1].clamp(0, MAX_TEST_STRUCTURE_SIZE),
-                self.size[2].clamp(0, MAX_TEST_STRUCTURE_SIZE),
-            ]),
-        );
+        nbt.put("size", NbtTag::IntArray(self.size.to_vec()));
         nbt.put_string("rotation", self.rotation.serialized_name().to_string());
         nbt.put_bool("ignore_entities", self.ignore_entities);
         nbt.put_string("status", self.status.serialized_name().to_string());
@@ -196,7 +189,7 @@ impl TestInstanceData {
         let test = nbt
             .get_string("test")
             .and_then(|raw| parse_structure_identifier(raw).map(|(_, _, id)| id));
-        let size = read_clamped_size(nbt);
+        let size = read_size(nbt);
         let rotation = nbt
             .get_string("rotation")
             .and_then(TestInstanceRotation::from_serialized_name)
@@ -219,22 +212,14 @@ impl TestInstanceData {
     }
 }
 
-fn read_clamped_size(nbt: &NbtCompound) -> [i32; 3] {
+fn read_size(nbt: &NbtCompound) -> [i32; 3] {
     match nbt.get("size") {
-        Some(NbtTag::IntArray(arr)) if arr.len() == 3 => [
-            arr[0].clamp(0, MAX_TEST_STRUCTURE_SIZE),
-            arr[1].clamp(0, MAX_TEST_STRUCTURE_SIZE),
-            arr[2].clamp(0, MAX_TEST_STRUCTURE_SIZE),
-        ],
+        Some(NbtTag::IntArray(arr)) if arr.len() == 3 => [arr[0], arr[1], arr[2]],
         Some(NbtTag::List(list)) if list.len() == 3 => {
             let x = list[0].extract_int().unwrap_or(0);
             let y = list[1].extract_int().unwrap_or(0);
             let z = list[2].extract_int().unwrap_or(0);
-            [
-                x.clamp(0, MAX_TEST_STRUCTURE_SIZE),
-                y.clamp(0, MAX_TEST_STRUCTURE_SIZE),
-                z.clamp(0, MAX_TEST_STRUCTURE_SIZE),
-            ]
+            [x, y, z]
         }
         _ => [0, 0, 0],
     }
@@ -249,15 +234,7 @@ pub struct TestInstanceErrorMarker {
 #[must_use]
 pub fn lookup_test_instance(server: &Server, raw_test_id: &str) -> Option<GameTestDefinition> {
     let (_, _, canonical_id) = parse_structure_identifier(raw_test_id)?;
-    crate::server::builtin_game_tests::ensure_builtin_game_tests_registered();
-    server
-        .datapack_manager
-        .get_test_instance(&canonical_id)
-        .or_else(|| {
-            pumpkin_gametest::registered_test_definitions()
-                .into_iter()
-                .find_map(|(id, def)| (id == canonical_id).then_some(def))
-        })
+    server.datapack_manager.get_test_instance(&canonical_id)
 }
 
 #[must_use]
@@ -770,7 +747,7 @@ impl TestInstanceBlockBlockEntity {
         }
 
         self.clear_error_markers();
-        stop_game_tests();
+        stop_game_tests(&server);
 
         let report = Arc::new(GameTestBatchReport::new(
             Arc::new(PlayerTestReporter {
@@ -897,7 +874,7 @@ mod tests {
     fn instance_data_nbt_roundtrip_canonicalizes_id_and_preserves_component() {
         let original = TestInstanceData {
             test: Some("minecraft:always_pass".to_string()),
-            size: [4, 5, 6],
+            size: [129, 128, 256],
             rotation: TestInstanceRotation::Clockwise90,
             ignore_entities: true,
             status: TestInstanceStatus::Finished,

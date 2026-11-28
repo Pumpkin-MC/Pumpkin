@@ -10,7 +10,8 @@ use crate::command::argument_builder::{ArgumentBuilder, argument, command};
 use crate::command::argument_types::client_parsed::MessageArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::data::SaveJSONConfiguration;
@@ -32,20 +33,27 @@ const ERROR_BANIP_FAILED: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_BANIP_FAILED,
 );
 
-fn parse_ip(target: &str, server: &Server) -> Option<IpAddr> {
-    IpAddr::from_str(target).ok().or_else(|| {
-        server
-            .get_player_by_name(target)
-            .map(|p| p.client.address().ip())
-    })
+const ERROR_BANIP_SIMULATED: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("Simulated players have no IP address to ban.");
+
+fn parse_ip(target: &str, server: &Server) -> Result<IpAddr, CommandSyntaxError> {
+    if let Ok(ip) = IpAddr::from_str(target) {
+        return Ok(ip);
+    }
+    let player = server
+        .get_player_by_name(target)
+        .ok_or_else(|| ERROR_BANIP_INVALID.create_without_context())?;
+    player
+        .client
+        .remote_ip()
+        .ok_or_else(|| ERROR_BANIP_SIMULATED.create_without_context())
 }
 
 fn ban_ip(context: &CommandContext, target: &str, reason: Option<String>) -> CommandExecutorResult {
     let server = context.source.server();
     let reason = reason.unwrap_or_else(|| "Banned by an operator.".to_string());
 
-    let target_ip =
-        parse_ip(target, server).ok_or_else(|| ERROR_BANIP_INVALID.create_without_context())?;
+    let target_ip = parse_ip(target, server)?;
 
     let mut banned_ips = server.data.banned_ip_list.write().unwrap();
 
@@ -75,12 +83,7 @@ fn ban_ip(context: &CommandContext, target: &str, reason: Option<String>) -> Com
         true,
     );
 
-    let players_to_kick: Vec<_> = server
-        .get_all_players()
-        .iter()
-        .filter(|player| player.client.address().ip() == target_ip)
-        .cloned()
-        .collect();
+    let players_to_kick = server.get_players_by_ip(target_ip);
 
     let kick_count = players_to_kick.len();
     if !players_to_kick.is_empty() {

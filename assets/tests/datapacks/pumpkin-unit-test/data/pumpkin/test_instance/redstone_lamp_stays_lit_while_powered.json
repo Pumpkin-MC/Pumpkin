@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:redstone_lamp_stays_lit_while_powered",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

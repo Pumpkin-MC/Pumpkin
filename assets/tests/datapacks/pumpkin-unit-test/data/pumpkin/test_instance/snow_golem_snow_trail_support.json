@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:snow_golem_snow_trail_support",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

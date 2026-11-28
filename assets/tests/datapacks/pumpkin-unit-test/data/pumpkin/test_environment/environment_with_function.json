@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:all_of",
+  "definitions": [
+    { "type": "minecraft:game_rules", "rules": { "minecraft:advance_time": false, "minecraft:random_tick_speed": 7 } },
+    { "type": "minecraft:clock_time", "clock": "minecraft:overworld", "time": 18000 },
+    { "type": "minecraft:weather", "weather": "thunder" },
+    { "type": "minecraft:function", "setup": "pumpkin:test_environment_setup", "teardown": "pumpkin:test_environment_teardown" }
+  ]
+}

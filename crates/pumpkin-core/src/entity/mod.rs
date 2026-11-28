@@ -4384,7 +4384,7 @@ impl Entity {
                 .get_player()
                 .and_then(|p| match p.client.as_ref() {
                     ClientPlatform::Bedrock(client) => Some(client),
-                    ClientPlatform::Java(_) => None,
+                    ClientPlatform::Java(_) | ClientPlatform::SimulatedPlayer(_) => None,
                 });
             if !tracked.has_bedrock_watchers() && self_bedrock.is_none() {
                 return;

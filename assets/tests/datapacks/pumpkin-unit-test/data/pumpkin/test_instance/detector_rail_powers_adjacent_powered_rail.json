@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:detector_rail_powers_adjacent_powered_rail",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

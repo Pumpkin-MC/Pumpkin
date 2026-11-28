@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use crate::helper::GameTestFunction;
+use crate::context::GameTestFunction;
 use crate::model::{GameTestDefinition, GameTestRotation, TestType};
 
 #[derive(Clone)]

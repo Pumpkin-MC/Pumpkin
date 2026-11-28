@@ -8,15 +8,16 @@ use std::time::Instant;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::block_based::BlockBasedTest;
-use crate::error::{GameTestError, GameTestResult};
-use crate::helper::{
-    GameTestControllerState, GameTestHelper, SequenceEvent, SequenceEventKind, get_test_function,
+use crate::context::{
+    GameTestContext, GameTestControllerState, SequenceEvent, SequenceEventKind, get_test_function,
 };
+use crate::error::{GameTestError, GameTestResult};
 use crate::model::{GameTestRotation, TestType};
+use crate::structure::clear_placed_test;
 use crate::structure::{
     GameTestPosition, GameTestStructureTemplate, TestBlockMode, TestStructureInstance,
-    clear_success_entities, encase_structure, place_structure_with_controller_rotation,
-    remove_barriers,
+    clear_success_entities, encase_structure, place_prepared_structure, remove_barriers,
+    resolve_structure_placement,
 };
 use crate::world::GameTestWorld;
 
@@ -37,12 +38,25 @@ pub struct GameTestSession {
     test_x: i32,
     test_y: Option<i32>,
     test_z: i32,
+    ignore_entities: bool,
     chunks_loaded: bool,
     started_at: Option<Instant>,
     controller: Arc<Mutex<GameTestControllerState>>,
 }
 
 impl GameTestSession {
+    pub(crate) const fn environment(&self) -> &serde_json::Value {
+        &self.test.definition().environment
+    }
+
+    pub(crate) fn environment_world_key(&self) -> usize {
+        self.world.environment_world_key()
+    }
+
+    pub(crate) fn environment_world(&self) -> Arc<dyn GameTestWorld> {
+        self.world.clone()
+    }
+
     #[must_use]
     pub fn new(
         test: BlockBasedTest,
@@ -82,6 +96,7 @@ impl GameTestSession {
             test_x,
             test_y: None,
             test_z,
+            ignore_entities: false,
             chunks_loaded: false,
             started_at: None,
             controller: Arc::new(Mutex::new(GameTestControllerState::default())),
@@ -91,6 +106,12 @@ impl GameTestSession {
     #[must_use]
     pub const fn with_y(mut self, test_y: Option<i32>) -> Self {
         self.test_y = test_y;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_ignore_entities(mut self, ignore_entities: bool) -> Self {
+        self.ignore_entities = ignore_entities;
         self
     }
 
@@ -112,10 +133,37 @@ impl GameTestSession {
             test_x: self.test_x,
             test_y: self.test_y,
             test_z: self.test_z,
+            ignore_entities: self.ignore_entities,
             chunks_loaded: false,
             started_at: None,
             controller: Arc::new(Mutex::new(GameTestControllerState::default())),
         }
+    }
+
+    pub async fn clear_placement(&self) -> GameTestResult<()> {
+        self.world.disconnect_simulated_players().await?;
+        if let Some(placement) = self.current_placement() {
+            clear_placed_test(
+                self.world.as_ref(),
+                &placement,
+                self.test.definition().padding,
+                self.test.definition().sky_access,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    fn current_placement(&self) -> Option<TestStructureInstance> {
+        self.controller
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .placement
+            .or(self.placement)
+    }
+
+    pub async fn disconnect_simulated_players(&self) -> GameTestResult<()> {
+        self.world.disconnect_simulated_players().await
     }
 
     #[must_use]
@@ -144,38 +192,45 @@ impl GameTestSession {
     }
 
     async fn tick_queued(&mut self) {
-        let placement = place_structure_with_controller_rotation(
+        let placement = resolve_structure_placement(
             self.world.as_ref(),
             &self.template,
-            self.test.id(),
             self.effective_rotation,
-            self.extra_rotation,
             GameTestPosition::new(self.test_x, self.test_y, self.test_z),
             self.test.definition().padding,
         )
         .await;
+        self.test_y = Some(placement.test_instance_pos().0.y);
+        self.placement = Some(placement);
 
-        match placement {
-            Ok(placement) => {
-                if let Err(error) = encase_structure(
-                    self.world.as_ref(),
-                    &placement,
-                    self.test.definition().sky_access,
-                )
-                .await
-                {
-                    self.finish_failure(0, error, None).await;
-                    return;
-                }
-
-                self.test_y = Some(placement.test_instance_pos().0.y);
-                self.placement = Some(placement);
-                // Vanilla's StructureSpawner calls startExecution(1), so even a test
-                // with zero setup ticks waits until the next server tick to start.
-                self.state = GameTestState::SettingUp { elapsed_ticks: 0 };
-            }
-            Err(error) => self.finish_failure(0, error, None).await,
+        if let Err(error) = place_prepared_structure(
+            self.world.as_ref(),
+            &self.template,
+            self.test.id(),
+            self.extra_rotation,
+            &placement,
+            self.test.definition().padding,
+            self.ignore_entities,
+        )
+        .await
+        {
+            self.finish_failure(0, error, None).await;
+            return;
         }
+        if let Err(error) = encase_structure(
+            self.world.as_ref(),
+            &placement,
+            self.test.definition().sky_access,
+        )
+        .await
+        {
+            self.finish_failure(0, error, None).await;
+            return;
+        }
+
+        // Vanilla's StructureSpawner calls startExecution(1), so even a test
+        // with zero setup ticks waits until the next server tick to start.
+        self.state = GameTestState::SettingUp { elapsed_ticks: 0 };
     }
 
     async fn tick_setup(&mut self, elapsed_ticks: u32) {
@@ -338,7 +393,6 @@ impl GameTestSession {
                             .as_deref()
                             .and_then(get_test_function)
                     })
-                    .or_else(|| get_test_function(self.test.id()))
                     .ok_or_else(|| {
                         let name = self
                             .test
@@ -351,21 +405,22 @@ impl GameTestSession {
                         ))
                     })?;
 
-                let helper = self.make_helper(tick)?;
-                function.run(helper).await
+                let test = self.make_test_context(tick)?;
+                function.run(test).await
             }
         }
     }
 
-    fn make_helper(&self, tick: u32) -> GameTestResult<GameTestHelper> {
+    fn make_test_context(&self, tick: u32) -> GameTestResult<GameTestContext> {
         let placement = self.placement.ok_or_else(|| {
             GameTestError::World("GameTest has no placed structure instance".to_string())
         })?;
-        Ok(GameTestHelper::with_controller(
+        Ok(GameTestContext::with_controller(
             self.world.clone(),
             placement,
             tick,
             self.test.max_ticks(),
+            self.test.definition().sky_access,
             self.controller.clone(),
         ))
     }
@@ -375,7 +430,7 @@ impl GameTestSession {
         tick: u32,
         fail_if_not_complete: bool,
     ) -> GameTestResult<RunningEvaluation> {
-        let helper = self.make_helper(tick)?;
+        let test = self.make_test_context(tick)?;
 
         if let Some(eval) = self.check_controller_outcome() {
             return Ok(eval);
@@ -400,7 +455,7 @@ impl GameTestSession {
         };
 
         for mut callback in due_callbacks {
-            if let Err(error) = callback(helper.with_tick(tick)).await {
+            if let Err(error) = callback(test.with_tick(tick)).await {
                 self.controller
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -420,7 +475,7 @@ impl GameTestSession {
 
         for seq_idx in 0..sequence_count {
             if let Some(eval) = self
-                .tick_sequence(seq_idx, tick, &helper, fail_if_not_complete)
+                .tick_sequence(seq_idx, tick, &test, fail_if_not_complete)
                 .await
             {
                 return Ok(eval);
@@ -442,7 +497,7 @@ impl GameTestSession {
         &self,
         seq_idx: usize,
         tick: u32,
-        helper: &GameTestHelper,
+        test: &GameTestContext,
         fail_if_not_complete: bool,
     ) -> Option<RunningEvaluation> {
         loop {
@@ -461,7 +516,7 @@ impl GameTestSession {
 
             match event.kind {
                 SequenceEventKind::WaitUntil(mut callback) => {
-                    match callback(helper.with_tick(tick)).await {
+                    match callback(test.with_tick(tick)).await {
                         Ok(()) => {
                             if let Some(failure) = self.advance_sequence_tick(
                                 seq_idx,
@@ -490,7 +545,7 @@ impl GameTestSession {
                     }
                 }
                 SequenceEventKind::Execute(mut callback) => {
-                    if let Err(error) = callback(helper.with_tick(tick)).await {
+                    if let Err(error) = callback(test.with_tick(tick)).await {
                         return Some(RunningEvaluation::Failed(error));
                     }
                     if let Some(failure) = self.advance_sequence_tick(
@@ -525,7 +580,7 @@ impl GameTestSession {
                         }
                         return None;
                     }
-                    if let Err(error) = callback(helper.with_tick(tick)).await {
+                    if let Err(error) = callback(test.with_tick(tick)).await {
                         return Some(RunningEvaluation::Failed(error));
                     }
                     if let Some(failure) = self.advance_sequence_tick(
@@ -543,7 +598,7 @@ impl GameTestSession {
                     mut callback,
                 } => {
                     if tick < last_tick.saturating_add(delta) {
-                        if let Err(error) = callback(helper.with_tick(tick)).await {
+                        if let Err(error) = callback(test.with_tick(tick)).await {
                             return Some(RunningEvaluation::Failed(error));
                         }
                         self.push_front_sequence_event(
@@ -707,10 +762,10 @@ impl GameTestSession {
     }
 
     async fn handle_attempt_pass(&mut self, tick: u32) {
-        if let Some(placement) = &self.placement {
+        if let Some(placement) = self.current_placement() {
             // GameTestInfo::succeed removes non-player entities before the listeners
             // report success or schedule a copyReset rerun.
-            if let Err(error) = clear_success_entities(self.world.as_ref(), placement).await {
+            if let Err(error) = clear_success_entities(self.world.as_ref(), &placement).await {
                 self.state = GameTestState::Failed { tick, error };
                 return;
             }
@@ -728,7 +783,7 @@ impl GameTestSession {
             // on every passed execution, including executions that will be rerun.
             if let Err(error) = remove_barriers(
                 self.world.as_ref(),
-                placement,
+                &placement,
                 self.test.definition().sky_access,
             )
             .await

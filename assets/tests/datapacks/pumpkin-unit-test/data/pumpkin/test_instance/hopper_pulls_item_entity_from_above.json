@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:hopper_pulls_item_entity_from_above",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

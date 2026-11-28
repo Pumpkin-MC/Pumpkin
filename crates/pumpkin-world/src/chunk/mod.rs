@@ -95,8 +95,8 @@ pub struct ChunkEntityData {
     /// Chunk Z
     pub z: i32,
     pub data: std::sync::Mutex<Vec<NbtCompound>>,
-    /// Set once the serialized entities have been consumed and spawned. From then on the
-    /// live entity list is the source of truth and `data` is rebuilt from it on every save.
+    /// Whether the live entity list is authoritative. Activation consumes `data`, and
+    /// unloading restores the saved records and clears this flag.
     pub live: AtomicBool,
 
     pub dirty: AtomicBool,

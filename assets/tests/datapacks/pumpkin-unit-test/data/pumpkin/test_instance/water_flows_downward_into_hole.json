@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:water_flows_downward_into_hole",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}

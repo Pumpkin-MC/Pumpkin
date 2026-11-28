@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:copper_bulb_variants_toggle_and_remember_lit",
+  "max_ticks": 30,
+  "setup_ticks": 0
+}

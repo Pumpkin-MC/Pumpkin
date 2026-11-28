@@ -62,6 +62,8 @@ default = [
     "block_transformer",
     "trial_spawner",
     "test_instance",
+    "test_environment",
+    "test_function",
     "painting_variant",
     "poi_type",
     "context_provider",
@@ -111,6 +113,8 @@ context_provider = []
 painting_variant = []
 poi_type = ["tag"]
 test_instance = []
+test_environment = []
+test_function = []
 trial_spawner = []
 block_transformer = ["block", "sound", "world", "tag"]
 map_color = []

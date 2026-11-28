@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:function",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "function": "pumpkin:piston_destroys_torch_and_moss_carpet",
+  "max_ticks": 20,
+  "setup_ticks": 0
+}
