@@ -82,12 +82,16 @@ fn check_flags(server: &Server, pack: &str, enabling: bool) -> Result<(), Comman
             ERROR_DISABLE_FEATURE.create_without_context(TextComponent::text(pack.to_owned()))
         );
     }
-    // Vanilla doesn't know a pack it can't read.
-    let Some(missing) = crate::data::datapack::DatapackManager::missing_features(server, pack)
-    else {
-        return Err(
-            ERROR_UNKNOWN_DATAPACK.create_without_context(TextComponent::text(pack.to_owned()))
-        );
+    let missing = match crate::data::datapack::DatapackManager::missing_features(server, pack) {
+        Some(missing) => missing,
+        // An enabled pack that became unreadable requests nothing, so it stays removable.
+        None if !enabling => Vec::new(),
+        // Vanilla doesn't know a pack it can't read.
+        None => {
+            return Err(
+                ERROR_UNKNOWN_DATAPACK.create_without_context(TextComponent::text(pack.to_owned()))
+            );
+        }
     };
     if missing.is_empty() {
         return Ok(());

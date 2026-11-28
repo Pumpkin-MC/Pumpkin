@@ -1589,10 +1589,7 @@ impl DatapackManager {
             return Err(format!("Unknown datapack '{resolved_name}'"));
         };
         if !missing.is_empty() {
-            return Err(format!(
-                "Pack '{resolved_name}' cannot be enabled, since required flags are not enabled in this world: {}!",
-                missing.join(", ")
-            ));
+            return Err(no_flags_error(&resolved_name, &missing));
         }
 
         let target = resolved_name;
@@ -1692,6 +1689,12 @@ impl DatapackManager {
             return Err(format!(
                 "Pack '{target_pack}' cannot be disabled, since it is part of an enabled flag!"
             ));
+        }
+        // Vanilla `DataPackCommand.getPack` checks the flags when disabling too.
+        if let Some(missing) = Self::missing_features(server, &target_pack)
+            && !missing.is_empty()
+        {
+            return Err(no_flags_error(&target_pack, &missing));
         }
 
         let target = target_pack;
@@ -2486,6 +2489,14 @@ fn available_packs(world_path: &Path, warn_unreadable: bool) -> Vec<AvailablePac
     }
     packs.sort_by(|a, b| a.id.cmp(&b.id));
     packs
+}
+
+/// Vanilla `commands.datapack.enable.no_flags`, which it uses for disabling as well.
+fn no_flags_error(pack: &str, missing: &[&str]) -> String {
+    format!(
+        "Pack '{pack}' cannot be enabled, since required flags are not enabled in this world: {}!",
+        missing.join(", ")
+    )
 }
 
 /// Why vanilla `Pack.readPackMetadata` refuses a pack.
