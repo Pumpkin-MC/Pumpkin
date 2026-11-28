@@ -586,24 +586,13 @@ pub async fn on_unload(
                     PluginApiVersion::V0_2 => {
                         let plugin =
                             guest_exports::<pumpkin_wasm_host_v0_2::Plugin>(&plugin_instance)?;
-                        let (context_res, context_rep) = guest.with(|mut store| {
-                            let resource = store.data_mut().add(context)?;
-                            let rep = resource.rep();
-                            Ok::<_, wasmtime::Error>((resource, rep))
-                        })?;
+                        let context_res = guest.with(|mut store| store.data_mut().add(context))?;
 
-                        let result = guest
+                        // The guest owns the context once lowered, including its destruction.
+                        guest
                             .call(plugin.func_on_unload(), (context_res,))
                             .await
-                            .map(|(result,)| result);
-
-                        guest.with(|mut store| {
-                            let _ = store.data_mut().resource_table.delete::<Arc<Context>>(
-                                wasmtime::component::Resource::new_own(context_rep),
-                            );
-                        });
-
-                        result
+                            .map(|(result,)| result)
                     }
                     #[cfg(not(feature = "v0_2"))]
                     PluginApiVersion::V0_2 => Err(v0_2_disabled()),
