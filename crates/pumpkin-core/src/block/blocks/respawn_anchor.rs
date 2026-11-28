@@ -65,8 +65,11 @@ impl BlockBehaviour for RespawnAnchorBlock {
         }
 
         if !args.world.dimension.respawn_anchor_works {
-            args.world
-                .break_block(args.position, None, BlockFlags::SKIP_DROPS);
+            args.world.break_block(
+                args.position,
+                None,
+                BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
+            );
             let center_pos = args.position.to_centered_f64();
             let explosion = Explosion::new(
                 5.0,
