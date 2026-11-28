@@ -30,6 +30,7 @@ static PUMPKIN_NL_BE_JSON: &str = include_str!("../../../assets/translations/nl_
 static PUMPKIN_NL_NL_JSON: &str = include_str!("../../../assets/translations/nl_nl.json");
 static PUMPKIN_RO_RO_JSON: &str = include_str!("../../../assets/translations/ro_ro.json");
 static PUMPKIN_RU_RU_JSON: &str = include_str!("../../../assets/translations/ru_ru.json");
+static PUMPKIN_SL_SI_JSON: &str = include_str!("../../../assets/translations/sl_si.json");
 static PUMPKIN_SQ_AL_JSON: &str = include_str!("../../../assets/translations/sq_al.json");
 static PUMPKIN_ZH_CN_JSON: &str = include_str!("../../../assets/translations/zh_cn.json");
 static PUMPKIN_ZH_HK_JSON: &str = include_str!("../../../assets/translations/zh_hk.json");
@@ -340,6 +341,7 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
         let pumpkin_nl_nl = parse_json(PUMPKIN_NL_NL_JSON);
         let pumpkin_ro_ro = parse_json(PUMPKIN_RO_RO_JSON);
         let pumpkin_ru_ru = parse_json(PUMPKIN_RU_RU_JSON);
+        let pumpkin_sl_si = parse_json(PUMPKIN_SL_SI_JSON);
         let pumpkin_sq_al = parse_json(PUMPKIN_SQ_AL_JSON);
         let pumpkin_zh_cn = parse_json(PUMPKIN_ZH_CN_JSON);
         let pumpkin_zh_hk = parse_json(PUMPKIN_ZH_HK_JSON);
@@ -398,6 +400,9 @@ pub static TRANSLATIONS: LazyLock<Mutex<[HashMap<String, String>; Locale::COUNT]
         }
         for (key, value) in pumpkin_ru_ru {
             array[Locale::RuRu as usize].insert(format!("pumpkin:{key}"), value);
+        }
+        for (key, value) in pumpkin_sl_si {
+            array[Locale::SlSi as usize].insert(format!("pumpkin:{key}"), value);
         }
         for (key, value) in pumpkin_sq_al {
             array[Locale::SqAl as usize].insert(format!("pumpkin:{key}"), value);
