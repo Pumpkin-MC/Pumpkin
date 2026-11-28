@@ -70,10 +70,14 @@ pub fn use_cart_in_air(
         }
         let ticks = consumable.consume_ticks();
         if ticks > 0 {
-            player
+            return if player
                 .living_entity
-                .start_cart_use(hand, slot, live, ticks, world);
-            return Use;
+                .start_cart_use(hand, slot, live, ticks, world)
+            {
+                Use
+            } else {
+                Pass
+            };
         }
         let Some(committed) = commit_cart_consumption(player, slot, stack, false) else {
             return Pass;
@@ -118,9 +122,12 @@ pub fn use_cart_in_air(
     if !blocks && kinetic.is_none() {
         return Pass;
     }
-    player
+    if !player
         .living_entity
-        .start_cart_use(hand, slot, live, stack.get_max_use_time(), world);
+        .start_cart_use(hand, slot, live, stack.get_max_use_time(), world)
+    {
+        return Pass;
+    }
     if !blocks
         && Arc::ptr_eq(&player.world(), world)
         && let Some(sound) = kinetic.and_then(|weapon| weapon.sound.as_ref())

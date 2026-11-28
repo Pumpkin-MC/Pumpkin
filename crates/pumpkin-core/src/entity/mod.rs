@@ -1331,7 +1331,6 @@ impl RemovalReason {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum PassengerRemoval {
     Dismount,
-    Switch,
     Teleport,
     VehicleRemoved,
 }
@@ -1347,6 +1346,7 @@ struct CommittedPassengerMount {
     revision: u64,
     stood: bool,
     displaced_driver: Option<i32>,
+    switch_placement_baseline: Option<(Vector3<f64>, i32)>,
 }
 
 // IMPORTANT: have that 1 and not 0 because fetch_add returns previous value and 0 would be invalid
@@ -5901,11 +5901,15 @@ impl Entity {
         true
     }
 
-    pub fn has_leash_data(&self) -> bool {
+    fn has_leash_holder_link(&self) -> bool {
         self.leashed_to
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_some()
+    }
+
+    pub fn has_leash_data(&self) -> bool {
+        self.has_leash_holder_link()
             || self
                 .delayed_leash
                 .lock()
@@ -6318,6 +6322,7 @@ impl Entity {
             player,
             usize::MAX,
             PassengerMount::Restoration,
+            None,
             || true,
         );
     }
@@ -6353,36 +6358,51 @@ impl Entity {
             return false;
         }
 
-        let previous_revision = rider.riding_revision();
-        if let Some(previous) = rider.get_vehicle() {
-            let previous = previous.get_entity();
-            if !is_java || std::ptr::eq(previous, self) {
+        let revision = rider.riding_revision();
+        let position = rider.pos.load();
+        let pose = rider.pose.load();
+        let teleport = player.teleport_id_count.load(Ordering::Acquire);
+        let previous = rider.get_vehicle();
+        let source = previous.as_ref().map(|source| source.get_entity());
+        if let Some(source) = source {
+            if !is_java || std::ptr::eq(source, self) {
                 return false;
             }
-            let can_switch = {
-                let _commits = world
+            {
+                let _commit = world
                     .riding_link_commits
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                self.can_attach_rider(&world, vehicle.as_ref(), rider)
-            };
-            if !can_switch
-                || !previous.remove_passenger_internal(
-                    rider.entity_id,
-                    PassengerRemoval::Switch,
-                    Some(previous_revision),
-                )
-            {
+                if !eligible()
+                    || !self.can_attach_rider(&world, vehicle.as_ref(), rider)
+                    || self
+                        .passengers
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .len()
+                        >= capacity
+                {
+                    return false;
+                }
+            }
+            // Later mount vetoes can still abort the switch after the exit callbacks.
+            if !source.allow_dismount(rider.entity_id, PassengerRemoval::Dismount) {
                 return false;
             }
         }
-        let position = rider.pos.load();
-        let teleport = player.teleport_id_count.load(Ordering::Acquire);
-        self.add_passenger_if(vehicle.clone(), passenger, capacity, || {
-            eligible()
-                && rider.pos.load() == position
-                && player.teleport_id_count.load(Ordering::Acquire) == teleport
-        })
+        self.attach_passenger(
+            vehicle.clone(),
+            passenger,
+            capacity,
+            PassengerMount::Gameplay,
+            source.map(|source| (source, revision)),
+            || {
+                eligible()
+                    && rider.pos.load() == position
+                    && rider.pose.load() == pose
+                    && player.teleport_id_count.load(Ordering::Acquire) == teleport
+            },
+        )
     }
 
     /// Recheck caller-specific eligibility after the mount and pose callbacks.
@@ -6398,6 +6418,7 @@ impl Entity {
             passenger,
             capacity,
             PassengerMount::Gameplay,
+            None,
             still_eligible,
         )
     }
@@ -6406,28 +6427,39 @@ impl Entity {
         clippy::needless_pass_by_value,
         reason = "riding entry points pass owned Arc handles"
     )]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "The riding transaction validates and commits both links under the same guards."
+    )]
     fn attach_passenger(
         &self,
         vehicle: Arc<dyn EntityBase>,
         passenger: Arc<dyn EntityBase>,
         capacity: usize,
         mount: PassengerMount,
+        switch: Option<(&Self, u64)>,
         still_eligible: impl FnOnce() -> bool,
     ) -> bool {
         let passenger_entity = passenger.get_entity();
         if self.removal_reason.load().is_some()
             || passenger_entity.is_removed()
-            || passenger_entity.has_vehicle()
+            || (switch.is_none() && passenger_entity.has_vehicle())
         {
             return false;
         }
-        let riding_revision = passenger_entity.riding_revision.load(Ordering::Acquire);
+        let riding_revision = switch.map_or_else(
+            || passenger_entity.riding_revision(),
+            |(_, revision)| revision,
+        );
+        if passenger_entity.riding_revision() != riding_revision {
+            return false;
+        }
         if !self.allow_mount(passenger_entity.entity_id) {
             return false;
         }
         if !self.uses_vehicle_collisions()
             && passenger.get_mob().is_some()
-            && passenger_entity.has_leash_data()
+            && passenger_entity.has_leash_holder_link()
             && !passenger_entity.drop_leash()
         {
             return false;
@@ -6444,6 +6476,13 @@ impl Entity {
         if !still_eligible() || !self.can_attach_rider(&world, vehicle.as_ref(), passenger_entity) {
             return false;
         }
+        // Only a switch holds two carrier lists, and switches share the world commit lock.
+        let mut source_passengers = switch.map(|(source, _)| {
+            source
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
         let mut passengers = self
             .passengers
             .lock()
@@ -6458,10 +6497,38 @@ impl Entity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if passenger_entity.is_removed()
             || passenger_entity.riding_revision.load(Relaxed) != riding_revision
-            || rider_vehicle.as_ref().and_then(Weak::upgrade).is_some()
+            || match (switch, rider_vehicle.as_ref().and_then(Weak::upgrade)) {
+                (None, None) => false,
+                (Some((source, _)), Some(current)) => {
+                    !std::ptr::eq(source, current.get_entity())
+                        || source.is_removed()
+                        || !Arc::ptr_eq(&world, &source.world.load())
+                }
+                _ => true,
+            }
         {
             return false;
         }
+        let source_update = if let Some(source_passengers) = source_passengers.as_mut() {
+            let Some(index) = source_passengers
+                .iter()
+                .position(|current| Arc::ptr_eq(current, &passenger))
+            else {
+                return false;
+            };
+            let previous_first = source_passengers
+                .first()
+                .map(|first| first.get_entity().entity_id);
+            source_passengers.remove(index);
+            passenger_entity.riding_cooldown.store(60, Relaxed);
+            let ids = source_passengers
+                .iter()
+                .map(|p| VarInt(p.get_entity().entity_id))
+                .collect::<Vec<_>>();
+            Some((ids, previous_first))
+        } else {
+            None
+        };
         if stand {
             passenger_entity.pose.store(EntityPose::Standing);
         }
@@ -6487,9 +6554,17 @@ impl Entity {
             .riding_revision
             .fetch_add(1, Ordering::Release)
             .wrapping_add(1);
+        let switch_placement_baseline = switch
+            .and_then(|_| passenger.get_player())
+            .map(Self::java_rider_placement_baseline);
         drop(rider_vehicle);
         drop(passengers);
+        drop(source_passengers);
         drop(riding_links);
+
+        if let (Some((source, _)), Some((ids, previous_first))) = (switch, source_update) {
+            source.finish_passenger_switch_exit(&world, passenger.as_ref(), &ids, previous_first);
+        }
 
         self.finish_passenger_mount(
             vehicle.as_ref(),
@@ -6499,6 +6574,7 @@ impl Entity {
                 revision: riding_revision,
                 stood: stand,
                 displaced_driver,
+                switch_placement_baseline,
             },
             mount,
         );
@@ -6518,6 +6594,7 @@ impl Entity {
             revision,
             stood,
             displaced_driver,
+            switch_placement_baseline,
         } = committed;
         let rider = passenger.get_entity();
         // The pose was committed before releasing the riding locks. Refresh it even
@@ -6551,11 +6628,9 @@ impl Entity {
             .get_player()
             .filter(|player| vehicle_mount && player.client.java().is_some());
         let java_placement = java_rider.map(|player| {
-            (
-                player,
-                rider.pos.load(),
-                player.teleport_id_count.load(Ordering::Acquire),
-            )
+            let (position, teleport_count) = switch_placement_baseline
+                .unwrap_or_else(|| Self::java_rider_placement_baseline(player));
+            (player, position, teleport_count)
         });
         // Java restores a player's saved attachment with seat and link updates, while
         // suppressing the mount game event and riding advancement triggers.
@@ -6617,6 +6692,13 @@ impl Entity {
         if !vehicle_mount && mount == PassengerMount::Gameplay && still_boarded() {
             self.notify_started_riding(world);
         }
+    }
+
+    fn java_rider_placement_baseline(player: &Player) -> (Vector3<f64>, i32) {
+        (
+            player.get_entity().pos.load(),
+            player.teleport_id_count.load(Ordering::Acquire),
+        )
     }
 
     fn place_java_rider(
@@ -7266,6 +7348,55 @@ impl Entity {
     }
 
     #[allow(clippy::too_many_lines)]
+    fn allow_dismount(&self, passenger_id: i32, reason: PassengerRemoval) -> bool {
+        let mut dismount_event =
+            crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
+                passenger_id,
+                self.entity_id,
+            );
+        let mut vehicle_exit =
+            crate::plugin::api::events::vehicle::vehicle_exit::VehicleExitEvent::new(
+                self.entity_id,
+                passenger_id,
+            );
+        if let Some(server) = self.world.load().server.upgrade() {
+            dismount_event = server.plugin_manager.fire_blocking(&server, dismount_event);
+            vehicle_exit = server.plugin_manager.fire_blocking(&server, vehicle_exit);
+        }
+        reason == PassengerRemoval::VehicleRemoved
+            || !(dismount_event.cancelled || vehicle_exit.cancelled)
+    }
+
+    fn finish_passenger_switch_exit(
+        &self,
+        world: &World,
+        rider: &dyn EntityBase,
+        ids: &[VarInt],
+        previous_first: Option<i32>,
+    ) {
+        let rider_entity = rider.get_entity();
+        if self.uses_vehicle_collisions()
+            && std::ptr::eq(world, rider_entity.world.load().as_ref())
+            && rider_entity
+                .removal_reason
+                .load()
+                .is_none_or(|reason| reason.should_destroy())
+        {
+            world.emit_game_event_with_context(
+                GameEvent::EntityDismount.name(),
+                self.pos.load(),
+                &crate::world::game_event::GameEventContext {
+                    source_entity: Some(rider),
+                },
+            );
+        }
+        // The rider remains mounted throughout the switch; destination mount publishes the riding flags.
+        let links =
+            self.bedrock_links_after_removal(rider.get_entity().entity_id, previous_first, ids);
+        self.send_passenger_update(world, rider.get_player(), ids, &links);
+    }
+
+    #[expect(clippy::too_many_lines)]
     fn remove_passenger_internal(
         &self,
         passenger_id: i32,
@@ -7297,23 +7428,7 @@ impl Entity {
         let previous_teleport = previous_rider
             .get_player()
             .map(|player| player.teleport_id_count.load(Ordering::Acquire));
-        let mut dismount_event =
-            crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
-                passenger_id,
-                self.entity_id,
-            );
-        let mut vehicle_exit =
-            crate::plugin::api::events::vehicle::vehicle_exit::VehicleExitEvent::new(
-                self.entity_id,
-                passenger_id,
-            );
-        if let Some(server) = self.world.load().server.upgrade() {
-            dismount_event = server.plugin_manager.fire_blocking(&server, dismount_event);
-            vehicle_exit = server.plugin_manager.fire_blocking(&server, vehicle_exit);
-        }
-        if reason != PassengerRemoval::VehicleRemoved
-            && (dismount_event.cancelled || vehicle_exit.cancelled)
-        {
+        if !self.allow_dismount(passenger_id, reason) {
             return false;
         }
         let reposition = reason != PassengerRemoval::Teleport;
@@ -7377,7 +7492,7 @@ impl Entity {
             let rider_position = passenger_entity.pos.load();
             let rider_pose = passenger_entity.pose.load();
             let vehicle_exit = self.uses_vehicle_collisions();
-            let guard_placement = vehicle_exit || reason == PassengerRemoval::Switch;
+            let guard_placement = vehicle_exit;
             // Exit listeners can move a rider before the old attachment is unlinked.
             let reposition = reposition
                 && (!guard_placement
@@ -8107,6 +8222,7 @@ mod tests {
                 revision,
                 stood: true,
                 displaced_driver: None,
+                switch_placement_baseline: None,
             },
             PassengerMount::Gameplay,
         );

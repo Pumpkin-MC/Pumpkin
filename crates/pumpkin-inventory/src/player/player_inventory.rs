@@ -198,7 +198,7 @@ impl PlayerInventory {
             Hand::Right => EquipmentSlot::MAIN_HAND,
             Hand::Left => EquipmentSlot::OFF_HAND,
         };
-        if source == *destination {
+        if source == *destination || self.equipment_slot_index(destination).is_none() {
             return None;
         }
         let mut main = self
@@ -269,21 +269,6 @@ impl PlayerInventory {
     #[must_use]
     pub const fn is_valid_hotbar_index(slot: usize) -> bool {
         slot < Self::HOTBAR_SIZE
-    }
-
-    /// Adds a stack to any available slot, prioritizing stacking with existing items.
-    fn add_stack(&self, stack: ItemStack) -> usize {
-        let mut slot_index = self.get_occupied_slot_with_room_for_stack(&stack);
-
-        if slot_index == -1 {
-            slot_index = self.get_empty_slot();
-        }
-
-        if slot_index == -1 {
-            usize::from(stack.item_count)
-        } else {
-            self.add_stack_to_slot(slot_index as usize, stack)
-        }
     }
 
     fn insert_into_available_slot(&self, stack: &mut ItemStack) -> Option<usize> {
@@ -475,7 +460,9 @@ impl PlayerInventory {
         loop {
             i = stack.item_count;
             if slot == -1 {
-                stack.set_count(self.add_stack(stack.clone()) as u8);
+                if self.insert_into_available_slot(stack).is_none() {
+                    break;
+                }
             } else {
                 stack.set_count(self.add_stack_to_slot(slot as usize, stack.clone()) as u8);
             }
@@ -651,7 +638,7 @@ impl PlayerInventory {
                 .entity_equipment
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if equipment.equipment.get(slot).is_some_and(matches) {
+            if matches(equipment.equipment.get(slot).unwrap_or(ItemStack::EMPTY)) {
                 equipment.put(slot, update);
                 return true;
             }
@@ -854,6 +841,30 @@ mod tests {
         let equipment_slots = Arc::new(build_equipment_slots());
         let entity_equipment = Arc::new(Mutex::new(EntityEquipment::new()));
         PlayerInventory::new(entity_equipment, equipment_slots)
+    }
+
+    #[test]
+    fn unmapped_equipment_swap_leaves_the_source_unchanged() {
+        let inv = create_test_inventory();
+        let held = ItemStack::new(1, &Item::STICK);
+        inv.set_stack_in_hand(Hand::Right, held.clone());
+        assert!(
+            inv.swap_equippable(Hand::Right, &EquipmentSlot::BODY, &held, false)
+                .is_none()
+        );
+        assert_eq!(inv.held_item().uid, held.uid);
+        assert!(inv.held_item().are_equal(&held));
+    }
+
+    #[test]
+    fn matching_empty_equipment_slot_can_be_filled() {
+        let inv = create_test_inventory();
+        let slot = PlayerInventory::OFF_HAND_SLOT;
+        let empty = inv.get_slot(slot);
+        let new_stack = ItemStack::new(1, &Item::STICK);
+        assert!(inv.replace_slot_if_same(slot, &empty, new_stack.clone()));
+        assert_eq!(inv.get_slot(slot).uid, new_stack.uid);
+        assert!(!inv.replace_slot_if_same(slot, &empty, ItemStack::EMPTY.clone()));
     }
 
     #[test]

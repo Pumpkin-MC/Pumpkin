@@ -590,6 +590,7 @@ async fn manual_vehicle_mount_preserves_teleport_from_mount_hook() -> TestResult
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn ordinary_vehicle_interaction_switches_mounts_after_an_allowed_exit() -> TestResult {
+    use crate::plugin::api::events::entity::entity_mount::EntityMountEvent;
     use pumpkin_data::item_stack::ItemStack;
 
     struct VetoExit(AtomicBool);
@@ -598,6 +599,19 @@ async fn ordinary_vehicle_interaction_switches_mounts_after_an_allowed_exit() ->
             &'a self,
             _server: &'a Arc<Server>,
             event: &'a mut EntityDismountEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                event.cancelled = self.0.load(Ordering::Relaxed);
+            })
+        }
+    }
+
+    struct VetoMount(AtomicBool);
+    impl EventRwHandler<EntityMountEvent> for VetoMount {
+        fn handle<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut EntityMountEvent,
         ) -> BoxFuture<'a, ()> {
             Box::pin(async move {
                 event.cancelled = self.0.load(Ordering::Relaxed);
@@ -648,18 +662,168 @@ async fn ordinary_vehicle_interaction_switches_mounts_after_an_allowed_exit() ->
         assert_eq!(rider.teleport_id_count.load(Ordering::Relaxed), old_id);
 
         veto.0.store(false, Ordering::Relaxed);
+        let veto_mount = Arc::new(VetoMount(AtomicBool::new(true)));
+        server
+            .plugin_manager
+            .register_blocking::<EntityMountEvent, _>(
+                veto_mount.clone(),
+                EventPriority::Normal,
+                None,
+            );
+        let old_revision = player.riding_revision();
+        let old_cooldown = player.riding_cooldown.load(Ordering::Relaxed);
+        assert!(!target.interact(&rider, &mut hand));
+        assert_mounted(old, player);
+        assert!(!target.get_entity().has_passengers());
+        assert_eq!(player.riding_revision(), old_revision);
+        assert_eq!(player.riding_cooldown.load(Ordering::Relaxed), old_cooldown);
+        assert_eq!(rider.teleport_id_count.load(Ordering::Relaxed), old_id);
+
+        veto_mount.0.store(false, Ordering::Relaxed);
         assert!(target.interact(&rider, &mut hand));
         assert!(!old.has_passengers());
         assert_mounted(target.get_entity(), player);
-        assert_eq!(
-            *rider
-                .awaiting_teleport
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner),
-            Some((old_id.wrapping_add(2).into(), player.pos.load()))
-        );
+        assert_switch_placement(&rider, target.get_entity(), destination, old_id);
         world.level.shutdown().await;
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn vehicle_switch_keeps_source_when_destination_fills_during_mount_event() -> TestResult {
+    use crate::plugin::api::events::entity::entity_mount::EntityMountEvent;
+
+    let directory = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&directory).await?;
+    let (rider, _peer) = java_rider(&server, &world, "Notch")?;
+    let source = Arc::new(BoatEntity::new(Entity::new(
+        world.clone(),
+        CENTER,
+        &EntityType::OAK_BOAT,
+    )));
+    let position = CENTER.add_raw(2.0, 0.0, 0.0);
+    let target = Arc::new(MinecartEntity::new(Entity::new(
+        world.clone(),
+        position,
+        &EntityType::MINECART,
+    )));
+    assert!(world.spawn_entity(source.clone()));
+    assert!(world.spawn_entity(target.clone()));
+    rider.get_entity().set_pos(CENTER);
+    source
+        .get_entity()
+        .add_passenger(source.clone(), rider.clone());
+
+    let occupant = PigEntity::new(Entity::new(world.clone(), position, &EntityType::PIG));
+    assert!(world.spawn_entity(occupant.clone()));
+    server
+        .plugin_manager
+        .register_blocking::<EntityMountEvent, _>(
+            Arc::new(FillLastSeat {
+                original: rider.entity_id(),
+                vehicle: target.clone(),
+                competitor: occupant.clone(),
+            }),
+            EventPriority::Normal,
+            None,
+        );
+
+    assert!(!target.interact(
+        &rider,
+        &mut pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+    ));
+    assert_mounted(source.get_entity(), rider.get_entity());
+    assert_mounted(target.get_entity(), occupant.get_entity());
+    world.level.shutdown().await;
+    Ok(())
+}
+
+fn assert_switch_placement(
+    rider: &crate::entity::player::Player,
+    target: &Entity,
+    destination: Vector3<f64>,
+    old_teleport_id: i32,
+) {
+    let position = rider.get_entity().pos.load();
+    let seat_offset = target
+        .entity_type
+        .boat
+        .map_or(0.0, |seats| f64::from(seats.single_passenger_x_offset));
+    assert_eq!(
+        (position.x, position.z),
+        (destination.x, destination.z + seat_offset)
+    );
+    assert_eq!(
+        *rider
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner),
+        Some((old_teleport_id.wrapping_add(1).into(), position))
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn vehicle_switch_preserves_movement_from_the_source_dismount_event() -> TestResult {
+    struct MoveOnDismount {
+        rider: Arc<crate::entity::player::Player>,
+        position: Vector3<f64>,
+    }
+
+    impl EventRwHandler<GenericGameEvent> for MoveOnDismount {
+        fn handle<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut GenericGameEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async {
+                if event.event_key == GameEvent::EntityDismount.name() {
+                    self.rider.get_entity().set_pos(self.position);
+                }
+            })
+        }
+    }
+
+    let directory = tempfile::tempdir()?;
+    let (server, world) = vehicle_world(&directory).await?;
+    let (rider, _peer) = java_rider(&server, &world, "Notch")?;
+    rider.get_entity().set_pos(CENTER);
+    let source = Arc::new(BoatEntity::new(Entity::new(
+        world.clone(),
+        CENTER,
+        &EntityType::OAK_BOAT,
+    )));
+    let target = Arc::new(MinecartEntity::new(Entity::new(
+        world.clone(),
+        CENTER.add_raw(2.0, 0.0, 0.0),
+        &EntityType::MINECART,
+    )));
+    assert!(world.spawn_entity(source.clone()));
+    assert!(world.spawn_entity(target.clone()));
+    source
+        .get_entity()
+        .add_passenger(source.clone(), rider.clone());
+    let old_id = rider.teleport_id_count.load(Ordering::Relaxed);
+    let position = CENTER.add_raw(0.0, 3.0, 0.0);
+    server
+        .plugin_manager
+        .register_blocking::<GenericGameEvent, _>(
+            Arc::new(MoveOnDismount {
+                rider: rider.clone(),
+                position,
+            }),
+            EventPriority::Normal,
+            None,
+        );
+
+    assert!(target.interact(
+        &rider,
+        &mut pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+    ));
+    assert!(!source.get_entity().has_passengers());
+    assert_mounted(target.get_entity(), rider.get_entity());
+    assert_eq!(rider.get_entity().pos.load(), position);
+    assert_eq!(rider.teleport_id_count.load(Ordering::Relaxed), old_id);
+    world.level.shutdown().await;
     Ok(())
 }
 
@@ -2464,6 +2628,17 @@ async fn java_vehicle_riding_distance_follows_each_rider_once_per_tick() -> Test
         let stats = rider.stats.lock().unwrap_or_else(PoisonError::into_inner);
         assert_eq!(stats.get(StatisticCategory::Custom, stat as i32), 100);
     }
+    let starts = world.capture_vehicle_rides(&players);
+    queue_vehicle_position(&driver, CENTER.add_raw(2.0, 0.0, 0.0), 0.0)?;
+    World::process_player_packets(&players);
+    assert_eq!(boat.get_entity().pos.load(), CENTER.add_raw(2.0, 0.0, 0.0));
+    boat.get_entity().remove_passenger(driver.entity_id());
+    assert!(!driver.get_entity().has_vehicle());
+    world.record_vehicle_rides(starts);
+    assert_eq!(
+        driver.get_stat(StatisticCategory::Custom, CustomStatistic::BoatOneCm as i32),
+        200,
+    );
     world.level.shutdown().await;
     Ok(())
 }
@@ -5126,11 +5301,11 @@ async fn configured_minecart_air_use_completes_consumption_and_dispatches_kineti
         assert_eq!(timer.load(Ordering::Relaxed), held.get_max_use_time() - 1);
         assert_eq!(
             feedback.near_kinetic.load(Ordering::Relaxed),
-            edition * 3 + 2
+            edition * 2 + 1
         );
         assert_eq!(feedback.far_kinetic.load(Ordering::Relaxed), 0);
         // Notch is the initiator in Java and a nearby observer of the Bedrock use.
-        assert_eq!(feedback.actor_kinetic.load(Ordering::Relaxed), edition * 2);
+        assert_eq!(feedback.actor_kinetic.load(Ordering::Relaxed), edition);
         assert_eq!(feedback.starts.load(Ordering::Relaxed), starts + 1);
         let replacement = held.copy_with_count(1);
         player.inventory().set_held_item(replacement);
@@ -5171,8 +5346,8 @@ async fn configured_minecart_air_use_completes_consumption_and_dispatches_kineti
         }
         count
     };
-    assert_eq!(sounds(&mut observer_packets), 6);
-    assert_eq!(sounds(&mut actor_packets), 3);
+    assert_eq!(sounds(&mut observer_packets), 4);
+    assert_eq!(sounds(&mut actor_packets), 2);
     for player in [&bedrock, &observer] {
         let client = player.client.bedrock().ok_or("Bedrock player")?;
         client.clear_player();

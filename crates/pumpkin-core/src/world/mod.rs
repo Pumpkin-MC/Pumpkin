@@ -246,6 +246,7 @@ pub(crate) struct VehicleRideStart<'a> {
     player: &'a Player,
     position: Vector3<f64>,
     attachment: u64,
+    statistic: pumpkin_data::statistic::CustomStatistic,
 }
 
 pub(crate) enum VehiclePlacementError {
@@ -269,7 +270,7 @@ pub struct World {
     pub(crate) entity_index: Arc<EntityIndex>,
     island_schedule: std::sync::Mutex<entity_islands::Schedule>,
     pub(crate) riding_link_commits: std::sync::Mutex<()>,
-    entity_registrations: std::sync::Mutex<FxHashSet<uuid::Uuid>>,
+    entity_registrations: std::sync::Mutex<FxHashMap<uuid::Uuid, i32>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: std::sync::Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -670,6 +671,10 @@ impl World {
             }
         }
 
+        let _registrations = self
+            .entity_registrations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.spawn_state.store(Arc::new(SpawnState::new(
             spawnable_chunks,
             &self.entities,
@@ -1845,23 +1850,36 @@ impl World {
                 player,
                 position: rider.pos.load(),
                 attachment: rider.riding_revision(),
+                statistic: player.get_movement_statistic(),
             })
     }
 
     pub(crate) fn record_vehicle_rides(&self, rides: Vec<Option<VehicleRideStart<'_>>>) {
         for ride in rides.into_iter().flatten() {
-            let rider = ride.player.get_entity();
-            if !std::ptr::eq(ride.player.world().as_ref(), self)
-                || rider.riding_revision() != ride.attachment
-            {
-                continue;
-            }
-            let distance: i32 =
-                ((rider.pos.load() - ride.position).length() as f32 * 100.0).round() as i32;
-            if distance > 0 {
-                ride.player
-                    .increment_custom_stat(ride.player.get_movement_statistic(), distance);
-            }
+            self.record_vehicle_ride(&ride);
+        }
+    }
+
+    fn record_vehicle_ride(&self, ride: &VehicleRideStart<'_>) {
+        let rider = ride.player.get_entity();
+        let end = if std::ptr::eq(ride.player.world().as_ref(), self)
+            && rider.riding_revision() == ride.attachment
+        {
+            rider.pos.load()
+        } else {
+            let Some(position) = ride
+                .player
+                .client
+                .java()
+                .and_then(|client| client.last_vehicle_rider_position(ride.attachment))
+            else {
+                return;
+            };
+            position
+        };
+        let distance = ((end - ride.position).length() as f32 * 100.0).round() as i32;
+        if distance > 0 {
+            ride.player.increment_custom_stat(ride.statistic, distance);
         }
     }
 
@@ -1988,6 +2006,10 @@ impl World {
                     .map(|(report, (entity, _))| report.block_write_check(entity.as_ref()))
                     .collect();
                 let mut reaches = entity_islands::resolve(reports, islands_config)?;
+                entity_islands::include_moving_vehicle_event_listeners(
+                    &mut reaches,
+                    tickable.iter().map(|(entity, _)| entity.as_ref()),
+                )?;
                 entity_islands::prune_block_writes(self, &mut reaches, &block_write_checks)?;
                 let nodes: Vec<_> = tickable
                     .iter()
@@ -2067,6 +2089,9 @@ impl World {
                 .as_ref()
                 .is_none_or(|ride| ride.attachment != player.get_entity().riding_revision())
             {
+                if let Some(ended_ride) = start.take() {
+                    self.record_vehicle_ride(&ended_ride);
+                }
                 *start = self.capture_vehicle_ride(player);
             }
         }
@@ -5894,16 +5919,16 @@ impl World {
         }
 
         let committed = {
-            let registrations = self
+            let mut registrations = self
                 .entity_registrations
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if registrations.contains(&entity.get_entity().entity_uuid)
-                || self.has_live_entity_uuid(entity.as_ref())
-            {
+            let base = entity.get_entity();
+            if base.is_removed() || registrations.contains_key(&base.entity_uuid) {
                 return Err(VehiclePlacementError::UuidUnavailable);
             }
             let committed = commit().ok_or(VehiclePlacementError::CommitRejected)?;
+            registrations.insert(base.entity_uuid, base.entity_id);
             self.spawn_state.load().add_entity(self, entity.as_ref());
             // The next placement must see this hull in its clearance check.
             self.publish_live_entity(entity);
@@ -5956,33 +5981,30 @@ impl World {
 
     #[expect(clippy::needless_pass_by_value)]
     pub fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
-        let uuid = entity.get_entity().entity_uuid;
-        {
+        let base = entity.get_entity();
+        loop {
+            let current = self.entities.load_full();
+            let mut next = (*current).clone();
+            next.push(entity.clone());
             let mut registrations = self
                 .entity_registrations
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if self.has_live_entity_uuid(entity.as_ref()) || !registrations.insert(uuid) {
+            if base.is_removed() || registrations.contains_key(&base.entity_uuid) {
                 return;
             }
+            let previous = self.entities.compare_and_swap(&current, Arc::new(next));
+            if Arc::ptr_eq(&previous, &current) {
+                registrations.insert(base.entity_uuid, base.entity_id);
+                self.spawn_state.load().add_entity(self, entity.as_ref());
+                break;
+            }
         }
-
-        self.spawn_state.load().add_entity(self, entity.as_ref());
         self.entity_tracker.add_entity(&entity, self);
-        self.publish_live_entity(&entity);
-        self.entity_registrations
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&uuid);
-        self.add_pending_riders(&entity);
-    }
-
-    fn has_live_entity_uuid(&self, entity: &dyn EntityBase) -> bool {
-        let uuid = entity.get_entity().entity_uuid;
-        self.entities
-            .load()
-            .iter()
-            .any(|live| live.get_entity().entity_uuid == uuid)
+        self.record_tick_spawn(base.entity_id);
+        if !base.is_removed() {
+            self.add_pending_riders(&entity);
+        }
     }
 
     fn publish_live_entity(&self, entity: &Arc<dyn EntityBase>) {
@@ -5995,18 +6017,31 @@ impl World {
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {
-        // Entity::remove passes its base projection; retain the registered living owner.
-        let registered = self.get_entity_by_id(entity.get_entity().entity_id);
+        let base = entity.get_entity();
+        let registered = {
+            let registrations = self
+                .entity_registrations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // Entity::remove passes its base projection; retain the registered living owner.
+            let registered = self.get_entity_by_id(base.entity_id);
+            if base
+                .removal_reason
+                .compare_exchange(None, Some(RemovalReason::Discarded))
+                .is_err()
+            {
+                return;
+            }
+            base.removed.store(true, Ordering::Release);
+            if registrations.get(&base.entity_uuid) == Some(&base.entity_id) {
+                self.spawn_state
+                    .load()
+                    .remove_entity(self, registered.as_deref().unwrap_or(entity));
+            }
+            registered
+        };
         let entity = registered.as_deref().unwrap_or(entity);
         let base_entity = entity.get_entity();
-        if base_entity
-            .removal_reason
-            .compare_exchange(None, Some(RemovalReason::Discarded))
-            .is_err()
-        {
-            return;
-        }
-        base_entity.removed.store(true, Ordering::Release);
 
         if let Some(vehicle) = base_entity.get_vehicle() {
             vehicle
@@ -6022,13 +6057,21 @@ impl World {
             base_entity.remove_passenger_after_vehicle_removal(passenger.get_entity().entity_id);
         }
 
-        self.spawn_state.load().remove_entity(self, entity);
         self.entity_tracker.remove_entity(entity, self);
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
-            new_entities
-        });
+        {
+            let mut registrations = self
+                .entity_registrations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.entities.rcu(|current_entities| {
+                let mut new_entities = (**current_entities).clone();
+                new_entities.retain(|e| e.get_entity().entity_id != base_entity.entity_id);
+                new_entities
+            });
+            if registrations.get(&base_entity.entity_uuid) == Some(&base_entity.entity_id) {
+                registrations.remove(&base_entity.entity_uuid);
+            }
+        }
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity().finish_removal(mob);
         }
@@ -6048,20 +6091,35 @@ impl World {
         }
         let mut entities_to_remove = Vec::new();
 
-        self.entities.rcu(|current_entities| {
-            entities_to_remove.clear();
-            let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|entity| {
-                let pos = saved_chunk_pos(entity.as_ref());
-                if chunks_set.contains(&pos) {
-                    entities_to_remove.push(entity.clone());
-                    false
-                } else {
-                    true
-                }
+        {
+            let mut registrations = self
+                .entity_registrations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.entities.rcu(|current_entities| {
+                entities_to_remove.clear();
+                let mut new_entities = (**current_entities).clone();
+                new_entities.retain(|entity| {
+                    let pos = saved_chunk_pos(entity.as_ref());
+                    if chunks_set.contains(&pos) {
+                        entities_to_remove.push(entity.clone());
+                        false
+                    } else {
+                        true
+                    }
+                });
+                new_entities
             });
-            new_entities
-        });
+            for entity in &entities_to_remove {
+                let base = entity.get_entity();
+                if registrations.get(&base.entity_uuid) == Some(&base.entity_id) {
+                    registrations.remove(&base.entity_uuid);
+                    if !base.is_removed() {
+                        self.spawn_state.load().remove_entity(self, entity.as_ref());
+                    }
+                }
+            }
+        }
 
         self.save_entities_by_chunk(&entities_to_remove, chunks_set.iter().copied(), true)
             .await;
@@ -6076,7 +6134,6 @@ impl World {
                 base.removed.store(true, Ordering::Release);
             }
             self.entity_tracker.remove_entity(entity.as_ref(), self);
-            self.spawn_state.load().remove_entity(self, entity.as_ref());
             if let Some(mob) = entity.get_mob() {
                 mob.get_mob_entity().finish_removal(mob);
             }

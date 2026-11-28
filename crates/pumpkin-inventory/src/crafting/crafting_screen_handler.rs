@@ -1108,9 +1108,6 @@ impl Slot for ResultSlot {
     fn set_id(&self, id: usize) {
         self.id.store(id as u8, Ordering::Relaxed);
     }
-    fn on_quick_move_crafted(&self, _stack: ItemStack, _stack_prev: ItemStack) {
-        self.refill_output();
-    }
     fn on_take_item(&self, player: &dyn InventoryPlayer, stack: &ItemStack) {
         crate::screen_handler::DeferredScreenEffects::publish_or_record(
             self.deferred_effects.as_deref(),

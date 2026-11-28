@@ -258,6 +258,20 @@ impl ShulkerEntity {
                     f64::from(candidate.0.z) + 0.5,
                 );
 
+                if let Some(carrier) = entity.get_vehicle() {
+                    let old_pos = entity.pos.load();
+                    carrier
+                        .get_entity()
+                        .remove_passenger_before_teleport(entity.entity_id);
+                    if entity.has_vehicle()
+                        || entity.is_removed()
+                        || entity.pos.load() != old_pos
+                        || !std::ptr::eq(world.as_ref(), entity.world.load().as_ref())
+                    {
+                        return false;
+                    }
+                }
+
                 self.set_attach_face(dir);
                 entity.set_pos(new_pos);
 

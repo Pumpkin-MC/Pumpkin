@@ -1850,9 +1850,16 @@ fn write_adventure_matchers(
             "Too many Adventure partial matchers".into(),
         ));
     }
-    seq.write_list(&partial, |seq, (name, data)| {
+    let mut ids = std::collections::HashSet::new();
+    seq.write_var_int(&VarInt(partial.len() as i32))?;
+    for (name, data) in &partial {
         // Java's persistent codec resolves a concrete predicate name before a component name.
         if let Some(kind) = adventure_predicate_type(name) {
+            if !ids.insert((true, kind as i32)) {
+                return Err(WritingError::Message(format!(
+                    "Duplicate Adventure partial matcher {name}"
+                )));
+            }
             seq.write_bool(true)?;
             seq.write_var_int(&VarInt(kind as i32))?;
         } else {
@@ -1864,6 +1871,11 @@ fn write_adventure_matchers(
                     "Expected an empty compound for Adventure component presence matcher {name}"
                 )));
             }
+            if !ids.insert((false, i32::from(component.to_id()))) {
+                return Err(WritingError::Message(format!(
+                    "Duplicate Adventure partial matcher {name}"
+                )));
+            }
             seq.write_bool(false)?;
             seq.write_var_int(&VarInt(i32::from(component.to_id())))?;
         }
@@ -1872,8 +1884,9 @@ fn write_adventure_matchers(
                 "Missing Adventure partial matcher payload for {name}"
             )));
         }
-        seq.write_nbt_with_version(Some(data), &JavaMinecraftVersion::V_26_3)
-    })
+        seq.write_nbt_with_version(Some(data), &JavaMinecraftVersion::V_26_3)?;
+    }
+    Ok(())
 }
 
 fn read_adventure_component_type(
@@ -1900,6 +1913,16 @@ fn exact_adventure_component_survives_storage(
     // Java enchantments are maps. Pumpkin's vectors may change order when read
     // back from NBT, so compare the distinct saved entries with the originals.
     let (expected, stored) = match component {
+        DataComponent::Container => {
+            let original = &get::<ContainerImpl>(original).items;
+            let restored = &get::<ContainerImpl>(restored.as_ref()).items;
+            return original.len() == restored.len()
+                && original.iter().zip(restored).all(
+                    |((slot, stack), (restored_slot, restored_stack))| {
+                        slot == restored_slot && stack.are_equal(restored_stack)
+                    },
+                );
+        }
         DataComponent::Enchantments => (
             &get::<EnchantmentsImpl>(original).enchantment,
             &get::<EnchantmentsImpl>(restored.as_ref()).enchantment,
@@ -3450,10 +3473,21 @@ impl DataComponentCodec<Self> for PotDecorationsImpl {
 
 impl DataComponentCodec<Self> for ContainerImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt::from(self.items.len() as i32))?;
-        for (_slot, stack) in &self.items {
-            seq.write_bool(true)?;
-            serialize_item_stack_template(stack, seq)?;
+        let mut slots = [None; 256];
+        let mut len = 0;
+        for (slot, stack) in &self.items {
+            let slot = usize::from(*slot);
+            if slots[slot].replace(stack).is_some() {
+                return Err(WritingError::Message("Duplicate container slot".into()));
+            }
+            len = len.max(slot + 1);
+        }
+        seq.write_var_int(&VarInt::from(len as i32))?;
+        for stack in &slots[..len] {
+            seq.write_bool(stack.is_some())?;
+            if let Some(stack) = stack {
+                serialize_item_stack_template(stack, seq)?;
+            }
         }
         Ok(())
     }
@@ -3956,6 +3990,25 @@ impl DataComponentCodec<Self> for WaxedImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exact_container_preserves_sparse_slot_indices() -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_data::{item::Item, item_stack::ItemStack};
+
+        let container = ContainerImpl {
+            items: vec![(2, ItemStack::new(1, &Item::STICK))],
+        };
+        let mut encoded = Vec::new();
+        container.serialize(&mut encoded)?;
+        assert_eq!(encoded.get(..4), Some([3, 0, 0, 1].as_slice()));
+        let mut input = encoded.as_slice();
+        let decoded = ContainerImpl::deserialize(&mut input)?;
+        assert!(input.is_empty());
+        assert_eq!(decoded.items.len(), 1);
+        assert_eq!(decoded.items[0].0, 2);
+        assert_eq!(decoded.items[0].1.get_item(), &Item::STICK);
+        Ok(())
+    }
 
     fn textured_profile() -> ProfileImpl {
         ProfileImpl {

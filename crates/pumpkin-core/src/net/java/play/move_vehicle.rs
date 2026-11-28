@@ -24,6 +24,7 @@ pub(in crate::net::java) struct VehicleMovement {
     root_id: i32,
     first_good: Vector3<f64>,
     last_good: Vector3<f64>,
+    last_rider_position: Option<(u64, Vector3<f64>)>,
     floating: bool,
     floating_ticks: u16,
 }
@@ -110,12 +111,18 @@ impl JavaClient {
                     root_id: entity.entity_id,
                     first_good: pos,
                     last_good: pos,
+                    last_rider_position: None,
                     floating,
                     floating_ticks,
                 }
             });
         self.vehicle_movement.store(state);
         state.is_some()
+    }
+
+    pub(crate) fn last_vehicle_rider_position(&self, attachment: u64) -> Option<Vector3<f64>> {
+        let (revision, position) = self.vehicle_movement.load()?.last_rider_position?;
+        (revision == attachment).then_some(position)
     }
 
     pub fn handle_move_vehicle(
@@ -161,13 +168,21 @@ impl JavaClient {
             }
             return;
         }
-        let Some(state) = self
+        let Some(mut state) = self
             .vehicle_movement
             .load()
             .filter(|state| state.root_id == vehicle.entity_id)
         else {
             return;
         };
+        let vehicle_pos = vehicle.pos.load();
+        if vehicle_pos != state.last_good {
+            state.first_good = vehicle_pos;
+            state.last_good = vehicle_pos;
+            state.floating = false;
+            state.floating_ticks = 0;
+            self.vehicle_movement.store(Some(state));
+        }
         let proposed = bounded_position(Vector3::new(packet.x, packet.y, packet.z));
         let too_fast = |target: Vector3<f64>| {
             (target - state.first_good).length_squared() - vehicle.velocity.load().length_squared()
@@ -286,6 +301,8 @@ impl JavaClient {
             .is_some_and(|mount| mount.get_entity().entity_id == vehicle.entity_id)
         {
             position_rider(root, player.as_ref());
+            let rider = player.get_entity();
+            state.last_rider_position = Some((rider.riding_revision(), rider.pos.load()));
         }
         state.last_good = target;
         state.floating = root

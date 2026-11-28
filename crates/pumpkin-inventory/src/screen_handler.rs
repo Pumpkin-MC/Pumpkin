@@ -195,9 +195,15 @@ pub trait InventoryPlayer: Send + Sync {
         packet: ScreenPacket<'_>,
         is_current: Option<ScreenUpdateContext<'_>>,
     ) {
-        if is_current.is_some_and(|context| context.lock_if_current().is_none()) {
-            return;
-        }
+        let _guard = match is_current {
+            Some(context) => {
+                let Some(guard) = context.lock_if_current() else {
+                    return;
+                };
+                Some(guard)
+            }
+            None => None,
+        };
         match packet {
             ScreenPacket::Content(packet, window) => self.enqueue_inventory_packet(&packet, window),
             ScreenPacket::Slot(packet, window, slots) => {
@@ -657,7 +663,7 @@ pub trait ScreenHandler: Send + Sync {
 
     /// Sends all content updates to listeners and sync handler.
     fn send_content_updates(&mut self) {
-        if self.get_behaviour().needs_full_sync {
+        if self.get_behaviour().needs_full_sync && !self.get_behaviour().disable_sync {
             self.update_to_client();
             return;
         }
@@ -677,13 +683,13 @@ pub trait ScreenHandler: Send + Sync {
         let mut prop_vec = vec![];
         for (idx, prop) in behaviour.properties.iter_mut().enumerate() {
             let value = prop.get();
-            if prop.has_changed() {
-                prop_vec.push((idx, value));
-            }
+            prop_vec.push((idx, value, prop.has_changed()));
         }
 
-        for (idx, value) in prop_vec {
-            self.update_tracked_properties(idx as i32, value);
+        for (idx, value, changed) in prop_vec {
+            if changed {
+                self.update_tracked_properties(idx as i32, value);
+            }
             self.check_property_updates(idx as i32, value);
         }
     }

@@ -1,6 +1,7 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use crate::entity::player::advancement::predicate::CriterionConditions;
+use crate::item::items::firework_rocket::FireworkRocketItem;
 use crate::item::registry::should_try_block_placement;
 use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_protocol::ser::NetworkReadExt;
@@ -59,7 +60,11 @@ impl JavaClient {
         let item_id = item.item.id;
         let is_boat = server.item_registry.uses_boat_placement(item_id);
         let minecart = server.item_registry.minecart_item(item_id);
-        let is_vehicle = is_boat || minecart.is_some();
+        let is_vehicle = !was_spectator && (is_boat || minecart.is_some());
+        let is_firework = server
+            .item_registry
+            .get_pumpkin_item(item_id)
+            .is_some_and(|item| item.as_any().is::<FireworkRocketItem>());
         if is_vehicle
             && ![cursor_pos.x, cursor_pos.y, cursor_pos.z]
                 .into_iter()
@@ -88,8 +93,6 @@ impl JavaClient {
                     .color_named(NamedColor::Red),
                     true,
                 );
-            } else {
-                Self::send_vehicle_build_limit_feedback(player, &world, true);
             }
             self.correct_block_use(player, &world, &position, face);
             return Ok(());
@@ -103,7 +106,7 @@ impl JavaClient {
                 && current.uid == before.uid
                 && current.are_equal(&before)
         };
-        if !is_vehicle && !was_spectator {
+        if !is_vehicle && !is_firework && !was_spectator {
             player.increment_stat(StatisticCategory::Used, i32::from(item_id), 1);
             if !source_is_current() || world.get_block(&position) != block {
                 return Ok(());
@@ -134,6 +137,19 @@ impl JavaClient {
             }
         }}
 
+        if was_spectator {
+            if Arc::ptr_eq(&world, &player.world())
+                && player.gamemode.load() == mode
+                && world.get_block(&position) == block
+                && let Some(factory) = server
+                    .block_registry
+                    .get_screen_handler_factory(block, player, &position, server, &world)
+            {
+                player.open_handled_screen(factory.as_ref(), Some(position));
+            }
+            return Ok(());
+        }
+
         if !source_is_current() || world.get_block(&position) != block {
             if is_vehicle {
                 self.correct_block_use(player, &world, &position, face);
@@ -143,19 +159,6 @@ impl JavaClient {
 
         if is_vehicle && !crate::net::vehicle_block_use_is_eligible(player, &world, &position) {
             self.correct_block_use(player, &world, &position, face);
-            return Ok(());
-        }
-
-        if was_spectator {
-            if let Some(factory) = server
-                .block_registry
-                .get_screen_handler_factory(block, player, &position, server, &world)
-            {
-                player.open_handled_screen(factory.as_ref(), Some(position));
-            }
-            if is_vehicle {
-                self.correct_block_use(player, &world, &position, face);
-            }
             return Ok(());
         }
 
@@ -217,6 +220,28 @@ impl JavaClient {
                 );
             }
             self.correct_block_use(player, &world, &position, face);
+            return Ok(());
+        }
+
+        if is_firework {
+            let hit = BlockHitResult {
+                face: &face,
+                cursor_pos: &cursor_pos,
+            };
+            let result = FireworkRocketItem::use_from_slot(
+                &before,
+                slot_index,
+                player,
+                &world,
+                position,
+                &hit,
+                || source_is_current() && world.get_block(&position) == block,
+            );
+            if result.consumes_action() {
+                trigger_item_used_on_block_advancement(
+                    player, &world, &position, block, &before, false,
+                );
+            }
             return Ok(());
         }
 

@@ -165,12 +165,12 @@ impl JavaClient {
                     player.gamemode.load() == GameMode::Creative,
                 )
             {
-                player.increment_stat(StatisticCategory::Used, i32::from(held.item.id), 1);
                 if held.get_base_use_time() == 0
                     && let Some(cooldown) = cooldown
                 {
                     player.start_cooldown(group, (cooldown.seconds * 20.0) as i32);
                 }
+                player.increment_stat(StatisticCategory::Used, i32::from(held.item.id), 1);
                 for extra in extras {
                     player.inventory().offer(extra, false, player);
                 }
@@ -182,7 +182,7 @@ impl JavaClient {
 
         player.increment_stat(StatisticCategory::Used, i32::from(held.item.id), 1);
         let current = player.inventory().get_stack_in_hand(hand);
-        if current.uid != held.uid || !current.are_equal(held) {
+        if current.uid != held.uid || !current.are_equal(held) || player.is_on_cooldown(&group) {
             return;
         }
         let kinetic = !native_use

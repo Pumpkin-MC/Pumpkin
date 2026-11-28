@@ -74,8 +74,8 @@ impl Worldborder {
     pub fn set_diameter(&mut self, world: &World, diameter: f64, speed: Option<i64>) {
         self.old_diameter = self.current_diameter();
         self.new_diameter = diameter;
-        self.speed = speed.unwrap_or(0).max(0);
-        self.lerp_ticks_remaining = self.speed / 50;
+        self.lerp_ticks_remaining = speed.unwrap_or(0).max(0) / 50;
+        self.speed = self.lerp_ticks_remaining * 50;
         if self.lerp_ticks_remaining > 0 {
             world.broadcast_packet_all(&CSetBorderLerpSize::new(
                 self.old_diameter,
@@ -254,14 +254,14 @@ impl Worldborder {
 
     #[must_use]
     pub fn clamp_block(&self, x: i32, z: i32) -> (i32, i32) {
-        let half = self.collision_diameter() / 2.0;
+        let [min_x, max_x, min_z, max_z] = self.limits();
         // A border narrower than one block spans no block boundary, leaving `max`
         // below `min`. `Ord::clamp` panics on an inverted range, so collapse the
         // range onto the single block that holds the centre instead.
-        let min_x = (self.center_x - half).floor() as i32;
-        let max_x = ((self.center_x + half).floor() as i32 - 1).max(min_x);
-        let min_z = (self.center_z - half).floor() as i32;
-        let max_z = ((self.center_z + half).floor() as i32 - 1).max(min_z);
+        let min_x = min_x.floor() as i32;
+        let max_x = (max_x.floor() as i32 - 1).max(min_x);
+        let min_z = min_z.floor() as i32;
+        let max_z = (max_z.floor() as i32 - 1).max(min_z);
         (x.clamp(min_x, max_x), z.clamp(min_z, max_z))
     }
 
@@ -270,11 +270,11 @@ impl Worldborder {
     pub fn clamp_to_bound(&self, x: f64, z: f64) -> (f64, f64) {
         // Unlike `f64::clamp`, an inverted range does not panic.
         let clamp = |value: f64, min: f64, max: f64| if value < min { min } else { value.min(max) };
-        let half = self.collision_diameter() / 2.0;
+        let [min_x, max_x, min_z, max_z] = self.limits();
         let margin = f64::from(1.0E-5f32);
         (
-            clamp(x, self.center_x - half, self.center_x + half - margin),
-            clamp(z, self.center_z - half, self.center_z + half - margin),
+            clamp(x, min_x, (max_x - margin).max(min_x)),
+            clamp(z, min_z, (max_z - margin).max(min_z)),
         )
     }
 }

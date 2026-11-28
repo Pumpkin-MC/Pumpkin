@@ -56,3 +56,65 @@ pub struct AttributeModifier {
     /// Whether the modifier persists across save/load sessions.
     pub is_serializable: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn attributes_round_trip_with_modifier_and_tick() -> Result<(), Box<dyn std::error::Error>> {
+        let packet = CUpdateAttributes {
+            target_runtime_id: VarULong(150),
+            attribute_list: vec![AttributeData {
+                min_value: 1.0,
+                max_value: 16.0,
+                current_value: 3.0,
+                default_min_value: 2.0,
+                default_max_value: 32.0,
+                default_value: 4.0,
+                name: "minecraft:health".into(),
+                modifiers: vec![AttributeModifier {
+                    id: "example:test".into(),
+                    name: "Test".into(),
+                    amount: 0.25,
+                    operation: 1,
+                    operand: 2,
+                    is_serializable: true,
+                }],
+            }],
+            tick: VarULong(300),
+        };
+        let mut bytes = Vec::new();
+        packet.write(&mut bytes)?;
+        let mut data = bytes.as_slice();
+        let decoded = CUpdateAttributes::read(&mut data)?;
+        assert!(data.is_empty());
+        assert_eq!(decoded.target_runtime_id, packet.target_runtime_id);
+        assert_eq!(decoded.tick, packet.tick);
+        let [attribute] = decoded.attribute_list.as_slice() else {
+            return Err("expected one attribute".into());
+        };
+        assert_eq!(attribute.name, "minecraft:health");
+        assert_eq!(
+            [
+                attribute.min_value.to_bits(),
+                attribute.max_value.to_bits(),
+                attribute.current_value.to_bits(),
+                attribute.default_min_value.to_bits(),
+                attribute.default_max_value.to_bits(),
+                attribute.default_value.to_bits(),
+            ],
+            [1.0f32, 16.0, 3.0, 2.0, 32.0, 4.0].map(f32::to_bits),
+        );
+        let [modifier] = attribute.modifiers.as_slice() else {
+            return Err("expected one modifier".into());
+        };
+        assert_eq!(modifier.id, "example:test");
+        assert_eq!(modifier.name, "Test");
+        assert_eq!(modifier.amount.to_bits(), 0.25f32.to_bits());
+        assert_eq!(modifier.operation, 1);
+        assert_eq!(modifier.operand, 2);
+        assert!(modifier.is_serializable);
+        Ok(())
+    }
+}

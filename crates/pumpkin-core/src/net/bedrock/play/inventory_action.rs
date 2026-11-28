@@ -163,8 +163,9 @@ impl VehicleBlockClick<'_> {
             .get_pumpkin_item(held.get_item().id)
             .is_some_and(|item| item.as_any().is::<FireworkRocketItem>())
         {
-            return FireworkRocketItem::use_from_offhand(
+            return FireworkRocketItem::use_from_slot(
                 &self.source,
+                self.slot,
                 player,
                 world,
                 data.block_position,
@@ -184,7 +185,6 @@ impl VehicleBlockClick<'_> {
             block,
             server,
         );
-        let mut consumed = result.consumes_action();
         if should_try_block_placement(&result)
             && let Some(placed_block) = pumpkin_data::Block::from_item_id(held.get_item().id)
         {
@@ -197,21 +197,41 @@ impl VehicleBlockClick<'_> {
                 is_against_world_border: false,
                 sequence: VarInt(0),
             };
-            consumed = matches!(
-                server.block_registry.place_block(
+            let mut remainder = held;
+            remainder.decrement_unless_creative(player.gamemode.load(), 1);
+            let changed = !remainder.are_equal(&self.source);
+            let inventory = player.inventory();
+            let consumed = matches!(
+                server.block_registry.place_block_with_commit(
                     player,
                     placed_block,
                     server,
                     &request,
                     data.block_position,
-                    face
+                    face,
+                    || self.source_is_current()
+                        && (!changed
+                            || inventory.replace_slot_if_same(
+                                self.slot,
+                                &self.source,
+                                remainder.clone()
+                            )),
                 ),
                 Ok(Some(_))
             );
             if consumed {
-                held.decrement_unless_creative(player.gamemode.load(), 1);
+                if changed {
+                    player.sync_hand_slot(self.slot, inventory.get_slot(self.slot));
+                }
+                player.increment_stat(
+                    pumpkin_data::statistic::StatisticCategory::Used,
+                    i32::from(self.source.get_item().id),
+                    1,
+                );
             }
+            return consumed;
         }
+        let consumed = result.consumes_action();
         if consumed {
             self.publish_changed_source(held);
             player.increment_stat(

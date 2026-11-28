@@ -246,6 +246,7 @@ impl EntityBase for MinecartEntity {
 
     fn vehicle_requires_serial_tick(&self) -> bool {
         matches!(self.kind, MinecartKind::CommandBlock(_) | MinecartKind::Tnt(_))
+            || self.get_entity().portal_manager.try_lock().map_or(true, |portal| portal.is_some())
             || (matches!(self.kind, MinecartKind::Rideable(_))
                 && self.get_entity().world.load().server.upgrade().is_some_and(|server| {
                     server.plugin_manager.has_handlers::<crate::plugin::api::events::entity::entity_mount::EntityMountEvent>()

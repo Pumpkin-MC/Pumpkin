@@ -38,3 +38,37 @@ impl<'a> CPlaySound<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn one_shot_sound_matches_protocol_2225() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::serial::PacketRead;
+
+        let packet = CPlaySound::once("note", &Vector3::new(1.25, -0.5, 0.125), 1.0, 0.5);
+        let mut bytes = Vec::new();
+        packet.write(&mut bytes)?;
+        assert_eq!(
+            bytes,
+            [
+                4, b'n', b'o', b't', b'e', 20, 7, 2, // Name and zigzag coordinates.
+                0, 0, 128, 63, 0, 0, 0, 63, // Volume and pitch.
+                0, 0, 0, 0, // Loop count, bypass, and both option markers.
+            ],
+        );
+        let mut data = &bytes[5..];
+        assert_eq!(VarInt::read(&mut data)?.0, 10);
+        assert_eq!(VarInt::read(&mut data)?.0, -4);
+        assert_eq!(VarInt::read(&mut data)?.0, 1);
+        assert_eq!(f32::read(&mut data)?.to_bits(), 1.0f32.to_bits());
+        assert_eq!(f32::read(&mut data)?.to_bits(), 0.5f32.to_bits());
+        assert_eq!(VarInt::read(&mut data)?.0, 0);
+        assert!(!bool::read(&mut data)?);
+        assert_eq!(Option::<u64>::read(&mut data)?, None);
+        assert_eq!(Option::<f32>::read(&mut data)?, None);
+        assert!(data.is_empty());
+        Ok(())
+    }
+}

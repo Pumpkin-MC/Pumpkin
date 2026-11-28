@@ -919,6 +919,41 @@ async fn furnace_cart_collision_preserves_an_observers_new_transport_in_both_ord
     .await
 }
 
+async fn assert_cart_velocity_received(
+    client: &crate::net::java::JavaClient,
+    peer: tokio::io::DuplexStream,
+    cart_id: i32,
+    replacement: Vector3<f64>,
+) -> TestResult {
+    use pumpkin_protocol::java::{client::play::CKeepAlive, packet_decoder::TCPNetworkDecoder};
+
+    assert!(client.try_send_packet(&CKeepAlive::new(73)));
+    let mut decoder = TCPNetworkDecoder::new(tokio::io::BufReader::new(peer));
+    let replacement_reached_peer = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let mut found = false;
+        loop {
+            let packet = decoder.get_raw_packet().await?;
+            if packet.id == CKeepAlive::to_id(CURRENT_MC_VERSION) {
+                return Ok::<_, pumpkin_protocol::PacketDecodeError>(found);
+            }
+            if packet.id == CEntityVelocity::to_id(CURRENT_MC_VERSION) {
+                let mut data = packet.payload.as_ref();
+                if let Ok(id) = data.get_var_int()
+                    && id.0 == cart_id
+                    && let Ok(LpVector3d(velocity)) = LpVector3d::read(&mut data)
+                    && (velocity - replacement).length_squared() < 1.0e-8
+                {
+                    found = true;
+                }
+            }
+        }
+    })
+    .await??;
+    assert!(replacement_reached_peer);
+
+    Ok(())
+}
+
 async fn check_cart_collision_observer(
     left_type: &'static EntityType,
     expected: [Vector3<f64>; 2],
@@ -932,7 +967,7 @@ async fn check_cart_collision_observer(
             .level
             .loaded_chunks
             .insert(chunk, ChunkData::empty_sync(0, 0));
-        let (watcher, _peer) = java_rider(&server, &world, "Notch")?;
+        let (watcher, peer) = java_rider(&server, &world, "Notch")?;
         let client = watcher.client.java().ok_or("Missing Java watcher")?;
         client.player.store(Arc::new(Some(watcher.clone())));
         watcher.get_entity().set_pos(CENTER.add_raw(0.0, 0.0, 3.0));
@@ -1007,21 +1042,37 @@ async fn check_cart_collision_observer(
 
         client.player.store(Arc::new(None));
         observer.check_collision(expected, reverse, packets_during_push)?;
+        assert_cart_velocity_received(
+            client,
+            peer,
+            other.get_entity().entity_id,
+            observer.replacement,
+        )
+        .await?;
         if mixed {
-            let furnace = left.get_entity();
-            assert!(!furnace.velocity_dirty.load(Ordering::SeqCst));
-            furnace.set_pos(CENTER);
-            furnace.velocity_dirty.store(true, Ordering::SeqCst);
-            receiver.push(contact.as_ref());
-            assert_eq!(
-                furnace.velocity.load(),
-                observer.replacement.multiply(0.95, 1.0, 0.95)
-            );
-            assert!(furnace.velocity_dirty.load(Ordering::SeqCst));
+            check_furnace_impulse(&left, receiver, contact, observer.replacement);
         }
         world.level.shutdown().await;
     }
     Ok(())
+}
+
+fn check_furnace_impulse(
+    left: &MinecartEntity,
+    receiver: &MinecartEntity,
+    contact: &MinecartEntity,
+    replacement: Vector3<f64>,
+) {
+    let furnace = left.get_entity();
+    assert!(!furnace.velocity_dirty.load(Ordering::SeqCst));
+    furnace.set_pos(CENTER);
+    furnace.velocity_dirty.store(true, Ordering::SeqCst);
+    receiver.push(contact);
+    assert_eq!(
+        furnace.velocity.load(),
+        replacement.multiply(0.95, 1.0, 0.95)
+    );
+    assert!(furnace.velocity_dirty.load(Ordering::SeqCst));
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -1445,7 +1496,14 @@ async fn fast_minecart_pickup_runs_mount_effects_only_on_success() -> TestResult
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn fast_minecart_pickup_respects_the_collision_disabled_team() -> TestResult {
+async fn minecart_pickup_respects_the_collision_disabled_team() -> TestResult {
+    for speed in [0.02, 0.2] {
+        check_collision_disabled_team(speed).await?;
+    }
+    Ok(())
+}
+
+async fn check_collision_disabled_team(speed: f64) -> TestResult {
     use crate::world::scoreboard::{CollisionRule, NameTagVisibility, Team};
     use pumpkin_util::text::{TextComponent, color::NamedColor};
 
@@ -1492,9 +1550,9 @@ async fn fast_minecart_pickup_respects_the_collision_disabled_team() -> TestResu
     entity.set_has_no_gravity(true);
     let tick = || {
         entity.set_pos(CENTER);
-        entity.velocity.store(Vector3::new(0.2, 0.0, 0.0));
+        entity.velocity.store(Vector3::new(speed, 0.0, 0.0));
         cart.tick(cart.as_ref(), &server);
-        assert!(entity.velocity.load().x >= 0.1);
+        assert!(entity.pos.load().x > CENTER.x);
     };
 
     tick();

@@ -348,7 +348,7 @@ fn include_vehicle_block_reach(reach: &mut TickReach, base: &Entity, bounds: Bou
         Some(union(&reach.body, &contact).expand_all(BLOCK_UPDATE_REACH + TRIPWIRE_REACH));
 }
 
-fn include_vehicle_event_links(reach: &mut TickReach, world: &World) {
+fn vehicle_event_area(body: &BoundingBox) -> BoundingBox {
     let radius = [
         GameEvent::EntityMount,
         GameEvent::EntityDismount,
@@ -360,16 +360,52 @@ fn include_vehicle_event_links(reach: &mut TickReach, world: &World) {
     .map(GameEvent::notification_radius)
     .max()
     .unwrap_or_default();
-    let area = union(
-        &super::game_event::notified_area(reach.body.min, radius),
-        &super::game_event::notified_area(reach.body.max, radius),
-    );
+    union(
+        &super::game_event::notified_area(body.min, radius),
+        &super::game_event::notified_area(body.max, radius),
+    )
+}
+
+fn include_vehicle_event_links(reach: &mut TickReach, world: &World) {
+    let area = vehicle_event_area(&reach.body);
     reach.links.extend(
         world
             .entity_index
             .listeners(world.entities.load_full(), area)
             .map(|listener| listener.get_entity().entity_id),
     );
+}
+
+/// Link tickable listeners whose next-tick body can enter a vehicle's notification area.
+pub(crate) fn include_moving_vehicle_event_listeners<'a>(
+    reaches: &mut [TickReach],
+    entities: impl Iterator<Item = &'a dyn EntityBase>,
+) -> Option<()> {
+    let mut listener_bounds = Vec::new();
+    let mut vehicles = Vec::new();
+    for (index, (reach, entity)) in reaches.iter().zip(entities).enumerate() {
+        if entity
+            .get_mob()
+            .is_some_and(crate::entity::mob::has_game_event_listener)
+        {
+            listener_bounds.push((entity.get_entity().entity_id, reach.body));
+        }
+        if entity.vehicle_contact_tick_reach().is_some() {
+            vehicles.push(index);
+        }
+    }
+    let mut budget = PlanningBudget::default();
+    budget.spend(vehicles.len().saturating_mul(listener_bounds.len()))?;
+    for vehicle in vehicles {
+        let reach = &mut reaches[vehicle];
+        let area = vehicle_event_area(&reach.body);
+        for &(id, bounds) in &listener_bounds {
+            if overlaps(&area, &bounds) && !reach.links.contains(&id) {
+                reach.links.push(id);
+            }
+        }
+    }
+    Some(())
 }
 
 #[derive(Clone, Copy)]
@@ -601,11 +637,11 @@ pub fn resolve(
                     reach.block_reads = grow(reach.block_reads);
                     reach.block_writes = reach.block_writes.map(grow);
                 }
-                include_vehicle_event_links(reach, world);
                 if vehicle_can_drop_leash(world, &reach.body) {
                     return None;
                 }
                 earlier_hulls.insert(earlier_hulls.boxes.len(), reach.entities, &mut budget)?;
+                include_vehicle_event_links(reach, world);
                 reach
             }
         };
@@ -1664,6 +1700,46 @@ mod tests {
         let listener_id = listener.get_entity().entity_id;
         assert!(cart_reach.entities.max.x < listener.get_entity().pos.load().x);
         assert!(cart_reach.links.contains(&listener_id));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn vehicle_links_a_listener_that_can_move_into_event_range()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{passive::allay::AllayEntity, vehicle::minecart::MinecartEntity};
+
+        let directory = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&directory);
+        let cart = MinecartEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(14.0, 64.0, 0.0),
+            &EntityType::MINECART,
+        ));
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            knockback_reach: 0.0,
+        };
+        let mut reaches =
+            resolve(vec![EntityReach::of(&cart, &config)], &config).ok_or("unexpected fallback")?;
+        let area = vehicle_event_area(&reaches[0].body);
+        let listener = AllayEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(area.max.x + 1.0, 64.0, 0.0),
+            &EntityType::ALLAY,
+        ));
+        world.add_entity_silent(listener.clone());
+        let listener_id = listener.get_entity().entity_id;
+        let bounds = listener.get_entity().bounding_box.load();
+        assert!(!overlaps(&area, &bounds));
+        assert!(!reaches[0].links.contains(&listener_id));
+        reaches.push(TickReach::conservative(&bounds, 2.0, Vec::new()));
+        include_moving_vehicle_event_listeners(
+            &mut reaches,
+            [&cart as &dyn EntityBase, listener.as_ref()].into_iter(),
+        )
+        .ok_or("unexpected link budget fallback")?;
+        assert!(reaches[0].links.contains(&listener_id));
         world.level.shutdown().await;
         Ok(())
     }

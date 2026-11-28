@@ -1090,13 +1090,13 @@ impl LivingEntity {
         stack: ItemStack,
         duration: i32,
         world: &Arc<World>,
-    ) {
+    ) -> bool {
         let source = CartUseSource {
             world: Arc::downgrade(world),
             hand,
             slot,
         };
-        self.start_active_hand(hand, stack, duration, false, Some(source));
+        self.start_active_hand(hand, stack, duration, false, Some(source))
     }
 
     pub(crate) fn stop_cart_use_for_selected_slot(&self, slot: u8) {
@@ -1387,15 +1387,17 @@ impl LivingEntity {
     }
 
     pub fn is_blocking(&self) -> bool {
+        self.blocking_component().is_some()
+    }
+
+    fn blocking_component(&self) -> Option<(BlocksAttacksImpl, u64)> {
         let active = self
             .item_in_use
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(item) = active.as_ref() else {
-            return false;
-        };
+        let item = active.as_ref()?;
         if self.livings_flags.load(Relaxed) & Self::USING_ITEM_FLAG == 0 {
-            return false;
+            return None;
         }
         let actor = self
             .entity
@@ -1409,23 +1411,19 @@ impl LivingEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let live;
         let item = if let Some(source) = source.as_ref() {
-            let Some(stack) = player.and_then(|player| source.live_stack(player, item)) else {
-                return false;
-            };
-            live = stack;
+            live = player.and_then(|player| source.live_stack(player, item))?;
             &live
         } else {
             item
         };
-        let Some(blocks_attacks) = item.get_data_component::<BlocksAttacksImpl>() else {
-            return false;
-        };
+        let blocks_attacks = item.get_data_component::<BlocksAttacksImpl>()?;
         let delay = if player.is_some_and(|player| player.client.bedrock().is_some()) {
             0
         } else {
             blocks_attacks.block_delay_ticks()
         };
-        item.get_max_use_time() - self.item_use_time.load(Relaxed) >= delay
+        (item.get_max_use_time() - self.item_use_time.load(Relaxed) >= delay)
+            .then(|| (blocks_attacks.clone(), self.item_use_revision.load(Relaxed)))
     }
 
     /// Like vanilla, the dead are not healed and a negative amount takes health.
@@ -3536,7 +3534,7 @@ impl LivingEntity {
         position: Option<Vector3<f64>>,
         source: Option<&dyn EntityBase>,
     ) -> f32 {
-        if amount <= 0.0 || !self.is_blocking() {
+        if amount <= 0.0 {
             return 0.0;
         }
         if source.is_some_and(|src| {
@@ -3547,16 +3545,7 @@ impl LivingEntity {
             return 0.0;
         }
 
-        let Some((blocks_attacks, use_revision)) = ({
-            let item_in_use = self
-                .item_in_use
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            item_in_use
-                .as_ref()
-                .and_then(|stack| stack.get_data_component::<BlocksAttacksImpl>().cloned())
-                .map(|blocks_attacks| (blocks_attacks, self.item_use_revision.load(Relaxed)))
-        }) else {
+        let Some((blocks_attacks, use_revision)) = self.blocking_component() else {
             return 0.0;
         };
 

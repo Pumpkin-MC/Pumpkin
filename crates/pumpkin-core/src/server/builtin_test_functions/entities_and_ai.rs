@@ -166,6 +166,14 @@ pub(super) async fn test_riding_shulker_keeps_attach_face(
         )
         .await?;
 
+    let mounted = helper
+        .execute_command(
+            &seat,
+            "execute as @e[type=minecraft:oak_boat,distance=..3] on passengers if entity @s[type=minecraft:shulker,nbt={AttachFace:0b}]",
+        )
+        .await?;
+    helper.assert_true(mounted == 1, "Shulker must attach down during /ride mount")?;
+
     helper
         .start_sequence()
         .then_idle(5)

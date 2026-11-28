@@ -43,9 +43,10 @@ impl JavaClient {
                 .get_slot(packet.slot as usize)
                 .set_stack(item_stack.clone());
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
+            let committed_equipment = player.screen_equipment();
             drop(player_screen_handler);
             player.send_player_screen_updates();
-            player.publish_screen_equipment(&equipment_before);
+            player.publish_committed_screen_equipment(&equipment_before, &committed_equipment);
         } else if is_negative && is_legal {
             // Item drop
             player.drop_item(item_stack);

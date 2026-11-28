@@ -60,7 +60,8 @@ async fn duplicate_vehicle_uuid_does_not_commit_placement() -> TestResult {
             .entity_registrations
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .insert(uuid)
+            .insert(uuid, boat.get_entity().entity_id)
+            .is_none()
     );
     assert!(
         world
@@ -82,6 +83,7 @@ async fn duplicate_vehicle_uuid_does_not_commit_placement() -> TestResult {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&uuid)
+            .is_some()
     );
     world.add_entity_silent(boat.clone());
     let id = boat.get_entity().entity_id;
@@ -4748,8 +4750,9 @@ async fn concurrent_boat_placements_commit_only_one_overlapping_hull() -> TestRe
     use crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent;
     use pumpkin_data::{item::Item, item_stack::ItemStack, statistic::StatisticCategory};
     use pumpkin_util::Hand;
+    use std::sync::atomic::AtomicUsize;
 
-    struct WaitForBothPlacements(tokio::sync::Barrier);
+    struct WaitForBothPlacements(tokio::sync::Barrier, AtomicUsize);
     impl EventRwHandler<EntitySpawnEvent> for WaitForBothPlacements {
         fn handle<'a>(
             &'a self,
@@ -4758,6 +4761,7 @@ async fn concurrent_boat_placements_commit_only_one_overlapping_hull() -> TestRe
         ) -> BoxFuture<'a, ()> {
             Box::pin(async move {
                 if event.entity_type == EntityType::OAK_BOAT.id.to_string() {
+                    self.1.fetch_add(1, Ordering::Relaxed);
                     assert!(
                         tokio::time::timeout(std::time::Duration::from_secs(5), self.0.wait())
                             .await
@@ -4778,13 +4782,13 @@ async fn concurrent_boat_placements_commit_only_one_overlapping_hull() -> TestRe
     second
         .get_entity()
         .set_pos(BOAT_PLACEMENT_OFFSET.add_raw(-0.75, 0.0, 0.0));
+    let barrier = Arc::new(WaitForBothPlacements(
+        tokio::sync::Barrier::new(2),
+        AtomicUsize::new(0),
+    ));
     server
         .plugin_manager
-        .register_blocking::<EntitySpawnEvent, _>(
-            Arc::new(WaitForBothPlacements(tokio::sync::Barrier::new(2))),
-            EventPriority::Normal,
-            None,
-        );
+        .register_blocking::<EntitySpawnEvent, _>(barrier.clone(), EventPriority::Normal, None);
     let place = |player: Arc<crate::entity::player::Player>| {
         let stack = ItemStack::new(1, &Item::OAK_BOAT);
         player.inventory().set_held_item(stack.clone());
@@ -4799,6 +4803,7 @@ async fn concurrent_boat_placements_commit_only_one_overlapping_hull() -> TestRe
     let second_request = place(second.clone());
     first_request.await?;
     second_request.await?;
+    assert_eq!(barrier.1.load(Ordering::Relaxed), 2);
 
     assert_eq!(boat_placement_actors(&world).len(), 1);
     let mut outcomes = [first, second].map(|player| {
@@ -6220,6 +6225,26 @@ async fn java_boat_air_swing_stays_in_the_placement_world() -> TestResult {
         .inventory()
         .set_held_item(ItemStack::new(1, &Item::OAK_BOAT));
     placer.last_attacked_ticks.store(20, Ordering::Relaxed);
+    let client = placer.client.java().ok_or("Java placer")?;
+    client.handle_use_item(
+        &placer,
+        &SUseItem {
+            hand: 0.into(),
+            sequence: 1.into(),
+            yaw: 0.0,
+            pitch: 45.0,
+        },
+        &server,
+    );
+    let boats = boat_placement_actors(&origin);
+    assert_eq!(boats.len(), 1);
+    assert_eq!(placer.last_attacked_ticks.load(Ordering::Relaxed), 0);
+    origin.remove_entity(boats.first().ok_or("Control boat")?.as_ref());
+    placer
+        .inventory()
+        .set_held_item(ItemStack::new(1, &Item::OAK_BOAT));
+    placer.last_attacked_ticks.store(20, Ordering::Relaxed);
+
     server
         .plugin_manager
         .register_blocking::<PlayerStatisticIncrementEvent, _>(
@@ -6227,11 +6252,11 @@ async fn java_boat_air_swing_stays_in_the_placement_world() -> TestResult {
             EventPriority::Normal,
             None,
         );
-    placer.client.java().ok_or("Java placer")?.handle_use_item(
+    client.handle_use_item(
         &placer,
         &SUseItem {
             hand: 0.into(),
-            sequence: 1.into(),
+            sequence: 2.into(),
             yaw: 0.0,
             pitch: 45.0,
         },
@@ -6243,7 +6268,7 @@ async fn java_boat_air_swing_stays_in_the_placement_world() -> TestResult {
     assert!(placer.inventory().held_item().is_empty());
     assert_eq!(
         placer.get_stat(StatisticCategory::Used, i32::from(Item::OAK_BOAT.id)),
-        1
+        2
     );
     assert_eq!(placer.last_attacked_ticks.load(Ordering::Relaxed), 20);
     destination.level.shutdown().await;

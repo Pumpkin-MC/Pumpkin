@@ -17,6 +17,20 @@ impl MinecartEntity {
         passenger: &dyn EntityBase,
         still_current: &dyn Fn() -> bool,
     ) -> Option<Vector3<f64>> {
+        self.search_dismount_location(passenger, still_current)
+            .or_else(|| {
+                if !still_current() {
+                    return None;
+                }
+                self.search_dismount_location(passenger, still_current)
+            })
+    }
+
+    fn search_dismount_location(
+        &self,
+        passenger: &dyn EntityBase,
+        still_current: &dyn Fn() -> bool,
+    ) -> Option<Vector3<f64>> {
         let minecart = self.get_entity();
         if let Some(exit) = exceptional_exit(minecart, passenger) {
             return Some(exit);

@@ -3201,6 +3201,7 @@ struct ObservedInventory {
     content: Vec<u16>,
     cursors: Vec<u16>,
     slots: Vec<u16>,
+    slot_destinations: Vec<(Option<i32>, i32)>,
 }
 
 async fn read_inventory_screen(
@@ -3242,13 +3243,14 @@ async fn read_inventory_screen(
             } else if packet.id == CSetPlayerInventory::to_id(CURRENT_MC_VERSION)
                 || packet.id == CSetContainerSlot::to_id(CURRENT_MC_VERSION)
             {
-                if packet.id == CSetPlayerInventory::to_id(CURRENT_MC_VERSION) {
-                    payload.get_var_int()?;
+                let destination = if packet.id == CSetPlayerInventory::to_id(CURRENT_MC_VERSION) {
+                    (None, payload.get_var_int()?.0)
                 } else {
-                    payload.get_container_id(&CURRENT_MC_VERSION)?;
+                    let window = payload.get_container_id(&CURRENT_MC_VERSION)?.0;
                     payload.get_var_int()?;
-                    payload.get_i16_be()?;
-                }
+                    (Some(window), i32::from(payload.get_i16_be()?))
+                };
+                observed.slot_destinations.push(destination);
                 let stack =
                     ItemStackSerializer::read_with_version(&mut payload, &CURRENT_MC_VERSION)?;
                 observed.slots.push(stack.0.item.id);
@@ -4483,14 +4485,13 @@ async fn bedrock_failed_stack_request_resends_its_partial_writes() -> TestResult
         Packet,
         bedrock::{
             client::{
-                inventory_content::CInventoryContent,
-                item_stack_response::{CItemStackResponse, ItemStackResponseInfo},
+                inventory_content::CInventoryContent, item_stack_response::CItemStackResponse,
             },
-            network_item::NetworkItemStackDescriptor,
+            network_item::{FullContainerName, NetworkItemStackDescriptor},
             server::inventory_transaction::WINDOW_ID_ARMOUR,
         },
         codec::{var_int::VarInt, var_uint::VarUInt},
-        serial::{PacketRead, PacketWrite},
+        serial::PacketRead,
     };
 
     let folder = tempfile::tempdir()?;
@@ -4547,19 +4548,21 @@ async fn bedrock_failed_stack_request_resends_its_partial_writes() -> TestResult
             assert_eq!(VarUInt::read(&mut payload)?.0, 2);
             assert_eq!(u8::read(&mut payload)?, 0);
             assert_eq!(VarInt::read(&mut payload)?.0, -3);
-            // The successful drop carries container data; the failed request ends
-            // the response with its ID and a false has-containers flag.
-            let mut failed_response = Vec::new();
-            ItemStackResponseInfo {
-                result: 1,
-                client_request_id: VarInt(-1),
-                containers: Vec::new(),
-            }
-            .write(&mut failed_response)?;
-            assert!(
-                payload.ends_with(&failed_response),
-                "missing failed acknowledgement"
-            );
+            assert!(bool::read(&mut payload)?);
+            assert_eq!(VarUInt::read(&mut payload)?.0, 1);
+            FullContainerName::read(&mut payload)?;
+            assert_eq!(VarUInt::read(&mut payload)?.0, 1);
+            assert_eq!(u8::read(&mut payload)?, 0);
+            assert_eq!(u8::read(&mut payload)?, 0);
+            assert_eq!(u8::read(&mut payload)?, 0);
+            assert!(!bool::read(&mut payload)?);
+            assert!(String::read(&mut payload)?.is_empty());
+            assert!(String::read(&mut payload)?.is_empty());
+            assert_eq!(VarInt::read(&mut payload)?.0, 0);
+            assert_eq!(u8::read(&mut payload)?, 1);
+            assert_eq!(VarInt::read(&mut payload)?.0, -1);
+            assert!(!bool::read(&mut payload)?);
+            assert!(payload.is_empty());
             acknowledged_failure = true;
         } else if i32::from(id) == CInventoryContent::PACKET_ID
             && VarUInt::read(&mut payload)?.0 == WINDOW_ID_ARMOUR as u32
@@ -4851,6 +4854,10 @@ async fn java_drop_updates_the_menu_opened_by_its_listener() -> TestResult {
     let observed = read_inventory_screen(peer).await?;
     assert_eq!(observed.content.get(54), Some(&Item::STICK.id));
     assert_eq!(observed.slots, [Item::AIR.id]);
+    assert!(matches!(
+        observed.slot_destinations.as_slice(),
+        [(Some(1), 54) | (None, 0)]
+    ));
     world.level.shutdown().await;
     Ok(())
 }

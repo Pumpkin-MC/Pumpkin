@@ -2495,6 +2495,7 @@ impl Player {
                 pumpkin_data::data_component_impl::IdOr::Value(_) => None,
             });
         let result = self.apply_item_damage(&mut stack, amount, true);
+        let committed_break = (result == DamageResult::Broken).then(|| stack.clone());
         if result == DamageResult::Untouched
             || !self
                 .inventory
@@ -2503,7 +2504,7 @@ impl Player {
             return false;
         }
         self.notify_committed_item_damage(original_item, result);
-        if result == DamageResult::Broken {
+        if let Some(committed_break) = committed_break {
             self.increment_stat(
                 statistics::StatisticCategory::Broken,
                 original_item.id as i32,
@@ -2516,7 +2517,11 @@ impl Player {
                     &self.living_entity.entity.pos.load(),
                 );
             }
-            if self.inventory.equipment_slot_index(slot) == Some(slot_index) {
+            let current = self.inventory.get_slot(slot_index);
+            if self.inventory.equipment_slot_index(slot) == Some(slot_index)
+                && current.uid == committed_break.uid
+                && current.are_equal(&committed_break)
+            {
                 self.world().send_entity_status(
                     &self.living_entity.entity,
                     super::equipment_break_status(slot),
@@ -3693,19 +3698,21 @@ impl Player {
             }
         }
 
-        if let Ok(current_screen_handler_guard) = self.current_screen_handler.try_lock() {
-            let current_screen_handler = current_screen_handler_guard.clone();
-            drop(current_screen_handler_guard);
-            let is_invalid = current_screen_handler
+        if let Ok(active) = self.current_screen_handler.try_lock() {
+            let owner = ScreenOwner {
+                handler: active.clone(),
+                generation: self.screen_handler_generation.load(Ordering::Relaxed),
+            };
+            drop(active);
+            let is_invalid = owner
+                .handler
                 .try_lock()
                 .is_ok_and(|screen_handler| !screen_handler.can_use(self));
 
             if is_invalid {
-                if let Some(p) = self.world().get_player_by_uuid(self.gameprofile.id) {
-                    p.close_handled_screen();
-                }
+                self.close_screen_with_packet(&owner);
             } else {
-                self.try_sync_screen(&current_screen_handler, true);
+                self.try_sync_screen(&owner.handler, true);
             }
         }
 

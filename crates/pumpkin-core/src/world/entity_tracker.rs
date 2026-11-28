@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::collections::hash_map::Entry;
 use std::sync::atomic::{
     AtomicBool, AtomicU32, AtomicU64,
     Ordering::{self, Relaxed},
@@ -57,6 +58,8 @@ use crate::world::chunker::get_view_distance;
 fn encode_pos(value: f64) -> i64 {
     (value * 4096.0 + 0.5).floor() as i64
 }
+
+const MAX_RELATIVE_MOVE_TICKS: u32 = 400;
 
 /// Vanilla `ServerEntity.sendChanges` packet choice.
 #[derive(Clone, Copy)]
@@ -140,7 +143,7 @@ pub(crate) struct EquipmentSession {
 }
 
 type EffectPairingRetries = FxHashMap<
-    (Uuid, &'static pumpkin_data::effect::StatusEffect),
+    (Uuid, Option<&'static pumpkin_data::effect::StatusEffect>),
     (Weak<Player>, EquipmentSession),
 >;
 
@@ -411,10 +414,12 @@ impl TrackedEntity {
                     self.send_move(&update, sync, yaw, pitch, on_ground);
                 }
                 if update.lock_if_current().is_none() {
+                    self.recover_partial_move(&update, sync);
                     return;
                 }
                 entity.send_dirty_entity_data();
                 let Some(_motion_guard) = update.lock_if_current() else {
+                    self.recover_partial_move(&update, sync);
                     return;
                 };
                 if matches!(sync, Some(MoveSync::Absolute)) {
@@ -453,6 +458,15 @@ impl TrackedEntity {
         }
     }
 
+    fn recover_partial_move(&self, update: &TrackingUpdate<'_>, sync: Option<MoveSync>) {
+        if sync.is_some_and(MoveSync::sends_position)
+            && update.entity.vehicle_motion_epoch() == update.teleport_epoch
+        {
+            self.teleport_delay.store(MAX_RELATIVE_MOVE_TICKS, Relaxed);
+            update.entity.sync_position.store(true, Ordering::SeqCst);
+        }
+    }
+
     fn pick_move(
         &self,
         update: &TrackingUpdate<'_>,
@@ -482,7 +496,7 @@ impl TrackedEntity {
 
         match delta {
             Some(delta)
-                if teleport_delay <= 400
+                if teleport_delay <= MAX_RELATIVE_MOVE_TICKS
                     && !self.was_riding.load(Relaxed)
                     && self.was_on_ground.load(Relaxed) == on_ground =>
             {
@@ -1243,15 +1257,7 @@ impl TrackedEntity {
         if let Some(living) = self.entity.get_living_entity() {
             self.send_pairing_equipment(living, player, session);
 
-            if let Ok(effect_types) = living
-                .active_effects
-                .try_lock()
-                .map(|effects| effects.keys().copied().collect::<Vec<_>>())
-            {
-                for effect_type in effect_types {
-                    self.send_pairing_effect(living, player, session, effect_type);
-                }
-            }
+            self.enumerate_pairing_effects(living, player, session);
         }
 
         if !still_paired() {
@@ -1276,6 +1282,29 @@ impl TrackedEntity {
             && !Self::java_pairing_link(&data, version, self.entity_id))
         .then_some(data)
         .and_then(|data| Self::without_java_removal(data, version, self.entity_id))
+    }
+
+    fn enumerate_pairing_effects(
+        &self,
+        living: &LivingEntity,
+        player: &Arc<Player>,
+        session: EquipmentSession,
+    ) {
+        let effect_types = match living
+            .active_effects
+            .try_lock()
+            .map(|effects| effects.keys().copied().collect::<Vec<_>>())
+        {
+            Ok(effect_types) => effect_types,
+            Err(std::sync::TryLockError::WouldBlock) => {
+                self.defer_pairing_effect(player, session, None);
+                return;
+            }
+            Err(std::sync::TryLockError::Poisoned(_)) => return,
+        };
+        for effect_type in effect_types {
+            self.send_pairing_effect(living, player, session, effect_type);
+        }
     }
 
     fn send_pairing_effect(
@@ -1360,6 +1389,15 @@ impl TrackedEntity {
                 return;
             }
         }
+        self.defer_pairing_effect(player, session, Some(effect_type));
+    }
+
+    fn defer_pairing_effect(
+        &self,
+        player: &Arc<Player>,
+        session: EquipmentSession,
+        effect_type: Option<&'static pumpkin_data::effect::StatusEffect>,
+    ) {
         if let Some(_pairing) = self.lock_pairing_session(session) {
             self.effect_retries
                 .lock()
@@ -1387,7 +1425,11 @@ impl TrackedEntity {
                 if let Some(viewer) = viewer.upgrade()
                     && self.lock_pairing_session(session).is_some()
                 {
-                    self.send_pairing_effect(living, &viewer, session, effect_type);
+                    if let Some(effect_type) = effect_type {
+                        self.send_pairing_effect(living, &viewer, session, effect_type);
+                    } else {
+                        self.enumerate_pairing_effects(living, &viewer, session);
+                    }
                 }
             }
         }
@@ -1852,9 +1894,13 @@ impl TrackedEntity {
             .seen_by
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(viewer) = viewers.remove(&player.gameprofile.id) else {
+        let Entry::Occupied(viewer) = viewers.entry(player.gameprofile.id) else {
             return false;
         };
+        if !std::ptr::eq(viewer.get().player.as_ref(), player) {
+            return false;
+        }
+        let viewer = viewer.remove();
         if viewer.player.client.bedrock().is_some() {
             self.bedrock_watchers.fetch_sub(1, Relaxed);
         }
@@ -2796,24 +2842,23 @@ impl EntityTracker {
         let track_deltas = entity_type.track_deltas;
         let entity_id = base.entity_id;
 
-        let tracked = Arc::new(TrackedEntity::new(
-            entity.clone(),
-            range,
-            update_interval,
-            track_deltas,
-        ));
-        match self.entity_map.entry(entity_id) {
+        let tracked = match self.entity_map.entry(entity_id) {
             dashmap::mapref::entry::Entry::Occupied(_) => return,
             dashmap::mapref::entry::Entry::Vacant(entry) => {
                 // World removal marks the actor before removing this map entry.
-                // Check while holding the shard so a concurrent removal either
-                // precedes this check or removes the tracker we insert.
                 if base.is_removed() {
                     return;
                 }
+                let tracked = Arc::new(TrackedEntity::new(
+                    entity.clone(),
+                    range,
+                    update_interval,
+                    track_deltas,
+                ));
                 entry.insert(tracked.clone());
+                tracked
             }
-        }
+        };
 
         let players = world.players.load();
         tracked.update_players(players.as_ref(), world);
@@ -3035,6 +3080,38 @@ mod tests {
         })
         .await??;
         Ok(packets)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn duplicate_registration_preserves_the_last_sent_position() -> TestResult {
+        let folder = tempfile::tempdir()?;
+        let (_, world) = vehicle_world(&folder).await?;
+        let cart: Arc<dyn EntityBase> = Arc::new(MinecartEntity::new(Entity::new(
+            world.clone(),
+            CENTER,
+            &EntityType::MINECART,
+        )));
+        world.add_entity_silent(cart.clone());
+        let entity = cart.get_entity();
+        let tracked = world
+            .entity_tracker
+            .get_tracked_entity(entity.entity_id)
+            .ok_or("Missing tracker")?;
+        assert_eq!(entity.last_sent_pos.load(), CENTER);
+
+        let new_pos = CENTER.add_raw(0.5, 0.0, 0.0);
+        entity.set_pos(new_pos);
+        assert_eq!(entity.pos.load(), new_pos);
+        world.entity_tracker.add_entity(&cart, &world);
+
+        let current = world
+            .entity_tracker
+            .get_tracked_entity(entity.entity_id)
+            .ok_or("Missing tracker")?;
+        assert!(Arc::ptr_eq(&tracked, &current));
+        assert_eq!(entity.last_sent_pos.load(), CENTER);
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

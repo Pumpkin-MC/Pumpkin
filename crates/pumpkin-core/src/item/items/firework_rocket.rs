@@ -61,29 +61,29 @@ impl FireworkRocketItem {
         ))
     }
 
-    /// Commits the independent offhand action of a guarded vehicle click.
-    pub(crate) fn use_from_offhand(
+    /// Commits a block launch together with its physical inventory debit.
+    pub(crate) fn use_from_slot(
         stack: &ItemStack,
+        slot: usize,
         player: &Player,
         world: &Arc<crate::world::World>,
         location: BlockPos,
         hit: &crate::block::BlockHitResult<'_>,
         can_commit: impl FnOnce() -> bool,
     ) -> BlockActionResult {
-        use pumpkin_data::data_component_impl::EquipmentSlot;
         use pumpkin_util::GameMode;
 
-        if stack.is_empty() || player.get_entity().is_fall_flying() {
+        if stack.is_empty() {
             return BlockActionResult::Fail;
+        }
+        if player.get_entity().is_fall_flying() {
+            return BlockActionResult::Pass;
         }
         let (group, duration) = block_use_cooldown(stack);
         if player.is_on_cooldown(group) {
             return BlockActionResult::Pass;
         }
         let inventory = player.inventory();
-        let Some(slot) = inventory.equipment_slot_index(&EquipmentSlot::OFF_HAND) else {
-            return BlockActionResult::Fail;
-        };
         let rocket = Self::rocket_at_block(stack, world, location, *hit.face, *hit.cursor_pos);
         let Ok((consumed, cooldown, mode)) = world.spawn_placed_vehicle(&rocket, || {
             let mode = player.gamemode.load();

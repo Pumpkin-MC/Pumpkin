@@ -379,6 +379,8 @@ fn block_predicate_matches(predicate: &NbtTag, block: &Block, state: Option<Bloc
             matches_block
                 && state.is_none_or(|state| {
                     c.get("nbt").is_none()
+                        && c.get("components").is_none()
+                        && c.get("predicates").is_none()
                         && c.get("state").is_none_or(|properties| {
                             properties.extract_compound().is_some_and(|properties| {
                                 properties.child_tags.iter().all(|(key, predicate)| {
