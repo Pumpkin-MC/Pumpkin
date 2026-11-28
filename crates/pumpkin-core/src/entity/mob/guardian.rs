@@ -99,6 +99,10 @@ impl Mob for GuardianEntity {
         &self.mob_entity
     }
 
+    fn check_spawn_obstruction(&self, world: &World) -> bool {
+        world.is_unobstructed(self.get_entity())
+    }
+
     fn on_damage(&self, _damage_type: DamageType, source: Option<&dyn EntityBase>) {
         if let Some(src) = source
             && let Some(living) = src.get_living_entity()
