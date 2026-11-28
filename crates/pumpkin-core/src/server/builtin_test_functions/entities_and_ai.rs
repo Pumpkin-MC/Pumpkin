@@ -1,6 +1,9 @@
 use pumpkin_data::Block;
 use pumpkin_gametest::{GameTestContext, GameTestResult};
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::{
+    GameMode,
+    math::{position::BlockPos, vector3::Vector3},
+};
 
 pub(super) async fn test_item_entities_merge(test: GameTestContext) -> GameTestResult<()> {
     test.set_dimensions(4, 4, 4).await?;
@@ -57,5 +60,43 @@ pub(super) async fn test_zombie_pathfinds_to_villager(test: GameTestContext) -> 
         )
         .await
     })?;
+    Ok(())
+}
+
+pub(super) async fn test_villager_stays_when_player_is_far(
+    test: GameTestContext,
+) -> GameTestResult<()> {
+    assert_stays_when_player_is_far(test, "minecraft:villager").await
+}
+
+pub(super) async fn test_wandering_trader_stays_when_player_is_far(
+    test: GameTestContext,
+) -> GameTestResult<()> {
+    assert_stays_when_player_is_far(test, "minecraft:wandering_trader").await
+}
+
+async fn assert_stays_when_player_is_far(
+    test: GameTestContext,
+    entity: &'static str,
+) -> GameTestResult<()> {
+    test.set_dimensions(5, 4, 5).await?;
+    test.build_floor(5, 5, &Block::STONE).await?;
+
+    test.execute_command(
+        &BlockPos::new(2, 1, 2),
+        &format!("summon {entity} ~ ~ ~ {{NoAI:1b}}"),
+    )
+    .await?;
+    test.spawn_simulated_player(
+        "FarPlayer",
+        Vector3::new(142.5, 1.0, 2.5),
+        GameMode::Survival,
+    )
+    .await?;
+
+    test.start_sequence()
+        .then_idle(10)
+        .then_execute(move |test| async move { test.assert_entity_present(entity).await })
+        .then_succeed();
     Ok(())
 }
