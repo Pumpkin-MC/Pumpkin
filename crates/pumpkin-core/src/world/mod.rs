@@ -1828,10 +1828,27 @@ impl World {
             })
             .collect();
 
+        let despawns_in_peaceful = |entity: &dyn EntityBase| {
+            !entity.get_entity().entity_type.allowed_in_peaceful && entity.get_mob().is_some()
+        };
+        let needs_ordered_peaceful_check = {
+            let info = self.level_info.load();
+            // A command block minecart can switch difficulty during its own entity turn.
+            (info.difficulty == Difficulty::Peaceful
+                || (info.game_rules.command_blocks_work
+                    && tickable.iter().any(|(entity, _)| {
+                        entity.get_entity().entity_type == &EntityType::COMMAND_BLOCK_MINECART
+                    })))
+                && tickable
+                    .iter()
+                    .any(|(entity, _)| despawns_in_peaceful(entity.as_ref()))
+        };
+        // Discarding a mob can dismount riders and release a leash at a saved position.
         // Entities that can affect each other tick in list order; separate islands run in
         // parallel.
         let islands_config = &server.advanced_config.world.entity_islands;
-        let plan_islands = !entity_islands::plugins_observe_entity_ticks(server)
+        let plan_islands = !needs_ordered_peaceful_check
+            && !entity_islands::plugins_observe_entity_ticks(server)
             && self
                 .island_schedule
                 .lock()
@@ -1890,11 +1907,27 @@ impl World {
         };
         let first_order = self.level.reserve_entity_tick_orders(tickable.len());
 
+        let discard_peaceful_mob = |index: usize| {
+            // Use the mob's original turn order for spawns and scheduled block or fluid ticks.
+            let (entity, _) = &tickable[index];
+            order::set_entity_order(Some(first_order + index as u64 * order::ORDERS_PER_ENTITY));
+            if self.discard_entity(entity.as_ref()) {
+                let base = entity.get_entity();
+                // Java advances the tick count and handles the leash after discarding the mob.
+                base.tick_count.fetch_add(1, Relaxed);
+                base.tick_leash(entity.as_ref());
+                // Release the holder even when a plugin vetoes the lead drop.
+                base.remove_leash();
+            }
+        };
+        let should_discard = |index: usize| {
+            despawns_in_peaceful(tickable[index].0.as_ref())
+                && self.level_info.load().difficulty == Difficulty::Peaceful
+        };
         let server_ref = server.as_ref();
         let tick_entity = |index: usize| {
             let (entity, _) = &tickable[index];
             order::set_entity_order(Some(first_order + index as u64 * order::ORDERS_PER_ENTITY));
-
             let base = entity.get_entity();
             base.tick_count.fetch_add(1, Relaxed);
             // Vanilla `rideTick`: a rider starts its tick without motion
@@ -1904,26 +1937,47 @@ impl World {
             entity.tick(entity.as_ref(), server_ref);
         };
         if let Some(islands) = islands {
-            islands
+            // A late switch to Peaceful can require removals with unbounded effects.
+            // Skip the mob's turn. Other entities can still find, damage, or kill it
+            // before the serial discard runs.
+            let mut deferred: Vec<_> = islands
                 .islands
                 .par_iter()
                 .with_max_len(1)
-                .for_each(|island| {
+                .flat_map_iter(|island| {
+                    let mut deferred = Vec::new();
                     for &index in island {
-                        #[cfg(debug_assertions)]
-                        entity_islands::enter(&islands, tickable[index].0.get_entity().entity_id);
-                        tick_entity(index);
+                        if should_discard(index) {
+                            deferred.push(index);
+                        } else {
+                            #[cfg(debug_assertions)]
+                            entity_islands::enter(
+                                &islands,
+                                tickable[index].0.get_entity().entity_id,
+                            );
+                            tick_entity(index);
+                        }
                     }
                     order::set_entity_order(None);
                     #[cfg(debug_assertions)]
                     entity_islands::leave();
-                });
+                    deferred
+                })
+                .collect();
+            deferred.sort_unstable();
+            for index in deferred {
+                discard_peaceful_mob(index);
+            }
         } else {
             for index in 0..tickable.len() {
-                tick_entity(index);
+                if should_discard(index) {
+                    discard_peaceful_mob(index);
+                } else {
+                    tick_entity(index);
+                }
             }
-            order::set_entity_order(None);
         }
+        order::set_entity_order(None);
         // Vanilla `rideTick`: riders follow their vehicle's seat once it has moved
         tickable.par_iter().for_each(|(entity, _)| {
             if !entity.is_passenger() && entity.get_entity().has_passengers() {
@@ -5710,6 +5764,11 @@ impl World {
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {
+        self.discard_entity(entity);
+    }
+
+    /// Returns whether this call claimed the entity's removal.
+    fn discard_entity(&self, entity: &dyn EntityBase) -> bool {
         // Entity::remove passes its base projection; retain the registered living owner.
         let registered = self.get_entity_by_id(entity.get_entity().entity_id);
         let entity = registered.as_deref().unwrap_or(entity);
@@ -5719,7 +5778,7 @@ impl World {
             .compare_exchange(None, Some(RemovalReason::Discarded))
             .is_err()
         {
-            return;
+            return false;
         }
         base_entity.removed.store(true, Ordering::Release);
 
@@ -5747,6 +5806,7 @@ impl World {
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity().finish_removal(mob);
         }
+        true
     }
 
     pub async fn remove_entities_in_chunks(
