@@ -138,6 +138,9 @@ pub fn ensure_builtin_test_functions_registered() {
         register_test_function("pumpkin:snow_golem_shearing_leash_and_snow_formation", snow_golem_interaction::test_snow_golem_shearing_leash_and_snow_formation);
         register_test_function("pumpkin:iron_golem_pattern_spawns", golems::test_iron_golem_pattern_spawns);
         register_test_function("pumpkin:wither_pattern_spawns", golems::test_wither_pattern_spawns);
+        register_test_function("pumpkin:boats_pick_up_nearby_mobs", entities_and_ai::test_boats_pick_up_nearby_mobs);
+        register_test_function("pumpkin:boats_reject_submerged_mob_pickup", entities_and_ai::test_boats_reject_submerged_mob_pickup);
+        register_test_function("pumpkin:riding_shulker_keeps_attach_face", entities_and_ai::test_riding_shulker_keeps_attach_face);
         register_test_function("pumpkin:item_entities_merge", entities_and_ai::test_item_entities_merge);
         register_test_function("pumpkin:zombie_pathfinds_to_villager", entities_and_ai::test_zombie_pathfinds_to_villager);
         register_test_function("pumpkin:villager_stays_when_player_is_far", entities_and_ai::test_villager_stays_when_player_is_far);

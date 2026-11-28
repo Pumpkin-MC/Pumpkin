@@ -120,29 +120,24 @@ impl FireBlockBase {
     pub fn apply_fire_collision(args: &OnEntityCollisionArgs<'_>, extra_damage_for_living: bool) {
         let base_entity = args.entity.get_entity();
         if !base_entity.is_fire_immune() {
-            let ticks = base_entity.fire_ticks.load(Ordering::Relaxed);
+            Self::ignite_from_contact(args.entity);
+            let damage = if extra_damage_for_living { 2.0 } else { 1.0 };
+            base_entity.damage(args.entity, damage, DamageType::IN_FIRE);
+        }
+    }
 
-            // Timer logic
-            if ticks < 0 {
-                base_entity.fire_ticks.store(ticks + 1, Ordering::Relaxed);
-            } else if base_entity.entity_type == &EntityType::PLAYER {
-                let rnd_ticks = rand::rng().random_range(1..3);
-                base_entity
-                    .fire_ticks
-                    .store(ticks + rnd_ticks, Ordering::Relaxed);
-            }
-
-            // Apply fire ticks
-            if base_entity.fire_ticks.load(Ordering::Relaxed) >= 0 {
-                args.entity.set_on_fire_for(8.0);
-            }
-
-            // Regular fire vs soul fire damage
-            if extra_damage_for_living {
-                base_entity.damage(args.entity, 2.0, DamageType::IN_FIRE);
-            } else {
-                base_entity.damage(args.entity, 1.0, DamageType::IN_FIRE);
-            }
+    /// Apply the fire contact timer after the caller checks fire immunity.
+    pub(crate) fn ignite_from_contact(entity: &dyn EntityBase) {
+        let base = entity.get_entity();
+        let ticks = base.fire_ticks.load(Ordering::Relaxed);
+        if ticks < 0 {
+            base.fire_ticks.store(ticks + 1, Ordering::Relaxed);
+        } else if base.entity_type == &EntityType::PLAYER {
+            let added = rand::rng().random_range(1..3);
+            base.fire_ticks.store(ticks + added, Ordering::Relaxed);
+        }
+        if base.fire_ticks.load(Ordering::Relaxed) >= 0 {
+            entity.set_on_fire_for(8.0);
         }
     }
 

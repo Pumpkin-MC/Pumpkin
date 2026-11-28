@@ -16,6 +16,11 @@ use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
+use super::vehicle_placement::{
+    block_use_cooldown, commit_placement_item, finish_consumed_inventory,
+    publish_placement_cooldown,
+};
+
 pub struct FireworkRocketItem;
 
 impl ItemMetadata for FireworkRocketItem {
@@ -26,21 +31,14 @@ impl ItemMetadata for FireworkRocketItem {
 
 const ROCKET_PLACEMENT_OFFSET: f64 = 0.15;
 
-impl ItemBehaviour for FireworkRocketItem {
-    fn use_on_block(
-        &self,
-        item: &mut ItemStack,
-        player: &Player,
+impl FireworkRocketItem {
+    fn rocket_at_block(
+        stack: &ItemStack,
+        world: &Arc<crate::world::World>,
         location: BlockPos,
         face: BlockDirection,
         cursor_pos: Vector3<f32>,
-        _block: &Block,
-        _server: &Server,
-    ) -> BlockActionResult {
-        if player.get_entity().is_fall_flying() {
-            return BlockActionResult::Pass;
-        }
-        let world = player.world();
+    ) -> Arc<dyn EntityBase> {
         let step = face.to_offset();
         let entity = Entity::new(
             world.clone(),
@@ -57,8 +55,77 @@ impl ItemBehaviour for FireworkRocketItem {
             ),
             &EntityType::FIREWORK_ROCKET,
         );
-        let entity = FireworkRocketEntity::new_with_stack(entity, item.copy_with_count(1));
-        world.spawn_entity(Arc::new(entity));
+        Arc::new(FireworkRocketEntity::new_with_stack(
+            entity,
+            stack.copy_with_count(1),
+        ))
+    }
+
+    /// Commits a block launch together with its physical inventory debit.
+    pub(crate) fn use_from_slot(
+        stack: &ItemStack,
+        slot: usize,
+        player: &Player,
+        world: &Arc<crate::world::World>,
+        location: BlockPos,
+        hit: &crate::block::BlockHitResult<'_>,
+        can_commit: impl FnOnce() -> bool,
+    ) -> BlockActionResult {
+        use pumpkin_util::GameMode;
+
+        if stack.is_empty() {
+            return BlockActionResult::Fail;
+        }
+        if player.get_entity().is_fall_flying() {
+            return BlockActionResult::Pass;
+        }
+        let (group, duration) = block_use_cooldown(stack);
+        if player.is_on_cooldown(group) {
+            return BlockActionResult::Pass;
+        }
+        let inventory = player.inventory();
+        let rocket = Self::rocket_at_block(stack, world, location, *hit.face, *hit.cursor_pos);
+        let Ok((consumed, cooldown, mode)) = world.spawn_placed_vehicle(&rocket, || {
+            let mode = player.gamemode.load();
+            if mode == GameMode::Spectator || player.get_entity().is_fall_flying() || !can_commit()
+            {
+                return None;
+            }
+            let (consumed, cooldown) =
+                commit_placement_item(player, slot, stack, mode, group, duration)?;
+            Some((consumed, cooldown, mode))
+        }) else {
+            return BlockActionResult::Fail;
+        };
+        player.increment_stat(StatisticCategory::Used, i32::from(stack.get_item().id), 1);
+        if !finish_consumed_inventory(player, slot, stack, &consumed, mode) {
+            player.sync_hand_slot(slot, inventory.get_slot(slot));
+        }
+        if let Some(cooldown) = cooldown {
+            publish_placement_cooldown(player, group, cooldown);
+        }
+        BlockActionResult::Success
+    }
+}
+
+impl ItemBehaviour for FireworkRocketItem {
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
+        location: BlockPos,
+        face: BlockDirection,
+        cursor_pos: Vector3<f32>,
+        _block: &Block,
+        _server: &Server,
+    ) -> BlockActionResult {
+        if player.get_entity().is_fall_flying() {
+            return BlockActionResult::Pass;
+        }
+        let world = player.world();
+        world.spawn_entity(Self::rocket_at_block(
+            item, &world, location, face, cursor_pos,
+        ));
         item.decrement_unless_creative(player.gamemode.load(), 1);
         BlockActionResult::Success
     }

@@ -1,5 +1,6 @@
 use crate::generation::proto_chunk::GenerationCache;
 use bitflags::bitflags;
+use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::{Block, BlockState, BlockStateId, Mirror, Rotation, chunk::Biome};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -97,5 +98,24 @@ pub trait BlockAccessor: Send + Sync {
     /// Clips a ray segment against the block and fluid shapes in this accessor.
     fn clip(&self, context: &crate::clip::ClipContext) -> crate::clip::BlockHitResult {
         crate::clip::clip(self, context)
+    }
+}
+
+/// The fluid's height, including the full block if the same fluid is above.
+#[must_use]
+pub fn fluid_height(
+    accessor: &(impl BlockAccessor + ?Sized),
+    pos: &BlockPos,
+    fluid: &Fluid,
+    state: &FluidState,
+) -> f32 {
+    if state.is_empty {
+        0.0
+    } else if fluid.matches_type(Fluid::of_block_state(
+        accessor.get_block_state_id(&pos.up()),
+    )) {
+        1.0
+    } else {
+        state.height
     }
 }

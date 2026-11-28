@@ -21,6 +21,10 @@ pub struct CLevelEvent {
 #[repr(i32)]
 pub enum LevelEvent {
     // There are hundreds of these, adding only what we need for now
+    /// Plays the block interaction click.
+    SoundClick = 1000,
+    /// Emits directional smoke at the target position.
+    ParticlesShoot = 2000,
     /// Emits block break particles at the target position.
     ParticlesDestroyBlock = 2001,
     /// Initiates a block cracking animation.

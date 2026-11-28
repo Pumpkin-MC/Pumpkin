@@ -233,6 +233,7 @@ impl AgeableMob for TurtleEntity {
     }
 
     fn age_boundary_reached(&self) {
+        self.age_boundary_reached_super();
         let world = self.get_entity().world.load();
         if !self.is_baby() && world.level_info.load().game_rules.mob_drops {
             let entity = self.get_entity();

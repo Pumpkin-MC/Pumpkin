@@ -488,9 +488,10 @@ impl UseRemainderImpl {
         if has_infinite_materials || used_stack.item_count >= stack_count_before_using {
             return used_stack;
         }
-        let Some(remainder_stack) = self.remainder.clone() else {
+        let Some(template) = &self.remainder else {
             return used_stack;
         };
+        let remainder_stack = template.copy_with_count(template.item_count);
         if used_stack.is_empty() {
             return remainder_stack;
         }

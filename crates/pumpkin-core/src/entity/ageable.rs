@@ -1,7 +1,7 @@
 use pumpkin_data::tracked_data;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering::Relaxed};
 
-use crate::entity::mob::Mob;
+use crate::entity::{mob::Mob, vehicle::boat::BoatEntity};
 
 pub const BABY_START_AGE: i32 = -24000;
 pub const DEFAULT_BABY_SPAWN_CHANCE: f32 = 0.05;
@@ -115,16 +115,24 @@ pub trait AgeableMob: Mob {
             entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, is_baby);
             entity.refresh_dimensions();
             self.age_boundary_reached();
-            // Full refresh, so growing up also clears the Bedrock baby flag and scale.
-            let mut actor_data = entity.bedrock_metadata();
-            if let Some(meta) = self.mob_metadata() {
-                actor_data.merge(meta.to_bedrock_actor_data());
-            }
-            entity.send_bedrock_actor_data(&actor_data);
+            entity.send_bedrock_age_metadata(is_baby, || self.mob_metadata());
         }
     }
 
-    fn age_boundary_reached(&self) {}
+    fn age_boundary_reached(&self) {
+        self.age_boundary_reached_super();
+    }
+
+    fn age_boundary_reached_super(&self) {
+        let entity = self.get_entity();
+        if !self.is_baby()
+            && let Some(vehicle) = entity.get_vehicle()
+            && let Some(boat) = vehicle.cast_any().downcast_ref::<BoatEntity>()
+            && !boat.has_enough_space_for(entity)
+        {
+            vehicle.get_entity().remove_passenger(entity.entity_id);
+        }
+    }
 
     fn default_should_spawn_baby(&self) -> bool {
         true
@@ -278,5 +286,77 @@ pub trait AgeableMob: Mob {
             let age = self.get_age() - 1;
             self.set_age(age);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::math::vector3::Vector3;
+    use uuid::Uuid;
+
+    use crate::entity::r#type::from_type;
+
+    #[tokio::test]
+    async fn growing_passengers_leave_boats_only_when_required()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        for (mob_type, vehicle_type, dismounts) in [
+            (&EntityType::POLAR_BEAR, &EntityType::OAK_BOAT, true),
+            (&EntityType::CAMEL, &EntityType::OAK_BOAT, true),
+            (&EntityType::HORSE, &EntityType::OAK_CHEST_BOAT, true),
+            (&EntityType::SNIFFER, &EntityType::OAK_BOAT, true),
+            (&EntityType::PIG, &EntityType::OAK_BOAT, false),
+            (&EntityType::HOGLIN, &EntityType::OAK_BOAT, true),
+            (&EntityType::CAMEL, &EntityType::MINECART, false),
+        ] {
+            let position = Vector3::new(0.0, 64.0, 0.0);
+            let passenger = from_type(mob_type, position, &world, Uuid::new_v4());
+            let vehicle = from_type(vehicle_type, position, &world, Uuid::new_v4());
+            let ageable = passenger
+                .get_mob()
+                .and_then(|mob| mob.as_ageable())
+                .ok_or("expected an ageable passenger")?;
+            let entity = passenger.get_entity();
+            ageable.set_age(-1);
+            let config = pumpkin_config::world::EntityIslandsConfig {
+                unaudited_reach: 0.0,
+                knockback_reach: 0.0,
+            };
+            assert!(
+                crate::world::entity_islands::resolve(
+                    vec![crate::world::entity_islands::EntityReach::of(
+                        passenger.as_ref(),
+                        &config
+                    )],
+                    &config,
+                )
+                .is_none()
+            );
+            if vehicle_type.boat.is_some() {
+                assert!(entity.entity_dimension.load().width < vehicle.get_entity().width());
+            }
+            vehicle
+                .get_entity()
+                .add_passenger(vehicle.clone(), passenger.clone());
+            assert!(entity.has_vehicle());
+
+            ageable.ageable_ai_step();
+
+            assert_eq!(ageable.get_age(), 0);
+            assert_eq!(
+                entity.has_vehicle(),
+                !dismounts,
+                "{}",
+                mob_type.resource_name
+            );
+            assert_eq!(
+                vehicle.get_entity().has_passenger(entity.entity_id),
+                !dismounts
+            );
+        }
+        world.level.shutdown().await;
+        Ok(())
     }
 }

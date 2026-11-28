@@ -1,4 +1,6 @@
-use pumpkin_protocol::java::client::play::{CChunkBatchEnd, CChunkBatchStart, CPlayDisconnect};
+use pumpkin_protocol::java::client::play::{
+    CChunkBatchEnd, CChunkBatchStart, CPlayDisconnect, CPlayerPosition,
+};
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
@@ -27,7 +29,7 @@ use pumpkin_protocol::java::server::play::{
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
-    ClientPacket, ConnectionState, PacketDecodeError, RawPacket, ServerPacket,
+    ClientPacket, ConnectionState, PacketDecodeError, PositionFlag, RawPacket, ServerPacket,
     codec::var_int::VarInt,
     java::{
         client::{config::CConfigDisconnect, login::CLoginDisconnect},
@@ -36,7 +38,7 @@ use pumpkin_protocol::{
     },
     ser::{NetworkReadExt, NetworkWriteExt, WritingError},
 };
-use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
 use tokio::{
@@ -93,6 +95,55 @@ fn frame_packet(packet_id: i32, payload: &[u8]) -> Option<Bytes> {
     Some(framed.into())
 }
 
+fn inventory_update_scope(
+    mut data: &[u8],
+    version: JavaMinecraftVersion,
+) -> Option<super::InventoryUpdateScope> {
+    use super::InventoryUpdateScope::{Content, Cursor, PlayerSlot, Property, Slot};
+    use pumpkin_protocol::java::client::play::{
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+        CSetPlayerInventory,
+    };
+
+    let id = data.get_var_int().ok()?.0;
+    if id == CSetPlayerInventory::to_id(version) {
+        return Some(PlayerSlot(
+            usize::try_from(data.get_var_int().ok()?.0).ok()?,
+        ));
+    }
+    if id == CSetCursorItem::to_id(version) {
+        return Some(Cursor);
+    }
+    if id == CSetContainerContent::to_id(version) {
+        return Some(Content {
+            window: data.get_container_id(&version).ok()?.0,
+            includes_cursor: version >= JavaMinecraftVersion::V_1_17_1,
+        });
+    }
+    if id == CSetContainerSlot::to_id(version) {
+        let window = i32::from(data.get_container_id(&version).ok()?.0 as i8);
+        if version >= JavaMinecraftVersion::V_1_17_1 {
+            data.get_var_int().ok()?;
+        }
+        let slot = data.get_i16_be().ok()?;
+        return Some(match window {
+            -1 => Cursor,
+            -2 => PlayerSlot(usize::try_from(slot).ok()?),
+            _ => Slot {
+                window,
+                slot: i32::from(slot),
+            },
+        });
+    }
+    if id == CSetContainerProperty::to_id(version) {
+        return Some(Property {
+            window: data.get_container_id(&version).ok()?.0,
+            property: i32::from(data.get_i16_be().ok()?),
+        });
+    }
+    None
+}
+
 #[repr(C)]
 pub struct JavaClient {
     pub id: u64,
@@ -137,6 +188,8 @@ pub struct JavaClient {
     /// On `SClientTickEnd` (≥1.21.4), if still `false`, the player's known
     /// movement is zeroed (they stood still). Matches vanilla's `receivedMovementThisTick`.
     pub received_movement_this_tick: AtomicBool,
+    vehicle_movement: AtomicCell<Option<play::move_vehicle::VehicleMovement>>,
+    vehicle_correction_tick: AtomicI32,
     /// The keep alive packet payload we send. The client should respond with the same id.
     pub keep_alive_id: AtomicCell<i64>,
     /// The last time we sent a keep alive packet.
@@ -182,6 +235,8 @@ impl JavaClient {
             player: ArcSwap::from_pointee(None),
             wait_for_keep_alive: AtomicBool::new(false),
             received_movement_this_tick: AtomicBool::new(false),
+            vehicle_movement: AtomicCell::new(None),
+            vehicle_correction_tick: AtomicI32::new(0),
             keep_alive_id: AtomicCell::new(0),
             last_keep_alive_time: AtomicCell::new(Instant::now()),
             last_packet_time: AtomicCell::new(Instant::now()),
@@ -483,7 +538,7 @@ impl JavaClient {
     }
 
     /// Queues packets a `PacketSentEvent` handler added, already in the client's format.
-    fn queue_extra_packets(&self, extras: Vec<Bytes>) {
+    fn queue_extra_packets(&self, extras: impl IntoIterator<Item = Bytes>) {
         for extra in extras {
             let Some(packet_len) = self.reserve_bytes(extra.len()) else {
                 return;
@@ -557,6 +612,77 @@ impl JavaClient {
             self.queue_extra_packets(extras);
         }
         queued
+    }
+
+    /// Validate a packet and its replacements after their observer callbacks.
+    pub(crate) fn try_enqueue_packet_data_if<T>(
+        &self,
+        packet_data: Bytes,
+        replacement_id: i32,
+        matches_replacement: impl Fn(&[u8]) -> bool,
+        lock_if_current: impl FnOnce() -> Option<T>,
+    ) {
+        self.try_enqueue_packet_data_filtering(packet_data, lock_if_current, |data| {
+            let mut payload = data.as_ref();
+            (!payload
+                .get_var_int()
+                .is_ok_and(|id| id.0 == replacement_id && matches_replacement(payload)))
+            .then_some(data)
+        });
+    }
+
+    pub(crate) fn try_enqueue_packet_data_filtering<T>(
+        &self,
+        packet_data: Bytes,
+        lock_if_current: impl FnOnce() -> Option<T>,
+        filter_stale_extra: impl Fn(Bytes) -> Option<Bytes>,
+    ) {
+        self.try_enqueue_packet_data_projecting(
+            packet_data,
+            lock_if_current,
+            |data, primary, guard| {
+                if guard.is_some() {
+                    Some(data)
+                } else if primary {
+                    None
+                } else {
+                    filter_stale_extra(data)
+                }
+            },
+            |_, _, _| {},
+        );
+    }
+
+    /// Project the observed primary and extras while holding the caller's validation guard.
+    /// The delivery callback runs only for bytes accepted by the send queue.
+    pub(crate) fn try_enqueue_packet_data_projecting<T>(
+        &self,
+        packet_data: Bytes,
+        validate: impl FnOnce() -> T,
+        mut project: impl FnMut(Bytes, bool, &T) -> Option<Bytes>,
+        mut delivered: impl FnMut(&Bytes, bool, &mut T),
+    ) {
+        if self.close_token.is_cancelled() {
+            return;
+        }
+        let (primary, extras) = self.translate_outgoing(packet_data, true);
+        let mut guard = validate();
+        let packets = primary
+            .into_iter()
+            .map(|data| (data, true))
+            .chain(extras.into_iter().map(|data| (data, false)));
+        for (data, is_primary) in packets {
+            let Some(data) = project(data, is_primary, &guard) else {
+                continue;
+            };
+            let Some(length) = self.reserve_bytes(data.len()) else {
+                break;
+            };
+            if !self.queue_outgoing(OutgoingPacket::normal(data.clone()), length) {
+                break;
+            }
+            delivered(&data, is_primary, &mut guard);
+        }
     }
 
     /// Like [`Self::try_enqueue_packet_data`] but does not fire `PacketSentEvent` for
@@ -758,10 +884,209 @@ impl JavaClient {
         Self::serialize_packet_for_version(packet, CURRENT_MC_VERSION)
     }
 
+    pub(crate) fn try_enqueue_inventory_update<P: ClientPacket>(
+        &self,
+        packet: &P,
+        context: Option<pumpkin_inventory::sync_handler::ScreenUpdateContext<'_>>,
+    ) {
+        self.try_enqueue_inventory_update_validated(packet, context, || Some(()));
+    }
+
+    pub(crate) fn try_enqueue_inventory_update_validated<P: ClientPacket, T>(
+        &self,
+        packet: &P,
+        context: Option<pumpkin_inventory::sync_handler::ScreenUpdateContext<'_>>,
+        validate: impl FnOnce() -> Option<T>,
+    ) {
+        if context.is_some_and(|context| context.lock_if_current().is_none()) {
+            return;
+        }
+        let Ok(data) = self.serialize_packet(packet) else {
+            return;
+        };
+        let origin = inventory_update_scope(&data, CURRENT_MC_VERSION);
+        let version = self.version.load();
+        self.try_enqueue_packet_data_filtering(
+            data,
+            || match context {
+                Some(context) => context
+                    .lock_for_delivery(validate)
+                    .map(|(menu, state)| (Some(menu), state)),
+                None => validate().map(|state| (None, state)),
+            },
+            |data| {
+                let overlaps = origin
+                    .zip(inventory_update_scope(&data, version))
+                    .is_some_and(|(origin, extra)| {
+                        self.inventory_update_overlaps(origin, extra, context)
+                    });
+                (!overlaps).then_some(data)
+            },
+        );
+    }
+
+    fn inventory_update_overlaps(
+        &self,
+        origin: super::InventoryUpdateScope,
+        extra: super::InventoryUpdateScope,
+        context: Option<pumpkin_inventory::sync_handler::ScreenUpdateContext<'_>>,
+    ) -> bool {
+        use super::InventoryUpdateScope::{Content, PlayerSlot, Slot};
+        if origin.overlaps(extra) {
+            return true;
+        }
+        let physical = |scope| match scope {
+            PlayerSlot(index) => Some(index),
+            Slot { window: 0, slot } => {
+                pumpkin_inventory::screen_handler::player_screen_inventory_index(slot)
+            }
+            _ => None,
+        };
+        if let Some(index_in_origin) = physical(origin) {
+            return physical(extra).map_or_else(
+                || self.menu_overlaps_player_slot(extra, index_in_origin),
+                |index| index == index_in_origin,
+            );
+        }
+        let Some(index) = physical(extra) else {
+            return false;
+        };
+        let Some(context) = context else {
+            return false;
+        };
+        if !matches!(origin, Content { .. } | Slot { .. }) {
+            return false;
+        }
+        let player = self.player.load();
+        let Some(player) = player.as_ref() else {
+            return false;
+        };
+        let inventory: Arc<dyn pumpkin_inventory::inventory::Inventory> =
+            player.inventory().clone();
+        let screen = context
+            .screen
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        screen
+            .get_slot_index(&inventory, index)
+            .is_some_and(|index| {
+                matches!(origin, Content { .. })
+                    || matches!(origin, Slot { slot, .. } if slot == index as i32)
+            })
+    }
+
+    fn menu_overlaps_player_slot(&self, update: super::InventoryUpdateScope, index: usize) -> bool {
+        use super::InventoryUpdateScope::{Content, Slot};
+        let (Content { window, .. } | Slot { window, .. }) = update else {
+            return false;
+        };
+        if window == 0 {
+            return matches!(update, Content { .. })
+                && index
+                    <= pumpkin_inventory::player::player_inventory::PlayerInventory::OFF_HAND_SLOT;
+        }
+        if window < 0 {
+            return false;
+        }
+        let player = self.player.load();
+        let Some(player) = player.as_ref() else {
+            return false;
+        };
+        let active = player
+            .current_screen_handler
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let screen = active
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let inventory: Arc<dyn pumpkin_inventory::inventory::Inventory> =
+            player.inventory().clone();
+        i32::from(screen.sync_id()) == window
+            && screen
+                .get_slot_index(&inventory, index)
+                .is_some_and(|index| {
+                    matches!(update, Content { .. })
+                        || matches!(update, Slot { slot, .. } if slot == index as i32)
+                })
+    }
+
     /// `false` when the packet was dropped instead (cancelled, closed, buffer full).
     pub fn try_send_packet<P: ClientPacket>(&self, packet: &P) -> bool {
         self.serialize_packet(packet)
             .is_ok_and(|data| self.try_enqueue_packet_data(data))
+    }
+
+    /// Queue a mount or dismount teleport only if it still owns the pending confirmation after
+    /// outgoing packet listeners have finished. Those listeners can request a new teleport.
+    pub(crate) fn try_send_riding_position(
+        &self,
+        packet: &CPlayerPosition,
+        player: &Player,
+        before_teleport: Vector3<f64>,
+        still_current: impl FnOnce() -> bool,
+    ) -> bool {
+        if self.close_token.is_cancelled() {
+            return false;
+        }
+        let Ok(data) = self.serialize_packet(packet) else {
+            return false;
+        };
+        let (primary, extras) = self.translate_outgoing(data, true);
+        let mut awaiting = player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let owns_teleport = awaiting
+            .as_ref()
+            .is_some_and(|(id, _)| *id == packet.teleport_id)
+            && still_current();
+        let version = self.version.load();
+        let has_confirmation = version >= JavaMinecraftVersion::V_1_9;
+        let mut sent = false;
+        let packets = primary
+            .into_iter()
+            .map(|data| (data, true))
+            .chain(extras.into_iter().map(|data| (data, false)));
+        for (data, is_primary) in packets {
+            // A listener can cancel the original and emit a replacement with the same ID.
+            let mut payload = data.as_ref();
+            let position = payload
+                .get_var_int()
+                .is_ok_and(|id| id.0 == CPlayerPosition::to_id(version))
+                .then(|| CPlayerPosition::read(&mut payload, &version).ok())
+                .flatten()
+                .filter(|position| !has_confirmation || position.teleport_id == packet.teleport_id);
+            if (is_primary || position.is_some()) && (!owns_teleport || sent) {
+                continue;
+            }
+            let Some(length) = self.reserve_bytes(data.len()) else {
+                break;
+            };
+            if !self.queue_outgoing(OutgoingPacket::normal(data), length) {
+                break;
+            }
+            if let Some(position) = position {
+                let mut destination = position.position;
+                for relative in position.relatives {
+                    match relative {
+                        PositionFlag::X => destination.x += before_teleport.x,
+                        PositionFlag::Y => destination.y += before_teleport.y,
+                        PositionFlag::Z => destination.z += before_teleport.z,
+                        _ => {}
+                    }
+                }
+                if has_confirmation {
+                    *awaiting = Some((position.teleport_id, destination));
+                    if version >= JavaMinecraftVersion::V_26_3 {
+                        player
+                            .riding_look_confirmation
+                            .store(Some(position.teleport_id));
+                    }
+                }
+                sent = true;
+            }
+        }
+        sent && has_confirmation
     }
 
     pub async fn send_packet<P: ClientPacket>(&self, packet: &P) {
@@ -971,7 +1296,11 @@ impl JavaClient {
                 );
             }
             id if id == SMoveVehicle::to_id(version) => {
-                self.handle_move_vehicle(player, &SMoveVehicle::read(&mut payload, &version)?);
+                self.handle_move_vehicle(
+                    player,
+                    server,
+                    &SMoveVehicle::read(&mut payload, &version)?,
+                );
             }
             id if id == SPaddleBoat::to_id(version) => {
                 self.handle_paddle_boat(player, &SPaddleBoat::read(&mut payload, &version)?);

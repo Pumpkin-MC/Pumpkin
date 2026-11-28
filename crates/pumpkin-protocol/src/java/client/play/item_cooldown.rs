@@ -14,6 +14,12 @@ pub struct CItemCooldown {
 }
 
 impl CItemCooldown {
+    /// Packet ID on protocols whose cooldown payload names a group.
+    #[must_use]
+    pub const fn group_packet_id(version: JavaMinecraftVersion) -> Option<i32> {
+        pumpkin_data::packet::named_cooldown_packet_id(version)
+    }
+
     #[must_use]
     pub const fn new(group: String, cooldown: VarInt) -> Self {
         Self { group, cooldown }

@@ -96,6 +96,21 @@ pub trait BlockBehaviour: Send + Sync {
         BlockActionResult::PassToDefaultBlockAction
     }
 
+    /// Uses a stack taken from a known physical slot. Blocks that transfer the
+    /// stack into storage can commit the debit before notifying observers.
+    fn use_with_item_from_slot(
+        &self,
+        args: UseWithItemArgs<'_>,
+        _source_slot: usize,
+    ) -> BlockActionResult {
+        self.use_with_item(args)
+    }
+
+    /// Whether item use on this block commits through the player's physical slot.
+    fn requires_physical_item_source(&self) -> bool {
+        false
+    }
+
     fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {}
 
     fn on_projectile_hit(&self, _args: OnProjectileHitArgs<'_>) {}
@@ -151,6 +166,9 @@ pub trait BlockBehaviour: Send + Sync {
             stop_vertical_movement_after_fall(args.entity);
         }
     }
+
+    /// Side effects of a resolved bounce, without changing the entity's velocity.
+    fn bounce_on(&self, _args: UpdateEntityMovementAfterFallOnArgs<'_>, _position: &Vector3<f64>) {}
 
     /// Called when a player starts digging this block, except in creative.
     fn attack(&self, _args: AttackArgs<'_>) {}

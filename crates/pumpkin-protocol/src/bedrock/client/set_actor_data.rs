@@ -1,12 +1,16 @@
 // Last verified for v2169
 
-use std::{collections::HashMap, io::Write};
+use std::{
+    collections::HashMap,
+    io::{Cursor, Write},
+};
 
 use crate::{
     codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
-    serial::PacketWrite,
+    serial::{PacketRead, PacketWrite},
 };
 use pumpkin_macros::packet;
+use pumpkin_nbt::{Nbt, deserializer::NbtReadHelperBedrock};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use std::io::Error;
 
@@ -22,6 +26,72 @@ pub struct CSetActorData {
     pub synced_properties: PropertySyncData,
     /// The server tick at which this update occurred
     pub tick: VarULong,
+}
+
+impl CSetActorData {
+    /// Checks whether the metadata payload updates the given key for this actor.
+    ///
+    /// # Errors
+    /// Returns an error if a metadata entry needed for the check cannot be decoded.
+    pub fn updates_key(
+        payload: &[u8],
+        actor: VarULong,
+        protocol: u32,
+        target_key: u32,
+    ) -> Result<bool, Error> {
+        const METADATA_DISCRIMINANT_PROTOCOL: u32 = 2168;
+
+        let mut input = Cursor::new(payload);
+        if VarULong::read(&mut input)?.0 != actor.0 {
+            return Ok(false);
+        }
+
+        let count = VarUInt::read(&mut input)?.0;
+        for _ in 0..count {
+            let key = VarUInt::read(&mut input)?.0;
+            let kind = VarUInt::read(&mut input)?.0;
+            // Bedrock 1.26.40 added a variant discriminant before the payload's type byte.
+            if protocol >= METADATA_DISCRIMINANT_PROTOCOL
+                && u32::from(u8::read(&mut input)?) != kind
+            {
+                return Err(Error::other("Inconsistent actor metadata type"));
+            }
+            if key == target_key {
+                return Ok(true);
+            }
+            match kind {
+                0 => {
+                    u8::read(&mut input)?;
+                }
+                1 => {
+                    i16::read(&mut input)?;
+                }
+                2 => {
+                    VarInt::read(&mut input)?;
+                }
+                3 => {
+                    f32::read(&mut input)?;
+                }
+                4 => {
+                    String::read(&mut input)?;
+                }
+                5 => {
+                    Nbt::read(&mut NbtReadHelperBedrock::new(&mut input)).map_err(Error::other)?;
+                }
+                6 => {
+                    BlockPos::read(&mut input)?;
+                }
+                7 => {
+                    VarLong::read(&mut input)?;
+                }
+                8 => {
+                    Vector3::<f32>::read(&mut input)?;
+                }
+                _ => return Err(Error::other("Unknown actor metadata type")),
+            }
+        }
+        Ok(false)
+    }
 }
 
 /// A map of metadata property keys to their typed values.
@@ -457,7 +527,37 @@ pub mod entity_data_flag {
 
 #[cfg(test)]
 mod tests {
-    use super::{SyncedActorDataList, entity_data_key};
+    use super::*;
+
+    #[test]
+    fn actor_flags_are_found_after_other_metadata() -> Result<(), Error> {
+        let updates_flags = |data, actor, protocol| {
+            CSetActorData::updates_key(data, actor, protocol, entity_data_key::FLAGS)
+        };
+        let actor = VarULong(5);
+        // Runtime ID, two entries, name ("A"), flags (0), properties and tick.
+        let packet = [5, 2, 4, 4, 4, 1, b'A', 0, 7, 7, 0, 0, 0, 0];
+        let legacy_packet = [5, 2, 4, 4, 1, b'A', 0, 7, 0, 0, 0, 0];
+        for (data, protocol) in [(packet.as_slice(), 2225), (legacy_packet.as_slice(), 671)] {
+            assert!(updates_flags(data, actor, protocol)?);
+            assert!(!updates_flags(data, VarULong(6), protocol)?);
+        }
+
+        let mut data = SyncedActorDataList::new();
+        data.set(entity_data_key::NAME, MetadataValue::String("Rider".into()));
+        let mut name_only = Vec::new();
+        CSetActorData {
+            target_runtime_id: actor,
+            actor_data: data,
+            synced_properties: PropertySyncData::default(),
+            tick: VarULong(0),
+        }
+        .write(&mut name_only)?;
+        assert!(!updates_flags(&name_only, actor, 2225)?);
+        assert!(!updates_flags(&[5, 1, 4, 4, 1, b'A', 0, 0, 0], actor, 671)?);
+        assert!(updates_flags(&packet[..6], actor, 2225).is_err());
+        Ok(())
+    }
 
     #[test]
     fn partial_metadata_does_not_reset_flags() {

@@ -228,18 +228,23 @@ impl Player {
             )
         });
 
-        if self.is_movement_locked.load(Ordering::Relaxed) {
+        let riding = entity.has_vehicle();
+        // Java sends the rider's look before its vehicle proposal. Only the driver
+        // correction is needed while this mount is frozen.
+        if self.is_movement_locked() && !(riding && self.client.java().is_some()) {
             self.apply_and_broadcast_look(requested);
             self.reject_client_move();
             return ClientMoveOutcome::Rejected;
         }
 
-        if entity.has_vehicle() {
+        if riding {
             // Vanilla passenger: rotation only, keep the vehicle's position.
             entity.on_ground.store(false, Ordering::Relaxed);
             entity.horizontal_collision.store(false, Ordering::Relaxed);
             self.apply_and_broadcast_look(requested);
-            entity.movement.store(Vector3::default());
+            if self.client.java().is_none() {
+                entity.movement.store(Vector3::default());
+            }
             return ClientMoveOutcome::Applied;
         }
 

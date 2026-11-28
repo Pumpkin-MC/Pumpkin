@@ -541,15 +541,8 @@ impl ItemStack {
 
     #[must_use]
     pub fn get_max_use_time(&self) -> i32 {
-        if let Some(value) = self.get_data_component::<ConsumableImpl>() {
-            return value.consume_ticks();
-        }
-        if self.get_data_component::<BlocksAttacksImpl>().is_some()
-            || self
-                .get_data_component::<crate::data_component_impl::KineticWeaponImpl>()
-                .is_some()
-        {
-            return 72000;
+        if let Some(duration) = self.base_use_time() {
+            return duration;
         }
         if let Some(inst) = self.get_data_component::<crate::data_component_impl::InstrumentImpl>()
             && let Some(instrument) = crate::instrument::Instrument::from_name(&inst.instrument)
@@ -557,6 +550,26 @@ impl ItemStack {
             return i32::try_from(instrument.use_duration_ticks()).unwrap_or(i32::MAX);
         }
         0
+    }
+
+    /// Duration supplied by the base Java item behavior.
+    #[must_use]
+    pub fn get_base_use_time(&self) -> i32 {
+        self.base_use_time().unwrap_or(0)
+    }
+
+    fn base_use_time(&self) -> Option<i32> {
+        if let Some(value) = self.get_data_component::<ConsumableImpl>() {
+            return Some(value.consume_ticks());
+        }
+        if self.get_data_component::<BlocksAttacksImpl>().is_some()
+            || self
+                .get_data_component::<crate::data_component_impl::KineticWeaponImpl>()
+                .is_some()
+        {
+            return Some(72000);
+        }
+        None
     }
 
     #[must_use]

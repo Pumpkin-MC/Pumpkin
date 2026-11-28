@@ -42,6 +42,98 @@ pub mod management;
 mod proxy;
 pub mod query;
 
+/// Eligibility shared by a vehicle block-use packet and its eventual source commit.
+pub(crate) fn vehicle_block_use_is_eligible(
+    player: &Player,
+    world: &Arc<crate::world::World>,
+    position: &pumpkin_util::math::position::BlockPos,
+) -> bool {
+    if !Arc::ptr_eq(world, &player.world())
+        || !world.is_in_build_limit(*position)
+        || !player.can_interact_with_block_at(position, 1.0)
+        || vehicle_spawn_is_protected(player, world, position)
+    {
+        return false;
+    }
+    if player.client.java().is_some()
+        && player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+    {
+        return false;
+    }
+    world
+        .worldborder
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .contains(f64::from(position.0.x), f64::from(position.0.z))
+}
+
+fn vehicle_spawn_is_protected(
+    player: &Player,
+    world: &crate::world::World,
+    position: &pumpkin_util::math::position::BlockPos,
+) -> bool {
+    if player.client.java().is_none() {
+        return world.is_in_spawn_protection(player, position);
+    }
+    // Pumpkin stores the level's shared respawn point in the Overworld.
+    if world.dimension != pumpkin_data::dimension::Dimension::OVERWORLD {
+        return false;
+    }
+    let Some(server) = world.server.upgrade() else {
+        return false;
+    };
+    let radius = server.basic_config.spawn_protection;
+    if radius == 0 {
+        return false;
+    }
+    let spawn = world.get_spawn_location().0;
+    if spawn.0.x.abs_diff(position.0.x) > radius || spawn.0.z.abs_diff(position.0.z) > radius {
+        return false;
+    }
+    let operators = server
+        .data
+        .operator_config
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    !operators.ops.is_empty() && operators.get_entry(&player.gameprofile.id).is_none()
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InventoryUpdateScope {
+    PlayerSlot(usize),
+    Content { window: i32, includes_cursor: bool },
+    Slot { window: i32, slot: i32 },
+    Cursor,
+    Property { window: i32, property: i32 },
+}
+
+impl InventoryUpdateScope {
+    fn overlaps(self, other: Self) -> bool {
+        use InventoryUpdateScope::{Content, Cursor, Slot};
+        match (self, other) {
+            (Content { window: a, .. }, Content { window: b, .. } | Slot { window: b, .. })
+            | (Slot { window: a, .. }, Content { window: b, .. }) => a == b,
+            (
+                Cursor,
+                Content {
+                    includes_cursor, ..
+                },
+            )
+            | (
+                Content {
+                    includes_cursor, ..
+                },
+                Cursor,
+            ) => includes_cursor,
+            _ => self == other,
+        }
+    }
+}
+
 #[derive(Deserialize, Debug)]
 pub struct GameProfile {
     pub id: Uuid,

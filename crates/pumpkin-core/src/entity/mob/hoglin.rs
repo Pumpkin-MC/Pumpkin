@@ -177,6 +177,8 @@ impl AgeableMob for HoglinEntity {
         self.mob_entity
             .living_entity
             .set_attribute_base(&Attributes::ATTACK_DAMAGE, damage);
+        // Apply the common growth dismount rule to address MC-188617.
+        self.age_boundary_reached_super();
     }
 }
 

@@ -150,6 +150,10 @@ impl WardenEntity {
 }
 
 impl Mob for WardenEntity {
+    fn mob_can_ride(&self, _vehicle: &dyn EntityBase) -> bool {
+        false
+    }
+
     fn mob_is_pushable(&self) -> bool {
         let pose = self.mob_entity.living_entity.entity.pose.load();
         pose != EntityPose::Digging

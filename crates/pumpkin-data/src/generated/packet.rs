@@ -33,6 +33,26 @@ impl From<i32> for PacketId {
         Self(id)
     }
 }
+#[doc = r" Identifies a cooldown packet on Java protocols whose payload names a group."]
+#[must_use]
+pub const fn named_cooldown_packet_id(version: JavaMinecraftVersion) -> Option<i32> {
+    let protocol = version.protocol_version();
+    if protocol == CURRENT_MC_VERSION.protocol_version() {
+        return Some(clientbound::play::COOLDOWN.0);
+    }
+    match protocol {
+        768i32 => Some(23i32),
+        769i32 => Some(23i32),
+        770i32 => Some(22i32),
+        771i32 => Some(22i32),
+        772i32 => Some(22i32),
+        773i32 => Some(22i32),
+        774i32 => Some(22i32),
+        775i32 => Some(22i32),
+        776i32 => Some(22i32),
+        _ => None,
+    }
+}
 pub mod serverbound {
     pub mod handshake {
         pub const INTENTION: super::super::PacketId = super::super::PacketId(0i32);

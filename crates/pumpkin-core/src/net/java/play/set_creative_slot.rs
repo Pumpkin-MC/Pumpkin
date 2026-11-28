@@ -38,20 +38,15 @@ impl JavaClient {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            let is_armor_equipped = player_screen_handler
-                .get_slot(packet.slot as usize)
-                .get_stack()
-                .are_equal(&item_stack);
-            if !is_armor_equipped {
-                player.sync_screen_slot_equipment(packet.slot as usize, &item_stack);
-            }
-
+            let equipment_before = player.screen_equipment();
             player_screen_handler
                 .get_slot(packet.slot as usize)
                 .set_stack(item_stack.clone());
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
-            player_screen_handler.send_content_updates();
+            let committed_equipment = player.screen_equipment();
             drop(player_screen_handler);
+            player.send_player_screen_updates();
+            player.publish_committed_screen_equipment(&equipment_before, &committed_equipment);
         } else if is_negative && is_legal {
             // Item drop
             player.drop_item(item_stack);

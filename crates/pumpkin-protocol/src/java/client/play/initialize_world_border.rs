@@ -63,16 +63,68 @@ impl ClientPacket for CInitializeWorldBorder {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_f64_be(self.x)?;
         write.write_f64_be(self.z)?;
         write.write_f64_be(self.old_diameter)?;
         write.write_f64_be(self.new_diameter)?;
-        write.write_var_long(&self.speed)?;
+        let speed = if *version >= JavaMinecraftVersion::V_1_21_11 {
+            VarLong(self.speed.0 / 50)
+        } else {
+            self.speed
+        };
+        write.write_var_long(&speed)?;
         write.write_var_int(&self.portal_teleport_boundary)?;
         write.write_var_int(&self.warning_blocks)?;
         write.write_var_int(&self.warning_time)?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::java::client::play::CSetBorderLerpSize;
+    use crate::ser::NetworkReadExt;
+
+    #[test]
+    fn border_duration_uses_ticks_since_java_1_21_11() -> Result<(), Box<dyn std::error::Error>> {
+        let lerp = CSetBorderLerpSize::new(32.0, 16.0, VarLong(7500));
+        let init = CInitializeWorldBorder::new(
+            0.0,
+            0.0,
+            32.0,
+            16.0,
+            VarLong(7500),
+            VarInt(8),
+            VarInt(5),
+            VarInt(15),
+        );
+        for (version, duration, wire) in [
+            (JavaMinecraftVersion::V_1_21_9, 7500, [0xcc, 0x3a]),
+            (JavaMinecraftVersion::V_1_21_11, 150, [0x96, 0x01]),
+            (JavaMinecraftVersion::V_26_3, 150, [0x96, 0x01]),
+        ] {
+            let mut lerp_bytes = Vec::new();
+            lerp.write_packet_data(&mut lerp_bytes, &version)?;
+            let mut lerp_fields = lerp_bytes.as_slice();
+            assert_eq!(lerp_fields.get_f64_be()?, 32.0);
+            assert_eq!(lerp_fields.get_f64_be()?, 16.0);
+            assert_eq!(lerp_fields, wire);
+            assert_eq!(lerp_fields.get_var_long()?.0, duration);
+            assert!(lerp_fields.is_empty());
+
+            let mut init_bytes = Vec::new();
+            init.write_packet_data(&mut init_bytes, &version)?;
+            let mut init_fields = init_bytes.as_slice();
+            for expected in [0.0, 0.0, 32.0, 16.0] {
+                assert_eq!(init_fields.get_f64_be()?, expected);
+            }
+            assert!(init_fields.starts_with(&wire));
+            assert_eq!(init_fields.get_var_long()?.0, duration);
+            assert_eq!(init_fields, [8, 5, 15]);
+        }
         Ok(())
     }
 }

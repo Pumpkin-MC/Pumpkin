@@ -21,9 +21,15 @@ use std::{collections::HashMap, sync::atomic::Ordering};
 use tracing::{debug, error, info, trace, warn};
 
 mod active_chunks;
+#[cfg(test)]
+mod boat_vehicle_tests;
 pub mod brightness;
 pub mod chunker;
 mod entity_index;
+#[cfg(test)]
+mod item_inventory_tests;
+#[cfg(test)]
+mod jukebox_vehicle_tests;
 pub(crate) use entity_index::EntityIndex;
 pub mod cat_spawner;
 pub mod entity_islands;
@@ -77,7 +83,7 @@ pub use explosion::{
     ExplosionInteraction, SimpleExplosionDamageCalculator,
 };
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::block_properties::{blocks_movement, is_air};
+use pumpkin_data::block_properties::is_air;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
@@ -121,6 +127,7 @@ use pumpkin_protocol::{
                 CreativeItemEntryPayload,
             },
             level_sound_event::CLevelSoundEvent,
+            play_sound::CPlaySound,
             player_list::{CPlayerList, PlayerListEntry, Skin},
             remove_actor::CRemoveActor,
             start_game::{Experiments, GamePublishSetting, LevelSettings},
@@ -235,6 +242,19 @@ impl PumpkinError for GetBlockError {
 /// - Manages the `Level` instance for handling chunk-related operations.
 /// - Stores and tracks active `Player` entities within the world.
 /// - Provides a central hub for interacting with the world's entities and environment.
+pub(crate) struct VehicleRideStart<'a> {
+    player: &'a Player,
+    position: Vector3<f64>,
+    attachment: u64,
+    statistic: pumpkin_data::statistic::CustomStatistic,
+}
+
+pub(crate) enum VehiclePlacementError {
+    SpawnVetoed,
+    UuidUnavailable,
+    CommitRejected,
+}
+
 #[repr(C)]
 pub struct World {
     /// Represents the World's Unique Identifier
@@ -249,6 +269,8 @@ pub struct World {
     pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
     pub(crate) entity_index: Arc<EntityIndex>,
     island_schedule: std::sync::Mutex<entity_islands::Schedule>,
+    pub(crate) riding_link_commits: std::sync::Mutex<()>,
+    entity_registrations: std::sync::Mutex<FxHashMap<uuid::Uuid, i32>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: std::sync::Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -437,6 +459,8 @@ impl World {
             entities: ArcSwap::new(Arc::new(Vec::new())),
             entity_index: Arc::default(),
             island_schedule: std::sync::Mutex::default(),
+            riding_link_commits: std::sync::Mutex::default(),
+            entity_registrations: std::sync::Mutex::default(),
             scoreboard: std::sync::Mutex::new(Scoreboard::default()),
             worldborder: std::sync::Mutex::new(Worldborder::new(
                 0.0,
@@ -647,6 +671,10 @@ impl World {
             }
         }
 
+        let _registrations = self
+            .entity_registrations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.spawn_state.store(Arc::new(SpawnState::new(
             spawnable_chunks,
             &self.entities,
@@ -1176,7 +1204,7 @@ impl World {
         );
     }
 
-    fn broadcast_bedrock_grouped<'a, P: BClientPacket>(
+    pub(crate) fn broadcast_bedrock_grouped<'a, P: BClientPacket>(
         packet: &P,
         recipients: impl Iterator<Item = &'a Arc<BedrockClient>>,
     ) {
@@ -1572,6 +1600,53 @@ impl World {
         self.broadcast_packet_except(&[player.gameprofile.id], &packet);
     }
 
+    pub(crate) fn play_cart_use_sound(
+        &self,
+        actor: &Player,
+        sound: &pumpkin_data::data_component_impl::IdOr<
+            pumpkin_data::data_component_impl::SoundEvent,
+        >,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        use pumpkin_data::data_component_impl::IdOr as DataSound;
+
+        let (name, fixed_range) = match sound {
+            DataSound::Id(id) => (id.to_name(), None),
+            DataSound::Value(sound) => (sound.sound_name.as_str(), sound.range),
+        };
+        let range = f64::from(fixed_range.unwrap_or_else(|| volume.max(1.0) * 16.0));
+        let players = self.players.load();
+        let recipients = players.iter().filter(|player| {
+            player.gameprofile.id != actor.gameprofile.id
+                && player.position().squared_distance_to_vec(position) < range * range
+        });
+        let java = CSoundEffect::new(
+            data_to_proto_sound(sound),
+            category,
+            position,
+            volume,
+            pitch,
+            rng().random::<i64>(),
+        );
+        Self::broadcast_java_players(&java, recipients.clone());
+
+        let name = match name.strip_prefix("minecraft:").unwrap_or(name) {
+            "entity.generic.eat" => "random.eat",
+            "entity.generic.drink" => "random.drink",
+            "item.honey_bottle.drink" => "random.drink_honey",
+            "item.spear_wood.use" => "item.wooden_spear.use",
+            name => name,
+        };
+        let bedrock = CPlaySound::once(name, position, volume, pitch);
+        Self::broadcast_bedrock_grouped(
+            &bedrock,
+            recipients.filter_map(|player| player.client.bedrock()),
+        );
+    }
+
     pub fn play_sound_fine(
         &self,
         sound: Sound,
@@ -1581,6 +1656,25 @@ impl World {
         pitch: f32,
     ) {
         self.play_sound_raw(sound as u16, category, position, volume, pitch);
+    }
+
+    pub(crate) fn play_bedrock_named_sound(
+        &self,
+        name: &str,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        let range = f64::from(volume.max(1.0)) * 16.0;
+        let players = self.players.load_full();
+        let recipients = players.iter().filter_map(|player| {
+            let client = player.client.bedrock()?;
+            (player.position().squared_distance_to_vec(position) < range * range).then_some(client)
+        });
+        Self::broadcast_bedrock_grouped(
+            &CPlaySound::once(name, position, volume, pitch),
+            recipients,
+        );
     }
 
     /// Plays a custom sound event by identifier for all players in range.
@@ -1746,10 +1840,86 @@ impl World {
         self.play_sound_expect(player, sound, category, &new_vec);
     }
 
+    pub(crate) fn capture_vehicle_rides<'a>(
+        &self,
+        players: &'a [Arc<Player>],
+    ) -> Vec<Option<VehicleRideStart<'a>>> {
+        players
+            .iter()
+            .map(|player| self.capture_vehicle_ride(player))
+            .collect()
+    }
+
+    fn capture_vehicle_ride<'a>(&self, player: &'a Player) -> Option<VehicleRideStart<'a>> {
+        if player.client.java().is_none() || !std::ptr::eq(player.world().as_ref(), self) {
+            return None;
+        }
+        let rider = player.get_entity();
+        rider
+            .get_vehicle()?
+            .get_entity()
+            .uses_vehicle_collisions()
+            .then(|| VehicleRideStart {
+                player,
+                position: rider.pos.load(),
+                attachment: rider.riding_revision(),
+                statistic: player.get_movement_statistic(),
+            })
+    }
+
+    pub(crate) fn record_vehicle_rides(&self, rides: Vec<Option<VehicleRideStart<'_>>>) {
+        for ride in rides.into_iter().flatten() {
+            self.record_vehicle_ride(&ride);
+        }
+    }
+
+    fn record_vehicle_ride(&self, ride: &VehicleRideStart<'_>) {
+        let rider = ride.player.get_entity();
+        let end = if std::ptr::eq(ride.player.world().as_ref(), self)
+            && rider.riding_revision() == ride.attachment
+        {
+            rider.pos.load()
+        } else {
+            let Some(position) = ride
+                .player
+                .client
+                .java()
+                .and_then(|client| client.last_vehicle_rider_position(ride.attachment))
+            else {
+                return;
+            };
+            position
+        };
+        let distance = ((end - ride.position).length() as f32 * 100.0).round() as i32;
+        if distance > 0 {
+            ride.player.increment_custom_stat(ride.statistic, distance);
+        }
+    }
+
+    pub(crate) fn process_player_packets(players: &[Arc<Player>]) {
+        let (drivers, other_players): (Vec<_>, Vec<_>) = players.iter().partition(|player| {
+            player
+                .client
+                .java()
+                .is_some_and(|client| client.prepare_vehicle_movement(player))
+        });
+        other_players
+            .into_par_iter()
+            .for_each(|player| player.process_inbound_packets());
+        // Drivers project against the positions already committed by the other queues.
+        for driver in drivers {
+            driver.process_inbound_packets();
+        }
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn tick(self: &Arc<Self>, server: &Arc<Server>) {
         let start = std::time::Instant::now();
 
+        self.worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick();
         self.flush_block_updates();
         self.flush_synced_block_events();
         self.update_active_chunks();
@@ -1783,10 +1953,8 @@ impl World {
         let player_count = players.len();
 
         let t_players = std::time::Instant::now();
-        // Vanilla handles all packets before any player ticks
-        players.par_iter().for_each(|player| {
-            player.process_inbound_packets();
-        });
+        let mut vehicle_rides = self.capture_vehicle_rides(&players);
+        Self::process_player_packets(&players);
         players.par_iter().for_each(|player| {
             player.tick(server);
         });
@@ -1851,6 +2019,10 @@ impl World {
                     .map(|(report, (entity, _))| report.block_write_check(entity.as_ref()))
                     .collect();
                 let mut reaches = entity_islands::resolve(reports, islands_config)?;
+                entity_islands::include_moving_vehicle_event_listeners(
+                    &mut reaches,
+                    tickable.iter().map(|(entity, _)| entity.as_ref()),
+                )?;
                 entity_islands::prune_block_writes(self, &mut reaches, &block_write_checks)?;
                 let nodes: Vec<_> = tickable
                     .iter()
@@ -1924,12 +2096,25 @@ impl World {
             }
             order::set_entity_order(None);
         }
+        // Capture rides started during this tick just before `rideTick` positions their riders.
+        for (player, start) in players.iter().zip(&mut vehicle_rides) {
+            if start
+                .as_ref()
+                .is_none_or(|ride| ride.attachment != player.get_entity().riding_revision())
+            {
+                if let Some(ended_ride) = start.take() {
+                    self.record_vehicle_ride(&ended_ride);
+                }
+                *start = self.capture_vehicle_ride(player);
+            }
+        }
         // Vanilla `rideTick`: riders follow their vehicle's seat once it has moved
         tickable.par_iter().for_each(|(entity, _)| {
             if !entity.is_passenger() && entity.get_entity().has_passengers() {
                 crate::entity::ride_tick_riders(entity.as_ref());
             }
         });
+        self.record_vehicle_rides(vehicle_rides);
         self.order_tick_spawns();
         let entity_elapsed = t_entities.elapsed();
 
@@ -2456,77 +2641,64 @@ impl World {
         fluid0: &Fluid,
         state0: &FluidState,
     ) -> Vector3<f64> {
-        let mut velo = Vector3::default();
-
-        for dir in BlockDirection::horizontal() {
-            let offset = dir.to_offset();
+        let normalize = |flow: Vector3<f64>| {
+            let length = flow.length();
+            if length < f64::from(1.0e-5f32) {
+                Vector3::default()
+            } else {
+                flow / length
+            }
+        };
+        let mut flow = Vector3::default();
+        let directions = BlockDirection::horizontal_worldgen();
+        for direction in directions {
+            let offset = direction.to_offset();
             let pos = pos0.offset(offset);
-
             let (neighbor_fluid, neighbor_state) = self.get_fluid_and_fluid_state(&pos);
-
-            if neighbor_fluid.matches_type(fluid0) {
-                let mut neighbor_height = neighbor_state.height;
-                let mut amplitude = 0.0;
-
-                if neighbor_height == 0.0 {
-                    let state_id = self.get_block_state_id(&pos);
-                    let block_id = state_id.to_block_id();
-                    let block_state = state_id.to_state();
-
-                    let blocks_movement = blocks_movement(block_state, block_id);
-
-                    if !blocks_movement {
-                        let down_pos = pos.down();
-                        let (down_fluid, down_state) = self.get_fluid_and_fluid_state(&down_pos);
-
-                        if down_fluid.matches_type(fluid0) {
-                            neighbor_height = down_state.height;
-                            if neighbor_height > 0.0 {
-                                amplitude = f64::from(state0.height)
-                                    - (f64::from(neighbor_height) - 0.888_888_9);
-                            }
-                        }
-                    }
-                } else if neighbor_height > 0.0 {
-                    amplitude = f64::from(state0.height) - f64::from(neighbor_height);
-                }
-
-                if amplitude != 0.0 {
-                    velo.x += f64::from(offset.x) * amplitude;
-                    velo.z += f64::from(offset.z) * amplitude;
-                }
+            if !(neighbor_state.is_empty || neighbor_fluid.matches_type(fluid0)) {
+                continue;
             }
-        }
 
-        if state0.falling {
-            for dir in BlockDirection::horizontal() {
-                let pos = pos0.offset(dir.to_offset());
-
-                if self.is_solid_face(fluid0.id, pos, dir.to_block_direction())
-                    || self.is_solid_face(fluid0.id, pos.up(), dir.to_block_direction())
-                {
-                    if velo.length_squared() != 0.0 {
-                        velo = velo.normalize();
-                    }
-
-                    velo.y -= 6.0;
-                    break;
+            let height = neighbor_state.height;
+            let distance = if height > 0.0 {
+                state0.height - height
+            } else if !self
+                .get_block(&pos)
+                .has_tag(&tag::Block::MINECRAFT_BLOCKS_FLUID_FLOW)
+            {
+                let (lower_fluid, lower_state) = self.get_fluid_and_fluid_state(&pos.down());
+                if lower_fluid.matches_type(fluid0) && lower_state.height > 0.0 {
+                    state0.height - (lower_state.height - 0.888_888_9)
+                } else {
+                    0.0
                 }
-            }
+            } else {
+                0.0
+            };
+
+            flow.x += f64::from(offset.x) * f64::from(distance);
+            flow.z += f64::from(offset.z) * f64::from(distance);
         }
 
-        if velo.length_squared() == 0.0 {
-            velo
-        } else {
-            velo.normalize()
+        if state0.falling
+            && directions.into_iter().any(|direction| {
+                let pos = pos0.offset(direction.to_offset());
+                let direction = direction.to_block_direction();
+                self.is_solid_face(fluid0.id, pos, direction)
+                    || self.is_solid_face(fluid0.id, pos.up(), direction)
+            })
+        {
+            flow = normalize(flow).add_raw(0.0, -6.0, 0.0);
         }
+
+        normalize(flow)
     }
 
     // FlowingFluid.isSolidFace()
     fn is_solid_face(&self, fluid0_id: u16, pos: BlockPos, direction: BlockDirection) -> bool {
         let id = self.get_block_state_id(&pos);
 
-        let fluid = Fluid::from_state_id(id).unwrap_or(&Fluid::EMPTY);
+        let fluid = Fluid::of_block_state(id);
 
         if Fluid::same_fluid_type(fluid.id, fluid0_id) {
             return false;
@@ -2538,8 +2710,6 @@ impl World {
 
         let block = Block::from_state_id(id);
         let state = BlockState::from_id(id);
-
-        // Doesn't count blue ice or packed ice
 
         if block == &Block::ICE || block == &Block::FROSTED_ICE {
             return false;
@@ -2769,6 +2939,79 @@ impl World {
             && self.no_border_collision(source, bounding_box)
     }
 
+    pub(crate) fn no_vehicle_collision(
+        &self,
+        source: &dyn EntityBase,
+        bounds: BoundingBox,
+    ) -> bool {
+        self.get_block_collisions(bounds, source).0.is_empty()
+            && self
+                .vehicle_entity_colliders(source, bounds)
+                .next()
+                .is_none()
+            && self.no_border_collision(source, bounds)
+    }
+
+    pub(crate) fn is_pushable_by_vehicle(&self, candidate: &dyn EntityBase) -> bool {
+        let entity = candidate.get_entity();
+        // Players always tick. Equines and parrots override LivingEntity.isPushable.
+        if candidate.get_living_entity().is_some()
+            && candidate.get_player().is_none()
+            && ![
+                &EntityType::HORSE,
+                &EntityType::DONKEY,
+                &EntityType::MULE,
+                &EntityType::SKELETON_HORSE,
+                &EntityType::ZOMBIE_HORSE,
+                &EntityType::CAMEL,
+                &EntityType::CAMEL_HUSK,
+                &EntityType::LLAMA,
+                &EntityType::TRADER_LLAMA,
+                &EntityType::PARROT,
+            ]
+            .contains(&entity.entity_type)
+        {
+            let chunk = entity.chunk_pos.load();
+            if !self
+                .active_chunks
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .contains(&chunk)
+                || !self.level.is_chunk_loaded(&chunk)
+            {
+                return false;
+            }
+        }
+        candidate.is_pushable()
+    }
+
+    fn vehicle_entity_colliders<'a>(
+        &'a self,
+        source: &'a dyn EntityBase,
+        bounds: BoundingBox,
+    ) -> impl Iterator<Item = BoundingBox> + 'a {
+        let size = bounds.max - bounds.min;
+        let candidates = if (size.x + size.y + size.z) / 3.0 < 1.0E-7 {
+            Vec::new()
+        } else {
+            self.get_all_at_box(&bounds.expand_all(1.0E-7))
+        };
+        let common_vehicle = source.get_entity().uses_vehicle_collisions();
+        candidates.into_iter().filter_map(move |candidate| {
+            let other = candidate.get_entity();
+            let normally_solid = other.entity_type == &EntityType::SHULKER
+                || other.entity_type == &EntityType::HAPPY_GHAST
+                || other.entity_type.has_tag(&tag::EntityType::C_BOATS);
+            let eligible = normally_solid
+                || (common_vehicle && self.is_pushable_by_vehicle(candidate.as_ref()));
+            (!other.is_removed()
+                && !candidate.is_spectator()
+                && eligible
+                && !source.is_passenger_of_same_vehicle(candidate.as_ref()))
+            .then(|| other.bounding_box.load())
+        })
+    }
+
     pub fn no_entity_collision(
         &self,
         source: Option<&dyn EntityBase>,
@@ -2792,6 +3035,52 @@ impl World {
                 && source
                     .is_none_or(|source| !source.get_entity().is_passenger_of_same_vehicle(other))
         })
+    }
+
+    pub(crate) fn add_vehicle_collision_shapes(
+        &self,
+        source: &dyn EntityBase,
+        bounds: BoundingBox,
+        shapes: &mut Vec<BoundingBox>,
+    ) {
+        shapes.extend(self.vehicle_entity_colliders(source, bounds));
+        let border = self
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !border.collision_shape_contains(&bounds)
+            && border.is_inside_close_to_border(source.get_entity(), &bounds)
+        {
+            shapes.extend(border.collision_walls());
+        }
+    }
+
+    /// Vanilla compares the destination's shapes against the source box. An obstruction
+    /// already intersecting the source does not prevent the vehicle from leaving it.
+    pub(crate) fn has_new_vehicle_collision(
+        &self,
+        source: &dyn EntityBase,
+        old_bounds: BoundingBox,
+        accepted_delta: Vector3<f64>,
+    ) -> bool {
+        const EPSILON: f64 = 1.0e-5f32 as f64;
+        let old_bounds = old_bounds.contract_all(EPSILON);
+        let new_bounds = old_bounds.shift(accepted_delta);
+        let (_, destination_blocks) = self.get_block_collisions(new_bounds, source);
+        if !destination_blocks.is_empty() {
+            // The contextual shape of a single block can consist of several boxes.
+            let (_, original_blocks) = self.get_block_collisions(old_bounds, source);
+            if destination_blocks
+                .iter()
+                .any(|(_, pos)| original_blocks.iter().all(|(_, old)| old != pos))
+            {
+                return true;
+            }
+        }
+        // The border participates in projection. Java's separate destination
+        // check compares entity and block shapes against the old box.
+        self.vehicle_entity_colliders(source, new_bounds)
+            .any(|shape| shape.intersects(&new_bounds) && !shape.intersects(&old_bounds))
     }
 
     pub fn no_border_collision(&self, source: &dyn EntityBase, bounding_box: BoundingBox) -> bool {
@@ -5539,19 +5828,8 @@ impl World {
         removed_player
     }
 
-    #[expect(clippy::needless_pass_by_value)]
     pub fn spawn_entity_non_save(&self, entity: Arc<dyn EntityBase>) {
-        let _base_entity = entity.get_entity();
-        self.entity_tracker.add_entity(&entity, self);
-        self.spawn_state.load().add_entity(self, entity.as_ref());
-
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.push(entity.clone());
-            new_entities
-        });
-        self.record_tick_spawn(entity.get_entity().entity_id);
-        self.add_pending_riders(&entity);
+        self.add_entity_silent(entity);
     }
 
     /// Records the sequential order of an entity spawned while an entity ticks.
@@ -5633,22 +5911,58 @@ impl World {
     ///
     /// [`EntitySpawnEvent`]: crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent
     pub fn spawn_entity(self: &Arc<Self>, entity: Arc<dyn EntityBase>) -> bool {
-        let mut event = crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
-            entity.get_entity().entity_id,
-            entity.get_entity().entity_type.id.to_string(),
-            entity.get_entity().pos.load(),
-            self.clone(),
-        );
-        if let Some(server) = self.server.upgrade() {
-            event = server.plugin_manager.fire_blocking(&server, event);
-        }
-        if event.cancelled {
+        if self.entity_spawn_cancelled(entity.as_ref()) {
             return false;
         }
-
         entity.init_data_tracker();
         self.add_entity_silent(entity);
         true
+    }
+
+    /// Publishes a placed vehicle after its spawn veto and source commit.
+    ///
+    /// The commit must leave observers until after the vehicle is live.
+    pub(crate) fn spawn_placed_vehicle<T>(
+        self: &Arc<Self>,
+        entity: &Arc<dyn EntityBase>,
+        commit: impl FnOnce() -> Option<T>,
+    ) -> Result<T, VehiclePlacementError> {
+        if self.entity_spawn_cancelled(entity.as_ref()) {
+            return Err(VehiclePlacementError::SpawnVetoed);
+        }
+
+        let committed = {
+            let mut registrations = self
+                .entity_registrations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let base = entity.get_entity();
+            if base.is_removed() || registrations.contains_key(&base.entity_uuid) {
+                return Err(VehiclePlacementError::UuidUnavailable);
+            }
+            let committed = commit().ok_or(VehiclePlacementError::CommitRejected)?;
+            registrations.insert(base.entity_uuid, base.entity_id);
+            self.spawn_state.load().add_entity(self, entity.as_ref());
+            // The next placement must see this hull in its clearance check.
+            self.publish_live_entity(entity);
+            committed
+        };
+        // Initial metadata dispatch can reenter the world and remove the live entity.
+        entity.init_data_tracker();
+        self.entity_tracker.add_entity(entity, self);
+        Ok(committed)
+    }
+
+    fn entity_spawn_cancelled(self: &Arc<Self>, entity: &dyn EntityBase) -> bool {
+        self.cancelled_by_plugin(|| {
+            let entity = entity.get_entity();
+            crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent::new(
+                entity.entity_id,
+                entity.entity_type.id.to_string(),
+                entity.pos.load(),
+                self.clone(),
+            )
+        })
     }
 
     /// Fires [`CreatureSpawnEvent`], then spawns the entity; `false` if either event is cancelled.
@@ -5680,48 +5994,67 @@ impl World {
 
     #[expect(clippy::needless_pass_by_value)]
     pub fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-
-        // Guard against duplicate entities with the same UUID.
-        // This can happen when chunk entity data is loaded while the entity
-        // already exists in the world (e.g. another player is still tracking it).
-        let already_exists = self
-            .entities
-            .load()
-            .iter()
-            .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
-        if already_exists {
-            return;
+        let base = entity.get_entity();
+        loop {
+            let current = self.entities.load_full();
+            let mut next = (*current).clone();
+            next.push(entity.clone());
+            let mut registrations = self
+                .entity_registrations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if base.is_removed() || registrations.contains_key(&base.entity_uuid) {
+                return;
+            }
+            let previous = self.entities.compare_and_swap(&current, Arc::new(next));
+            if Arc::ptr_eq(&previous, &current) {
+                registrations.insert(base.entity_uuid, base.entity_id);
+                self.spawn_state.load().add_entity(self, entity.as_ref());
+                break;
+            }
         }
-
-        // The entity stays live-only: it is written to its chunk's saved data on
-        // unload (see `save_entities_by_chunk`), never at spawn, so it can't be both live and
-        // serialized at once (which would double it on the next reload).
-        self.spawn_state.load().add_entity(self, entity.as_ref());
         self.entity_tracker.add_entity(&entity, self);
+        self.record_tick_spawn(base.entity_id);
+        if !base.is_removed() {
+            self.add_pending_riders(&entity);
+        }
+    }
 
+    fn publish_live_entity(&self, entity: &Arc<dyn EntityBase>) {
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
             new_entities.push(entity.clone());
             new_entities
         });
         self.record_tick_spawn(entity.get_entity().entity_id);
-        self.add_pending_riders(&entity);
     }
 
     pub fn remove_entity(&self, entity: &dyn EntityBase) {
-        // Entity::remove passes its base projection; retain the registered living owner.
-        let registered = self.get_entity_by_id(entity.get_entity().entity_id);
+        let base = entity.get_entity();
+        let registered = {
+            let registrations = self
+                .entity_registrations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // Entity::remove passes its base projection; retain the registered living owner.
+            let registered = self.get_entity_by_id(base.entity_id);
+            if base
+                .removal_reason
+                .compare_exchange(None, Some(RemovalReason::Discarded))
+                .is_err()
+            {
+                return;
+            }
+            base.removed.store(true, Ordering::Release);
+            if registrations.get(&base.entity_uuid) == Some(&base.entity_id) {
+                self.spawn_state
+                    .load()
+                    .remove_entity(self, registered.as_deref().unwrap_or(entity));
+            }
+            registered
+        };
         let entity = registered.as_deref().unwrap_or(entity);
         let base_entity = entity.get_entity();
-        if base_entity
-            .removal_reason
-            .compare_exchange(None, Some(RemovalReason::Discarded))
-            .is_err()
-        {
-            return;
-        }
-        base_entity.removed.store(true, Ordering::Release);
 
         if let Some(vehicle) = base_entity.get_vehicle() {
             vehicle
@@ -5734,16 +6067,24 @@ impl World {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
         for passenger in passengers {
-            base_entity.remove_passenger(passenger.get_entity().entity_id);
+            base_entity.remove_passenger_after_vehicle_removal(passenger.get_entity().entity_id);
         }
 
-        self.spawn_state.load().remove_entity(self, entity);
         self.entity_tracker.remove_entity(entity, self);
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
-            new_entities
-        });
+        {
+            let mut registrations = self
+                .entity_registrations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.entities.rcu(|current_entities| {
+                let mut new_entities = (**current_entities).clone();
+                new_entities.retain(|e| e.get_entity().entity_id != base_entity.entity_id);
+                new_entities
+            });
+            if registrations.get(&base_entity.entity_uuid) == Some(&base_entity.entity_id) {
+                registrations.remove(&base_entity.entity_uuid);
+            }
+        }
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity().finish_removal(mob);
         }
@@ -5763,20 +6104,35 @@ impl World {
         }
         let mut entities_to_remove = Vec::new();
 
-        self.entities.rcu(|current_entities| {
-            entities_to_remove.clear();
-            let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|entity| {
-                let pos = saved_chunk_pos(entity.as_ref());
-                if chunks_set.contains(&pos) {
-                    entities_to_remove.push(entity.clone());
-                    false
-                } else {
-                    true
-                }
+        {
+            let mut registrations = self
+                .entity_registrations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.entities.rcu(|current_entities| {
+                entities_to_remove.clear();
+                let mut new_entities = (**current_entities).clone();
+                new_entities.retain(|entity| {
+                    let pos = saved_chunk_pos(entity.as_ref());
+                    if chunks_set.contains(&pos) {
+                        entities_to_remove.push(entity.clone());
+                        false
+                    } else {
+                        true
+                    }
+                });
+                new_entities
             });
-            new_entities
-        });
+            for entity in &entities_to_remove {
+                let base = entity.get_entity();
+                if registrations.get(&base.entity_uuid) == Some(&base.entity_id) {
+                    registrations.remove(&base.entity_uuid);
+                    if !base.is_removed() {
+                        self.spawn_state.load().remove_entity(self, entity.as_ref());
+                    }
+                }
+            }
+        }
 
         self.save_entities_by_chunk(&entities_to_remove, chunks_set.iter().copied(), true)
             .await;
@@ -5791,7 +6147,6 @@ impl World {
                 base.removed.store(true, Ordering::Release);
             }
             self.entity_tracker.remove_entity(entity.as_ref(), self);
-            self.spawn_state.load().remove_entity(self, entity.as_ref());
             if let Some(mob) = entity.get_mob() {
                 mob.get_mob_entity().finish_removal(mob);
             }
@@ -6920,12 +7275,24 @@ impl World {
     /// `FluidState#getHeight` includes the full block when the same fluid is above.
     /// Keep `state.height` as the own height used by flow-velocity calculations.
     pub fn get_fluid_height(&self, position: &BlockPos, fluid: &Fluid, state: &FluidState) -> f32 {
-        if state.is_empty {
-            0.0
-        } else if fluid.matches_type(self.get_fluid(&position.up())) {
+        pumpkin_world::world::fluid_height(self, position, fluid, state)
+    }
+
+    /// `FluidState#getHeightForCamera` fills source fluid up to a sturdy ceiling.
+    pub fn get_fluid_height_for_camera(
+        &self,
+        position: &BlockPos,
+        fluid: &Fluid,
+        state: &FluidState,
+    ) -> f32 {
+        if state.is_source
+            && self
+                .get_block_state(&position.up())
+                .is_side_solid(BlockDirection::Down)
+        {
             1.0
         } else {
-            state.height
+            self.get_fluid_height(position, fluid, state)
         }
     }
 
@@ -8651,6 +9018,12 @@ fn block_entity_nbt(block_entity: &dyn BlockEntity) -> NbtCompound {
 }
 
 #[cfg(test)]
+mod minecart_vehicle_tests;
+
+#[cfg(test)]
+mod vehicle_tests;
+
+#[cfg(test)]
 mod tests {
     use pumpkin_data::{
         Block,
@@ -8659,6 +9032,8 @@ mod tests {
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::math::vector2::Vector2;
+    use pumpkin_util::math::vector3::Vector3;
+    use pumpkin_world::chunk::ChunkData;
     use uuid::Uuid;
 
     use super::{
@@ -8769,6 +9144,42 @@ mod tests {
         }
 
         assert_eq!(ids(&data), ["minecraft:piglin"]);
+    }
+
+    #[tokio::test]
+    async fn water_current_reaches_across_a_drop_until_flow_is_blocked()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk = ChunkData::empty_sync(0, 0);
+        let source = BlockPos::new(8, 64, 8);
+        chunk.set_block_absolute_y(8, 64, 8, Block::WATER.default_state.id);
+        chunk.set_block_absolute_y(9, 63, 8, Block::WATER.default_state.id);
+        world
+            .level
+            .loaded_chunks
+            .insert(source.chunk_position(), chunk);
+
+        let (water, state) = world.get_fluid_and_fluid_state(&source);
+        assert_eq!(
+            world.get_fluid_velocity(source, water, &state),
+            Vector3::new(1.0, 0.0, 0.0)
+        );
+
+        for obstruction in [&Block::STONE, &Block::LAVA] {
+            world
+                .level
+                .loaded_chunks
+                .get(&source.chunk_position())
+                .ok_or("water current test chunk is missing")?
+                .set_block_absolute_y(9, 64, 8, obstruction.default_state.id);
+            assert_eq!(
+                world.get_fluid_velocity(source, water, &state),
+                Vector3::default()
+            );
+        }
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[test]
@@ -9055,6 +9466,7 @@ mod tests {
         }
         Ok(())
     }
+
     #[tokio::test]
     async fn removing_a_wither_clears_its_bossbar_registration_without_dropping_loot()
     -> Result<(), Box<dyn std::error::Error>> {

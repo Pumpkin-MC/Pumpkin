@@ -341,7 +341,7 @@ impl ScreenHandler for StonecutterScreenHandler {
 
         slot.on_take_item(player, &stack);
         if slot_index == Self::RESULT_SLOT && !stack.is_empty() {
-            player.drop_item(stack, false);
+            self.get_behaviour_mut().drop_item(player, stack, false);
         }
 
         clicked

@@ -12,12 +12,12 @@ use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use rustc_hash::FxHashMap;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
-    AtomicBool, AtomicI32, AtomicU8,
+    AtomicBool, AtomicI32, AtomicU8, AtomicU64,
     Ordering::{Relaxed, SeqCst},
 };
+use std::sync::{Arc, Mutex, Weak};
 use tracing::warn;
 use uuid::Uuid;
 
@@ -33,7 +33,7 @@ use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::neutral::find_by_uuid;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
-use crate::world::loot::LootContextParameters;
+use crate::world::{World, loot::LootContextParameters};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::attributes::Attributes;
@@ -60,8 +60,7 @@ use pumpkin_protocol::java::client::play::{
     CHurtAnimation, CSwingArm, CTakeItemEntity, CUpdateMobEffect,
 };
 use pumpkin_protocol::{
-    codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CSetEquipment, MetadataSerializer},
+    java::client::play::MetadataSerializer,
     ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -74,6 +73,33 @@ use std::sync::RwLock;
 struct LastHurtByMob {
     uuid: Uuid,
     entity_id: i32,
+}
+
+#[derive(Clone)]
+struct CartUseSource {
+    world: Weak<World>,
+    hand: Hand,
+    slot: usize,
+}
+
+impl CartUseSource {
+    fn live_stack(
+        &self,
+        player: &super::player::Player,
+        expected: &ItemStack,
+    ) -> Option<ItemStack> {
+        let inventory = player.inventory();
+        if player.gamemode.load() == GameMode::Spectator
+            || !Weak::ptr_eq(&self.world, &Arc::downgrade(&player.world()))
+            || inventory.equipment_slot_index(&super::hand_equipment_slot(self.hand))
+                != Some(self.slot)
+        {
+            return None;
+        }
+        let held = inventory.get_slot(self.slot);
+        (!held.is_empty() && held.uid == expected.uid && held.item.id == expected.item.id)
+            .then_some(held)
+    }
 }
 
 /// Represents a living entity within the game world.
@@ -99,6 +125,10 @@ pub struct LivingEntity {
     pub item_use_time: AtomicI32,
     pub item_in_use: std::sync::Mutex<Option<ItemStack>>,
     pub active_hand: std::sync::Mutex<Option<Hand>>,
+    // Read and update under the item_in_use lock.
+    cart_use_source: Mutex<Option<CartUseSource>>,
+    item_use_revision: AtomicU64,
+    released_item_use_revision: AtomicU64,
     pub recent_kinetic_enemies: std::sync::Mutex<FxHashMap<i32, i32>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
@@ -201,7 +231,7 @@ impl EffectParticle {
     }
 }
 
-fn is_allowed_by_team_rules(
+pub(super) fn is_allowed_by_team_rules(
     own_team: Option<&crate::world::scoreboard::Team>,
     their_team: Option<&crate::world::scoreboard::Team>,
 ) -> bool {
@@ -274,17 +304,28 @@ impl LivingEntity {
             .auto_spin_attack_item_stack
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((item_stack, slot));
-        self.set_living_flag(Self::USING_RIPTIDE_FLAG, true);
+        self.publish_riptide_flag(true);
     }
 
     pub fn stop_auto_spin_attack(&self) {
         self.auto_spin_attack_ticks.store(0, Relaxed);
-        self.set_living_flag(Self::USING_RIPTIDE_FLAG, false);
         self.auto_spin_attack_dmg.store(0.0);
         *self
             .auto_spin_attack_item_stack
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.publish_riptide_flag(false);
+    }
+
+    fn publish_riptide_flag(&self, spinning: bool) {
+        use pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::DAMAGE_NEARBY_MOBS;
+        self.set_living_flag(Self::USING_RIPTIDE_FLAG, spinning);
+        Self::set_bedrock_use_bit(
+            &self.entity.bedrock_flags,
+            1i64 << DAMAGE_NEARBY_MOBS,
+            spinning,
+        );
+        self.send_living_bedrock_flags();
     }
 
     /// Vanilla `LivingEntity.checkAutoSpinAttack`.
@@ -500,6 +541,9 @@ impl LivingEntity {
             item_use_time: AtomicI32::new(0),
             item_in_use: std::sync::Mutex::new(None),
             active_hand: std::sync::Mutex::new(None),
+            cart_use_source: Mutex::new(None),
+            item_use_revision: AtomicU64::new(0),
+            released_item_use_revision: AtomicU64::new(0),
             recent_kinetic_enemies: std::sync::Mutex::new(FxHashMap::default()),
             livings_flags: AtomicU8::new(0),
             active_effects: std::sync::Mutex::new(FxHashMap::default()),
@@ -645,71 +689,45 @@ impl LivingEntity {
     }
 
     pub fn send_equipment_changes(&self, equipment: &[(EquipmentSlot, ItemStack)]) {
+        use crate::world::entity_tracker::EquippedStacks;
+
         if equipment.is_empty() {
             return;
         }
-        self.apply_and_send_equipment_attribute_modifiers(equipment);
-
-        if equipment
-            .iter()
-            .any(|(slot, _)| *slot == EquipmentSlot::FEET)
+        let world = self.entity.world.load_full();
+        let player = (self.entity.entity_type == &EntityType::PLAYER)
+            .then(|| world.get_player_by_id(self.entity_id()))
+            .flatten();
+        let mut attributes = Vec::new();
+        let mut boots = None;
         {
-            let pos_f64 = self.entity.pos.load();
+            let current = EquippedStacks::lock(self, player.as_deref());
             for (slot, stack) in equipment {
-                if *slot == EquipmentSlot::FEET && !stack.is_empty() {
-                    crate::enchantment::EnchantmentHelper::on_location_changed(
-                        &self.entity,
-                        stack,
-                        pos_f64,
-                    );
+                if !current.matches(slot, Some(stack), true) {
+                    continue;
+                }
+                self.apply_equipment_slot_attribute_modifiers(slot, stack, &mut attributes);
+                if *slot == EquipmentSlot::MAIN_HAND {
+                    for attribute in self.apply_weapon_attributes(stack) {
+                        push_unique_attribute(&mut attributes, &attribute);
+                    }
+                } else if *slot == EquipmentSlot::FEET && !stack.is_empty() {
+                    boots = Some(stack);
                 }
             }
         }
-
-        let equipment_java: Vec<(i8, ItemStackSerializer)> = equipment
-            .iter()
-            .map(|(slot, stack)| {
-                (
-                    slot.discriminant(),
-                    ItemStackSerializer::from(stack.clone()),
-                )
-            })
-            .collect();
-        let je_packet = CSetEquipment::new(self.entity_id().into(), equipment_java);
-        let world = self.entity.world.load();
-        world.send_to_tracking_players(&self.entity, &je_packet);
-
-        let mut armor_changed = false;
-        for (slot, stack) in equipment {
-            if *slot == EquipmentSlot::MAIN_HAND {
-                self.update_weapon_attributes(stack);
-            }
-            if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {
-                let window_id = if *slot == EquipmentSlot::OFF_HAND {
-                    pumpkin_protocol::bedrock::server::inventory_transaction::WINDOW_ID_OFF_HAND
-                        as u8
-                } else {
-                    0
-                };
-
-                let be_packet = pumpkin_protocol::bedrock::client::CMobEquipment {
-                    target_runtime_id: (self.entity_id() as u64).into(),
-                    item: pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor::from(
-                        stack,
-                    ),
-                    slot: 0,
-                    selected_slot: 0,
-                    container_id: window_id,
-                };
-                world.send_to_tracking_players_bedrock(&self.entity, &be_packet);
-            } else if slot.is_armor_slot() || matches!(slot, EquipmentSlot::Body(_)) {
-                armor_changed = true;
-            }
+        if let Some(boots) = boots {
+            crate::enchantment::EnchantmentHelper::on_location_changed(
+                &self.entity,
+                boots,
+                self.entity.pos.load(),
+            );
         }
-
-        if armor_changed {
-            let armor_packet = self.bedrock_armor_packet(equipment);
-            world.send_to_tracking_players_bedrock(&self.entity, &armor_packet);
+        if !attributes.is_empty() {
+            crate::entity::attributes::send_guarded_attribute_updates(self, &attributes);
+        }
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id()) {
+            tracked.broadcast_equipment(self, equipment);
         }
     }
 
@@ -749,7 +767,7 @@ impl LivingEntity {
     /// attribute map and sends the changed attributes to clients. Without this
     /// the client never sees the reduced attack speed and does not show the
     /// crosshair attack indicator.
-    fn update_weapon_attributes(&self, stack: &ItemStack) {
+    fn apply_weapon_attributes(&self, stack: &ItemStack) -> Vec<Attributes> {
         let component = stack.get_data_component::<AttributeModifiersImpl>();
 
         // Single pass over the item's modifiers, split by attribute.
@@ -798,9 +816,7 @@ impl LivingEntity {
                 changed.push(attribute);
             }
         }
-        if !changed.is_empty() {
-            crate::entity::attributes::send_attribute_updates_for_living(self, changed);
-        }
+        changed
     }
 
     /// Applies item `attribute_modifiers` for the given slots and notifies clients.
@@ -1030,28 +1046,135 @@ impl LivingEntity {
         stack: &ItemStack,
         event: pumpkin_data::game_event::GameEvent,
     ) {
-        if stack
+        if Self::use_vibration_enabled(stack, false) {
+            self.emit_use_vibration(event, None);
+        }
+    }
+
+    fn use_vibration_enabled(stack: &ItemStack, guarded_cart: bool) -> bool {
+        stack
             .get_data_component::<pumpkin_data::data_component_impl::UseEffectsImpl>()
-            .is_none_or(|u| u.interact_vibrations)
-        {
-            self.entity
-                .world
-                .load()
-                .emit_game_event(event.name(), self.entity.pos.load());
+            .map_or(!guarded_cart, |effects| effects.interact_vibrations)
+    }
+
+    fn emit_use_vibration(
+        &self,
+        event: pumpkin_data::game_event::GameEvent,
+        origin: Option<&Weak<World>>,
+    ) {
+        let world = self.entity.world.load_full();
+        if origin.is_none_or(|origin| Weak::ptr_eq(origin, &Arc::downgrade(&world))) {
+            let actor = world.get_entity_by_id(self.entity.entity_id);
+            world.emit_game_event_with_context(
+                event.name(),
+                self.entity.pos.load(),
+                &crate::world::game_event::GameEventContext {
+                    source_entity: Some(actor.as_deref().unwrap_or(self)),
+                },
+            );
         }
     }
 
     pub fn set_active_hand(&self, hand: Hand, stack: ItemStack, duration: i32) {
-        let is_blocking = stack.get_data_component::<BlocksAttacksImpl>().is_some();
-        self.cause_use_vibration(
-            &stack,
-            pumpkin_data::game_event::GameEvent::ItemInteractStart,
-        );
-        self.item_use_time.store(duration, Ordering::Relaxed);
-        *self
+        self.start_active_hand(hand, stack, duration, true, None);
+    }
+
+    pub(crate) fn start_blocking_if_idle(&self, hand: Hand, stack: ItemStack, duration: i32) {
+        self.start_active_hand(hand, stack, duration, false, None);
+    }
+
+    pub(crate) fn start_cart_use(
+        &self,
+        hand: Hand,
+        slot: usize,
+        stack: ItemStack,
+        duration: i32,
+        world: &Arc<World>,
+    ) -> bool {
+        let source = CartUseSource {
+            world: Arc::downgrade(world),
+            hand,
+            slot,
+        };
+        self.start_active_hand(hand, stack, duration, false, Some(source))
+    }
+
+    pub(crate) fn stop_cart_use_for_selected_slot(&self, slot: u8) {
+        let revision = {
+            let _active = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let source = self
+                .cart_use_source
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !source.as_ref().is_some_and(|source| {
+                source.hand == Hand::Right && source.slot != usize::from(slot)
+            }) {
+                return;
+            }
+            self.item_use_revision.load(Relaxed)
+        };
+        self.clear_active_hand_if(revision);
+    }
+
+    pub(crate) fn cart_use_live_source(
+        &self,
+        player: &super::player::Player,
+        hand: Hand,
+        slot: usize,
+        expected: &ItemStack,
+        revision: u64,
+    ) -> Option<ItemStack> {
+        let active = self
             .item_in_use
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(stack);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.item_use_revision.load(Relaxed) != revision
+            || self.livings_flags.load(Relaxed) & Self::USING_ITEM_FLAG == 0
+            || active
+                .as_ref()
+                .is_none_or(|stack| stack.uid != expected.uid)
+        {
+            return None;
+        }
+        let source = self
+            .cart_use_source
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let source = source.as_ref()?;
+        if source.hand != hand || source.slot != slot {
+            return None;
+        }
+        source.live_stack(player, expected)
+    }
+
+    fn start_active_hand(
+        &self,
+        hand: Hand,
+        stack: ItemStack,
+        duration: i32,
+        replace: bool,
+        cart_source: Option<CartUseSource>,
+    ) -> bool {
+        let blocking = stack.get_data_component::<BlocksAttacksImpl>().is_some();
+        let vibrates = Self::use_vibration_enabled(&stack, cart_source.is_some());
+        let vibration_origin = cart_source.as_ref().map(|source| source.world.clone());
+        let mut item_in_use = self
+            .item_in_use
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !replace && self.livings_flags.load(Relaxed) & Self::USING_ITEM_FLAG != 0 {
+            return false;
+        }
+        let revision = self.item_use_revision.fetch_add(1, Relaxed).wrapping_add(1);
+        self.item_use_time.store(duration, Relaxed);
+        *self
+            .cart_use_source
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = cart_source;
+        *item_in_use = Some(stack);
         *self
             .active_hand
             .lock()
@@ -1062,107 +1185,190 @@ impl LivingEntity {
             .clear();
         self.set_living_flag(Self::USING_ITEM_FLAG, true);
         self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left);
-        if is_blocking {
-            self.set_bedrock_blocking(true);
+        self.set_item_use_flags(true, blocking);
+        drop(item_in_use);
+        if vibrates {
+            self.emit_use_vibration(
+                pumpkin_data::game_event::GameEvent::ItemInteractStart,
+                vibration_origin.as_ref(),
+            );
         }
+        if self.item_use_revision.load(Relaxed) == revision {
+            self.send_living_bedrock_flags();
+        }
+        true
     }
 
     fn set_living_flag(&self, flag: u8, value: bool) {
-        let index = flag;
-        let mut b = self.livings_flags.load(Ordering::Relaxed);
         if value {
-            b |= index;
+            self.livings_flags.fetch_or(flag, Relaxed);
         } else {
-            b &= !index;
+            self.livings_flags.fetch_and(!flag, Relaxed);
         }
-        self.livings_flags.store(b, Ordering::Relaxed);
-
-        let bedrock_flag = if flag == Self::USING_ITEM_FLAG {
-            Some(pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::USING_ITEM)
-        } else if flag == Self::USING_RIPTIDE_FLAG {
-            Some(
-                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::DAMAGE_NEARBY_MOBS,
-            )
-        } else {
-            None
-        };
-        let bedrock_meta = bedrock_flag.map(|index| {
-            let mask = 1i64 << index;
-            if value {
-                self.entity.bedrock_flags.fetch_or(mask, Ordering::Relaxed);
-            } else {
-                self.entity
-                    .bedrock_flags
-                    .fetch_and(!mask, Ordering::Relaxed);
-            }
-
-            let mut meta =
-                pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
-            meta.set(
-                pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS,
-                pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Int64(
-                    self.entity.bedrock_flags.load(Ordering::Relaxed),
-                ),
-            );
-            meta
-        });
-
-        self.entity
-            .set_synced_data(tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS, b);
-        if let Some(bedrock_meta) = &bedrock_meta {
-            self.entity.send_bedrock_actor_data(bedrock_meta);
-        }
+        self.entity.set_synced_data(
+            tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS,
+            self.livings_flags.load(Relaxed),
+        );
     }
 
     pub fn set_bedrock_blocking(&self, blocking: bool) {
-        let flag = pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::BLOCKING;
-        let index = (flag - 64) as u8;
-        let mask = 1i64 << index;
-        if blocking {
-            self.entity
-                .bedrock_flags_two
-                .fetch_or(mask, Ordering::Relaxed);
-        } else {
-            self.entity
-                .bedrock_flags_two
-                .fetch_and(!mask, Ordering::Relaxed);
-        }
-
-        let mut meta =
-            pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
-        meta.set(
-            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::FLAGS_TWO,
-            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Int64(
-                self.entity.bedrock_flags_two.load(Ordering::Relaxed),
-            ),
+        use pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::BLOCKING;
+        Self::set_bedrock_use_bit(
+            &self.entity.bedrock_flags_two,
+            1i64 << (BLOCKING - 64),
+            blocking,
         );
-        self.entity.send_bedrock_actor_data(&meta);
+        self.send_living_bedrock_flags();
+    }
+
+    fn set_bedrock_use_bit(word: &std::sync::atomic::AtomicI64, mask: i64, set: bool) {
+        if set {
+            word.fetch_or(mask, Relaxed);
+        } else {
+            word.fetch_and(!mask, Relaxed);
+        }
+    }
+
+    fn set_item_use_flags(&self, using: bool, blocking: bool) {
+        use pumpkin_protocol::bedrock::client::set_actor_data::entity_data_flag::{
+            BLOCKING, USING_ITEM,
+        };
+
+        Self::set_bedrock_use_bit(&self.entity.bedrock_flags, 1i64 << USING_ITEM, using);
+        Self::set_bedrock_use_bit(
+            &self.entity.bedrock_flags_two,
+            1i64 << (BLOCKING - 64),
+            blocking,
+        );
+    }
+
+    fn send_living_bedrock_flags(&self) {
+        let world = self.entity.world.load_full();
+        let actor = world.get_entity_by_id(self.entity_id());
+        self.entity
+            .send_bedrock_flags(&world, self.entity.riding_revision(), || {
+                actor
+                    .as_deref()
+                    .and_then(EntityBase::get_mob)
+                    .and_then(super::mob::Mob::mob_metadata)
+            });
     }
 
     pub fn clear_active_hand(&self) {
-        let prev = self
-            .item_in_use
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-        if let Some(ref stack) = prev {
-            self.cause_use_vibration(
-                stack,
+        self.clear_active_hand_if(self.item_use_revision.load(Relaxed));
+    }
+
+    pub(crate) fn release_active_hand(
+        &self,
+        held_stack: impl FnOnce(Hand) -> ItemStack,
+        on_release: impl FnOnce(&ItemStack),
+    ) {
+        let (item_id, hand, revision, cart_source, uid) = {
+            let active = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let Some(stack) = active.as_ref() else {
+                return;
+            };
+            let hand = *self
+                .active_hand
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let revision = self.item_use_revision.load(Relaxed);
+            if self.livings_flags.load(Relaxed) & Self::USING_ITEM_FLAG == 0
+                || self.released_item_use_revision.swap(revision, Relaxed) == revision
+            {
+                return;
+            }
+            let cart_source = self
+                .cart_use_source
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            (stack.item.id, hand, revision, cart_source, stack.uid)
+        };
+        if let Some(hand) = hand {
+            let held = held_stack(hand);
+            let shares_source = cart_source.as_ref().is_none_or(|source| {
+                held.uid == uid
+                    && self
+                        .entity
+                        .world
+                        .load()
+                        .get_entity_by_id(self.entity_id())
+                        .and_then(|entity| source.live_stack(entity.get_player()?, &held))
+                        .is_some()
+            });
+            if shares_source && held.item.id == item_id {
+                let mut active = self
+                    .item_in_use
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if self.item_use_revision.load(Relaxed) != revision {
+                    return;
+                }
+                *active = Some(held.clone());
+                drop(active);
+                on_release(&held);
+            }
+        }
+        self.clear_active_hand_if(revision);
+    }
+
+    fn clear_active_hand_if(&self, revision: u64) {
+        let (vibrates, stopping_revision, vibration_origin) = {
+            let item_in_use = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if self.item_use_revision.load(Relaxed) != revision {
+                return;
+            }
+            let cart_source = self
+                .cart_use_source
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take();
+            let vibrates = self.livings_flags.load(Relaxed) & Self::USING_ITEM_FLAG != 0
+                && item_in_use
+                    .as_ref()
+                    .is_some_and(|item| Self::use_vibration_enabled(item, cart_source.is_some()));
+            let stopping_revision = revision.wrapping_add(1);
+            self.item_use_revision.store(stopping_revision, Relaxed);
+            self.recent_kinetic_enemies
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clear();
+            self.set_living_flag(Self::USING_ITEM_FLAG, false);
+            self.set_item_use_flags(false, false);
+            (
+                vibrates,
+                stopping_revision,
+                cart_source.map(|source| source.world),
+            )
+        };
+        if vibrates {
+            self.emit_use_vibration(
                 pumpkin_data::game_event::GameEvent::ItemInteractFinish,
+                vibration_origin.as_ref(),
             );
         }
+        let mut item_in_use = self
+            .item_in_use
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.item_use_revision.load(Relaxed) != stopping_revision {
+            return;
+        }
+        *item_in_use = None;
         *self
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-        self.recent_kinetic_enemies
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
-        self.item_use_time.store(0, Ordering::Relaxed);
-
-        self.set_living_flag(Self::USING_ITEM_FLAG, false);
-        self.set_bedrock_blocking(false);
+        self.item_use_time.store(0, Relaxed);
+        drop(item_in_use);
+        self.send_living_bedrock_flags();
     }
 
     pub fn was_recently_stabbed(&self, target_id: i32, now: i32, allowed_ticks: i32) -> bool {
@@ -1181,33 +1387,43 @@ impl LivingEntity {
     }
 
     pub fn is_blocking(&self) -> bool {
-        let item_in_use = self
+        self.blocking_component().is_some()
+    }
+
+    fn blocking_component(&self) -> Option<(BlocksAttacksImpl, u64)> {
+        let active = self
             .item_in_use
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(item) = item_in_use.as_ref()
-            && let Some(blocks_attacks) = item.get_data_component::<BlocksAttacksImpl>()
-        {
-            let use_time = self.item_use_time.load(Ordering::Relaxed);
-            let required_time = if let Some(dyn_self) = self
-                .entity
-                .world
-                .load()
-                .get_entity_by_id(self.entity.entity_id)
-                && let Some(player) = dyn_self
-                    .cast_any()
-                    .downcast_ref::<crate::entity::player::Player>()
-                && matches!(
-                    player.client.as_ref(),
-                    crate::net::ClientPlatform::Bedrock(_)
-                ) {
-                0
-            } else {
-                blocks_attacks.block_delay_ticks()
-            };
-            return item.get_max_use_time() - use_time >= required_time;
+        let item = active.as_ref()?;
+        if self.livings_flags.load(Relaxed) & Self::USING_ITEM_FLAG == 0 {
+            return None;
         }
-        false
+        let actor = self
+            .entity
+            .world
+            .load()
+            .get_entity_by_id(self.entity.entity_id);
+        let player = actor.as_deref().and_then(EntityBase::get_player);
+        let source = self
+            .cart_use_source
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let live;
+        let item = if let Some(source) = source.as_ref() {
+            live = player.and_then(|player| source.live_stack(player, item))?;
+            &live
+        } else {
+            item
+        };
+        let blocks_attacks = item.get_data_component::<BlocksAttacksImpl>()?;
+        let delay = if player.is_some_and(|player| player.client.bedrock().is_some()) {
+            0
+        } else {
+            blocks_attacks.block_delay_ticks()
+        };
+        (item.get_max_use_time() - self.item_use_time.load(Relaxed) >= delay)
+            .then(|| (blocks_attacks.clone(), self.item_use_revision.load(Relaxed)))
     }
 
     /// Like vanilla, the dead are not healed and a negative amount takes health.
@@ -3294,7 +3510,7 @@ impl LivingEntity {
                 self.set_health(1.0);
             }
 
-            self.apply_consume_effects_slice(caller, &death_protection.death_effects);
+            self.apply_consume_effects_slice(caller, &death_protection.death_effects, None);
             self.entity.world.load().send_entity_status(
                 &self.entity,
                 EntityStatus::ProtectedFromDeath,
@@ -3318,7 +3534,7 @@ impl LivingEntity {
         position: Option<Vector3<f64>>,
         source: Option<&dyn EntityBase>,
     ) -> f32 {
-        if amount <= 0.0 || !self.is_blocking() {
+        if amount <= 0.0 {
             return 0.0;
         }
         if source.is_some_and(|src| {
@@ -3329,15 +3545,7 @@ impl LivingEntity {
             return 0.0;
         }
 
-        let Some(blocks_attacks) = ({
-            let item_in_use = self
-                .item_in_use
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            item_in_use
-                .as_ref()
-                .and_then(|stack| stack.get_data_component::<BlocksAttacksImpl>().cloned())
-        }) else {
+        let Some((blocks_attacks, use_revision)) = self.blocking_component() else {
             return 0.0;
         };
 
@@ -3387,7 +3595,9 @@ impl LivingEntity {
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(hand) = active_hand {
+        if let Some(hand) = active_hand
+            && self.item_use_revision.load(Relaxed) == use_revision
+        {
             let slot = if hand == Hand::Left {
                 EquipmentSlot::OFF_HAND
             } else {
@@ -3412,34 +3622,36 @@ impl LivingEntity {
                     let broke = player.damage_item_in_slot(&slot, durability_damage);
                     let empty = player.inventory.get_stack_in_hand(hand).is_empty();
                     if broke && empty {
-                        self.clear_active_hand();
+                        self.clear_active_hand_if(use_revision);
                     }
                 }
             } else if durability_damage > 0 {
-                let mut equipment_guard = self
+                let break_sound = self
                     .entity_equipment
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if let Some(stack) = equipment_guard.equipment.get_mut(&slot) {
-                    let break_sound = stack
-                        .get_data_component::<pumpkin_data::data_component_impl::BreakSoundImpl>()
-                        .map(|bs| bs.sound.clone());
-                    if stack.damage_item(durability_damage) == DamageResult::Broken {
-                        if let Some(ref sound) = break_sound {
-                            world.play_sound_event(sound, SoundCategory::Neutral, &player_pos);
-                        }
-                        world.send_entity_status(
-                            &self.entity,
-                            crate::entity::equipment_break_status(&slot),
-                            ActorEventID::None,
-                        );
-                        *stack = ItemStack::EMPTY.clone();
-                        let broken_stack = stack.clone();
-                        drop(equipment_guard);
-
-                        self.send_equipment_changes(&[(slot, broken_stack)]);
-                        self.clear_active_hand();
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .equipment
+                    .get_mut(&slot)
+                    .and_then(|stack| {
+                        let sound = stack
+                            .get_data_component::<pumpkin_data::data_component_impl::BreakSoundImpl>()
+                            .map(|bs| bs.sound.clone());
+                        (stack.damage_item(durability_damage) == DamageResult::Broken).then(|| {
+                            *stack = ItemStack::EMPTY.clone();
+                            sound
+                        })
+                    });
+                if let Some(break_sound) = break_sound {
+                    if let Some(ref sound) = break_sound {
+                        world.play_sound_event(sound, SoundCategory::Neutral, &player_pos);
                     }
+                    world.send_entity_status(
+                        &self.entity,
+                        crate::entity::equipment_break_status(&slot),
+                        ActorEventID::None,
+                    );
+                    self.publish_cleared_mob_shield(world, &slot);
+                    self.clear_active_hand_if(use_revision);
                 }
             }
 
@@ -3474,7 +3686,7 @@ impl LivingEntity {
                     {
                         player.start_cooldown(blocking_key, cooldown_ticks);
                     }
-                    self.clear_active_hand();
+                    self.clear_active_hand_if(use_revision);
                     if let Some(ref disabled_sound) = blocks_attacks.disabled_sound {
                         world.play_sound_event(disabled_sound, SoundCategory::Players, &player_pos);
                     }
@@ -3484,6 +3696,36 @@ impl LivingEntity {
         }
 
         damage_blocked
+    }
+
+    fn publish_cleared_mob_shield(&self, world: &crate::world::World, slot: &EquipmentSlot) {
+        let mut attributes = Vec::new();
+        {
+            let equipment = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // A replacement installed by the normal equipment setter was already published.
+            if equipment
+                .equipment
+                .get(slot)
+                .is_some_and(|stack| !stack.is_empty())
+            {
+                return;
+            }
+            self.apply_equipment_slot_attribute_modifiers(slot, ItemStack::EMPTY, &mut attributes);
+            if *slot == EquipmentSlot::MAIN_HAND {
+                for attribute in self.apply_weapon_attributes(ItemStack::EMPTY) {
+                    push_unique_attribute(&mut attributes, &attribute);
+                }
+            }
+        }
+        if !attributes.is_empty() {
+            crate::entity::attributes::send_guarded_attribute_updates(self, &attributes);
+        }
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id()) {
+            tracked.send_cleared_hand_equipment(self, slot);
+        }
     }
 
     pub fn do_hurt_equipment(&self, damage_type: DamageType, damage: f32, slots: &[EquipmentSlot]) {
@@ -4682,198 +4924,7 @@ impl EntityBase for LivingEntity {
 
         self.tick_effects();
 
-        let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
-        if remaining_use_ticks > 0 {
-            let item_in_use = self
-                .item_in_use
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            if let Some(item) = item_in_use.as_ref() {
-                server
-                    .item_registry
-                    .on_use_tick(item, caller, remaining_use_ticks);
-            }
-        }
-
-        if caller.get_player().is_none() {
-            let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
-            if remaining_use_ticks > 0 {
-                let item_in_use = self
-                    .item_in_use
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone();
-                if let Some(item) = item_in_use
-                    && item
-                        .get_data_component::<ConsumableImpl>()
-                        .is_some_and(|consumable| {
-                            consumable.should_emit_particles_and_sounds(remaining_use_ticks)
-                        })
-                {
-                    self.play_consume_sound(caller, &item);
-                }
-            }
-        }
-
-        // Current active item
-        if self.item_use_time.load(Ordering::Relaxed) > 0
-            && self.item_use_time.fetch_sub(1, Ordering::Relaxed) <= 1
-        {
-            let item_in_use = self
-                .item_in_use
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            if let Some(item) = item_in_use.as_ref() {
-                // Consume item
-                if let Some(food) = item.get_data_component::<FoodImpl>()
-                    && let Some(player) = caller.get_player()
-                {
-                    player
-                        .hunger_manager
-                        .eat(player, food.nutrition as u8, food.saturation);
-                    self.entity.world.load().play_bedrock_level_sound(
-                        "burp",
-                        &self.entity.pos.load(),
-                        -1,
-                    );
-                }
-
-                if caller.get_player().is_none()
-                    && item.get_data_component::<ConsumableImpl>().is_some()
-                {
-                    self.play_consume_sound(caller, item);
-                }
-                self.apply_consumable_effects(caller, item);
-
-                // Handle potion consumption
-                if item
-                    .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
-                    .is_some()
-                {
-                    let effects = crate::item::potion::PotionContents::read_potion_effects(item);
-                    crate::item::potion::PotionContents::apply_effects_to(
-                        self,
-                        effects,
-                        1.0,
-                        crate::item::potion::PotionApplicationSource::Normal,
-                        None,
-                        None,
-                    );
-                }
-
-                if let Some(ominous) = item
-                    .get_data_component::<pumpkin_data::data_component_impl::OminousBottleAmplifierImpl>()
-                {
-                    self.add_effect(Effect {
-                        effect_type: &StatusEffect::BAD_OMEN,
-                        duration: 120_000,
-                        amplifier: ominous.amplifier.clamp(0, 4) as u8,
-                        ambient: false,
-                        show_particles: false,
-                        show_icon: true,
-                        blend: false,
-                    });
-                }
-
-                if let Some(stew) = item
-                    .get_data_component::<pumpkin_data::data_component_impl::SuspiciousStewEffectsImpl>()
-                {
-                    for entry in stew.effects.iter() {
-                        if let Some(effect_type) = StatusEffect::from_minecraft_name(&entry.effect)
-                        {
-                            self.add_effect(Effect {
-                                effect_type,
-                                duration: entry.duration,
-                                amplifier: 0,
-                                ambient: false,
-                                show_particles: true,
-                                show_icon: true,
-                                blend: false,
-                            });
-                        }
-                    }
-                }
-
-                if let Some(player) = caller.get_player() {
-                    player.trigger_advancement(
-                        crate::entity::player::advancement::trigger::AdvancementTrigger::ConsumeItem {
-                            item_id: format!("minecraft:{}", item.item.registry_key),
-                        },
-                    );
-
-                    // Vanilla `ItemStack.finishUsingItem`: consume one, then apply `use_remainder`.
-                    let finish_using = |mut stack: ItemStack| {
-                        let stack_count_before_using = stack.item_count;
-                        let gamemode = player.gamemode.load();
-                        stack.decrement_unless_creative(gamemode, 1);
-                        match item.get_data_component::<UseRemainderImpl>() {
-                            Some(use_remainder) => use_remainder.convert_into_remainder(
-                                stack,
-                                stack_count_before_using,
-                                gamemode == GameMode::Creative,
-                                |mut extra| {
-                                    if !player.inventory.insert_stack_anywhere(&mut extra)
-                                        && !extra.is_empty()
-                                    {
-                                        player.drop_item(extra);
-                                    }
-                                },
-                            ),
-                            None => stack,
-                        }
-                    };
-
-                    // Prefer modifying the exact stack that matches the consumed item:
-                    // 1) selected hotbar (held_item)
-                    // 2) off-hand
-                    // 3) fallback to active_hand if the above didn't match
-                    let mut handled = false;
-
-                    // Check main hand (hotbar selected)
-                    let held = player.inventory.held_item();
-                    if held.are_items_and_components_equal(item) {
-                        player.inventory.set_held_item(finish_using(held));
-                        handled = true;
-                    }
-
-                    if !handled {
-                        // Check off-hand
-                        let off_hand = player.inventory.off_hand_item();
-                        if off_hand.are_items_and_components_equal(item) {
-                            player
-                                .inventory
-                                .set_stack_in_hand(Hand::Left, finish_using(off_hand));
-                            handled = true;
-                        }
-                    }
-
-                    if !handled {
-                        // Use stored active_hand (as a fallback)
-                        let active_hand = *self
-                            .active_hand
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        let hand_to_modify = active_hand.unwrap_or(Hand::Right);
-                        let item_stack = self.get_stack_in_hand(caller, hand_to_modify);
-                        player
-                            .inventory
-                            .set_stack_in_hand(hand_to_modify, finish_using(item_stack));
-                    }
-
-                    if let Some(cooldown) = item.get_use_cooldown() {
-                        let group = cooldown
-                            .cooldown_group
-                            .clone()
-                            .unwrap_or_else(|| item.item.registry_key.to_string());
-                        player.start_cooldown(group, (cooldown.seconds * 20.0) as i32);
-                    }
-                }
-
-                self.clear_active_hand();
-            }
-        }
+        self.tick_active_item_use(caller, server);
 
         if self.hurt_cooldown.load(Relaxed) > 0 {
             self.hurt_cooldown.fetch_sub(1, Relaxed);
@@ -4972,11 +5023,330 @@ impl LivingEntity {
         super_factor + efficiency * (1.0 - super_factor)
     }
 
-    fn play_consume_sound(&self, caller: &dyn EntityBase, item: &ItemStack) {
+    fn tick_active_item_use(&self, caller: &dyn EntityBase, server: &Server) {
+        let (item, source, remaining, revision) = {
+            let active = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let remaining = self.item_use_time.load(Relaxed);
+            if remaining <= 0 || self.livings_flags.load(Relaxed) & Self::USING_ITEM_FLAG == 0 {
+                return;
+            }
+            let Some(item) = active.clone() else {
+                return;
+            };
+            let source = self
+                .cart_use_source
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            (
+                item,
+                source,
+                remaining,
+                self.item_use_revision.load(Relaxed),
+            )
+        };
+
+        if let Some(source) = source
+            && let Some(player) = caller.get_player()
+        {
+            self.tick_cart_use(player, &source, &item, remaining, revision);
+            return;
+        }
+
+        server.item_registry.on_use_tick(&item, caller, remaining);
+        if caller.get_player().is_none() && Self::emits_consume_sound_on_tick(&item, remaining) {
+            self.play_consume_sound(caller, &item, None);
+        }
+        let completes = {
+            let _active = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.item_use_revision.load(Relaxed) == revision
+                && self.item_use_time.load(Relaxed) == remaining
+                && self.item_use_time.fetch_sub(1, Relaxed) == 1
+        };
+        if completes {
+            self.finish_timed_item_use(caller, &item, revision);
+        }
+    }
+
+    fn tick_cart_use(
+        &self,
+        player: &super::player::Player,
+        source: &CartUseSource,
+        previous: &ItemStack,
+        remaining: i32,
+        revision: u64,
+    ) {
+        let Some(origin) = source.world.upgrade() else {
+            self.clear_active_hand_if(revision);
+            return;
+        };
+        let Some(item) = source.live_stack(player, previous) else {
+            self.clear_active_hand_if(revision);
+            return;
+        };
+        let mut active = self
+            .item_in_use
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.item_use_revision.load(Relaxed) != revision {
+            return;
+        }
+        *active = Some(item.clone());
+        drop(active);
+        if Self::emits_consume_sound_on_tick(&item, remaining) {
+            self.play_consume_sound(player, &item, Some(&origin));
+        }
+        if item
+            .get_data_component::<pumpkin_data::data_component_impl::KineticWeaponImpl>()
+            .is_some()
+        {
+            crate::item::items::spear::SpearItem::tick_cart_kinetic_use(
+                &item,
+                player,
+                source.hand,
+                source.slot,
+                remaining,
+                revision,
+            );
+        }
+
+        let completion = {
+            let mut active = self
+                .item_in_use
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if self.item_use_revision.load(Relaxed) != revision
+                || self.item_use_time.load(Relaxed) != remaining
+            {
+                return;
+            }
+            let Some(live) = source.live_stack(player, &item) else {
+                drop(active);
+                self.clear_active_hand_if(revision);
+                return;
+            };
+            if self.item_use_time.fetch_sub(1, Relaxed) != 1 {
+                return;
+            }
+            let completed =
+                crate::item::items::cart_air_use::commit_timed_cart_use(player, source.slot, &live);
+            *active = Some(live.clone());
+            completed.map(|action| (action, live))
+        };
+        if let Some((action, item)) = completion {
+            action.publish(player, source.slot, &item, &origin);
+        }
+        self.clear_active_hand_if(revision);
+    }
+
+    fn emits_consume_sound_on_tick(item: &ItemStack, remaining: i32) -> bool {
+        item.get_data_component::<ConsumableImpl>()
+            .is_some_and(|consumable| consumable.should_emit_particles_and_sounds(remaining))
+    }
+
+    fn finish_timed_item_use(&self, caller: &dyn EntityBase, item: &ItemStack, revision: u64) {
+        self.apply_item_finish_effects(caller, item, None);
+        if let Some(player) = caller.get_player() {
+            player.trigger_advancement(
+                crate::entity::player::advancement::trigger::AdvancementTrigger::ConsumeItem {
+                    item_id: format!("minecraft:{}", item.item.registry_key),
+                },
+            );
+
+            // Vanilla `ItemStack.finishUsingItem`: consume one, then apply `use_remainder`.
+            let finish_using = |mut stack: ItemStack| {
+                let stack_count_before_using = stack.item_count;
+                let gamemode = player.gamemode.load();
+                stack.decrement_unless_creative(gamemode, 1);
+                match item.get_data_component::<UseRemainderImpl>() {
+                    Some(use_remainder) => use_remainder.convert_into_remainder(
+                        stack,
+                        stack_count_before_using,
+                        gamemode == GameMode::Creative,
+                        |mut extra| {
+                            if !player.inventory.insert_stack_anywhere(&mut extra)
+                                && !extra.is_empty()
+                            {
+                                player.drop_item(extra);
+                            }
+                        },
+                    ),
+                    None => stack,
+                }
+            };
+
+            // Prefer modifying the exact stack that matches the consumed item:
+            // 1) selected hotbar (held_item)
+            // 2) off-hand
+            // 3) fallback to active_hand if the above didn't match
+            let mut handled = false;
+
+            // Check main hand (hotbar selected)
+            let held = player.inventory.held_item();
+            if held.are_items_and_components_equal(item) {
+                player.inventory.set_held_item(finish_using(held));
+                handled = true;
+            }
+
+            if !handled {
+                // Check off-hand
+                let off_hand = player.inventory.off_hand_item();
+                if off_hand.are_items_and_components_equal(item) {
+                    player
+                        .inventory
+                        .set_stack_in_hand(Hand::Left, finish_using(off_hand));
+                    handled = true;
+                }
+            }
+
+            if !handled {
+                // Use stored active_hand (as a fallback)
+                let active_hand = *self
+                    .active_hand
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let hand_to_modify = active_hand.unwrap_or(Hand::Right);
+                let item_stack = self.get_stack_in_hand(caller, hand_to_modify);
+                player
+                    .inventory
+                    .set_stack_in_hand(hand_to_modify, finish_using(item_stack));
+            }
+
+            if let Some(cooldown) = item.get_use_cooldown() {
+                let group = cooldown
+                    .cooldown_group
+                    .clone()
+                    .unwrap_or_else(|| item.item.registry_key.to_string());
+                player.start_cooldown(group, (cooldown.seconds * 20.0) as i32);
+            }
+        }
+
+        self.clear_active_hand_if(revision);
+    }
+
+    pub(crate) fn apply_cart_consumption_effects(
+        &self,
+        player: &super::player::Player,
+        item: &ItemStack,
+        origin: &Arc<World>,
+    ) {
+        use pumpkin_data::{game_event::GameEvent, statistic::StatisticCategory};
+        self.play_consume_sound(player, item, Some(origin));
+        player.increment_stat(StatisticCategory::Used, i32::from(item.get_item().id), 1);
+        player.trigger_advancement(
+            crate::entity::player::advancement::trigger::AdvancementTrigger::ConsumeItem {
+                item_id: format!("minecraft:{}", item.item.registry_key),
+            },
+        );
+        self.apply_item_finish_effects(player, item, Some(origin));
+        let is_drink = item
+            .get_data_component::<ConsumableImpl>()
+            .is_some_and(|consumable| consumable.animation == ConsumeAnimation::Drink);
+        self.emit_use_vibration(
+            if is_drink {
+                GameEvent::Drink
+            } else {
+                GameEvent::Eat
+            },
+            Some(&Arc::downgrade(origin)),
+        );
+    }
+
+    fn apply_item_finish_effects(
+        &self,
+        caller: &dyn EntityBase,
+        item: &ItemStack,
+        origin: Option<&Arc<World>>,
+    ) {
+        let guarded_cart = origin.is_some();
+        if let Some(food) = item.get_data_component::<FoodImpl>()
+            && let Some(player) = caller.get_player()
+        {
+            player
+                .hunger_manager
+                .eat(player, food.nutrition as u8, food.saturation);
+            let world = self.entity.world.load_full();
+            if origin.is_none_or(|origin| Arc::ptr_eq(origin, &world)) {
+                world.play_bedrock_level_sound("burp", &self.entity.pos.load(), -1);
+            }
+        }
+
+        if caller.get_player().is_none() && item.get_data_component::<ConsumableImpl>().is_some() {
+            self.play_consume_sound(caller, item, None);
+        }
+        if !guarded_cart {
+            self.apply_consumable_effects(caller, item, None);
+        }
+
+        // Handle potion consumption
+        if item
+            .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+            .is_some()
+        {
+            let effects = crate::item::potion::PotionContents::read_potion_effects(item);
+            crate::item::potion::PotionContents::apply_effects_to(
+                self,
+                effects,
+                1.0,
+                crate::item::potion::PotionApplicationSource::Normal,
+                None,
+                None,
+            );
+        }
+
+        if let Some(ominous) = item
+            .get_data_component::<pumpkin_data::data_component_impl::OminousBottleAmplifierImpl>()
+        {
+            self.add_effect(Effect {
+                effect_type: &StatusEffect::BAD_OMEN,
+                duration: 120_000,
+                amplifier: ominous.amplifier.clamp(0, 4) as u8,
+                ambient: false,
+                show_particles: false,
+                show_icon: true,
+                blend: false,
+            });
+        }
+
+        if let Some(stew) = item
+            .get_data_component::<pumpkin_data::data_component_impl::SuspiciousStewEffectsImpl>()
+        {
+            for entry in stew.effects.iter() {
+                if let Some(effect_type) = StatusEffect::from_minecraft_name(&entry.effect) {
+                    self.add_effect(Effect {
+                        effect_type,
+                        duration: entry.duration,
+                        amplifier: 0,
+                        ambient: false,
+                        show_particles: true,
+                        show_icon: true,
+                        blend: false,
+                    });
+                }
+            }
+        }
+        if guarded_cart {
+            self.apply_consumable_effects(caller, item, origin);
+        }
+    }
+
+    fn play_consume_sound(
+        &self,
+        caller: &dyn EntityBase,
+        item: &ItemStack,
+        origin: Option<&Arc<World>>,
+    ) {
         let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
             return;
         };
-        if self.entity.is_silent() {
+        let riding_player = origin.and_then(|_| caller.get_player());
+        if riding_player.is_none() && self.entity.is_silent() {
             return;
         }
         let mut rng = rand::rng();
@@ -4988,9 +5358,23 @@ impl LivingEntity {
                 0.2f32.mul_add(rng.random::<f32>() - rng.random::<f32>(), 1.0),
             )
         };
-        let world = self.entity.world.load();
+        let world = self.entity.world.load_full();
+        if origin.is_some_and(|origin| !Arc::ptr_eq(origin, &world)) {
+            return;
+        }
         let pos = self.entity.pos.load();
         let category = caller.sound_source();
+        if let Some(player) = riding_player {
+            world.play_cart_use_sound(
+                player,
+                &consumable.sound_event,
+                category,
+                &pos,
+                volume,
+                pitch,
+            );
+            return;
+        }
         match caller.get_mob().and_then(|mob| mob.mob_consume_sound(item)) {
             Some(sound) => world.play_sound_fine(sound, category, &pos, volume, pitch),
             None => {
@@ -5001,15 +5385,25 @@ impl LivingEntity {
 
     /// Applies data-driven `apply_effects` consume effects after an item completes use.
     /// Vanilla: `Consumable.onConsume` invokes every configured effect server-side.
-    fn apply_consumable_effects(&self, caller: &dyn EntityBase, item: &ItemStack) {
+    fn apply_consumable_effects(
+        &self,
+        caller: &dyn EntityBase,
+        item: &ItemStack,
+        origin: Option<&Arc<World>>,
+    ) {
         let Some(consumable) = item.get_data_component::<ConsumableImpl>() else {
             return;
         };
-        self.apply_consume_effects_slice(caller, &consumable.effects);
+        self.apply_consume_effects_slice(caller, &consumable.effects, origin);
     }
 
     /// Executes a slice of `ConsumeEffect`s on `self` (shared by `Consumable` and `DeathProtection`).
-    fn apply_consume_effects_slice(&self, caller: &dyn EntityBase, effects: &[ConsumeEffect]) {
+    fn apply_consume_effects_slice(
+        &self,
+        caller: &dyn EntityBase,
+        effects: &[ConsumeEffect],
+        origin: Option<&Arc<World>>,
+    ) {
         for consume_effect in effects {
             match consume_effect {
                 ConsumeEffect::ApplyEffects((effects, probability)) => {
@@ -5087,11 +5481,14 @@ impl LivingEntity {
                 }
                 ConsumeEffect::PlaySound(sound) => {
                     if let pumpkin_data::data_component_impl::IdOr::Id(sound) = sound {
-                        self.entity.world.load().play_sound(
-                            *sound,
-                            SoundCategory::Neutral,
-                            &self.entity.pos.load(),
-                        );
+                        let world = self.entity.world.load_full();
+                        if origin.is_none_or(|origin| Arc::ptr_eq(origin, &world)) {
+                            world.play_sound(
+                                *sound,
+                                SoundCategory::Neutral,
+                                &self.entity.pos.load(),
+                            );
+                        }
                     }
                 }
             }

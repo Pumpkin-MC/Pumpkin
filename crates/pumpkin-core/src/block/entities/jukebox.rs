@@ -1,6 +1,7 @@
 use std::any::Any;
+use std::num::NonZero;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::sync::{Arc, Mutex, OnceLock, TryLockError, Weak};
 
 use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
 use pumpkin_data::item_stack::ItemStack;
@@ -22,6 +23,8 @@ pub struct JukeboxBlockEntity {
     record_stack: Arc<Mutex<ItemStack>>,
     /// Serializes record snapshots, storage, playback, and `has_record` updates.
     record_transition: Mutex<()>,
+    // Checked under the record lock while the physical source commits.
+    retiring: AtomicBool,
     /// Ticks since the current song started playing
     ticks_since_song_started: AtomicU64,
     /// Length of the current song in ticks (0 if not playing)
@@ -75,6 +78,7 @@ impl BlockEntity for JukeboxBlockEntity {
             world: OnceLock::new(),
             record_stack: Arc::new(Mutex::new(record_stack)),
             record_transition: Mutex::new(()),
+            retiring: AtomicBool::new(false),
             ticks_since_song_started: AtomicU64::new(ticks_since_song_started),
             song_length_ticks: AtomicU64::new(song_length_ticks),
             dirty: AtomicBool::new(false),
@@ -181,6 +185,12 @@ impl BlockEntity for JukeboxBlockEntity {
     }
 
     fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+        let record = self
+            .record_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.retiring.store(true, Ordering::Relaxed);
+        drop(record);
         self.world.get_or_init(|| Arc::downgrade(world));
         let record = self.clear_record();
         if !record.is_empty() {
@@ -220,6 +230,7 @@ impl JukeboxBlockEntity {
             world: OnceLock::new(),
             record_stack: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             record_transition: Mutex::new(()),
+            retiring: AtomicBool::new(false),
             ticks_since_song_started: AtomicU64::new(0),
             song_length_ticks: AtomicU64::new(0),
             dirty: AtomicBool::new(false),
@@ -246,6 +257,69 @@ impl JukeboxBlockEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
         self.mark_dirty();
+    }
+
+    pub(crate) fn try_insert_record_from_slot(
+        &self,
+        world: &World,
+        stack: ItemStack,
+        length_in_ticks: u64,
+        commit_source: impl FnOnce() -> bool,
+    ) -> bool {
+        // An inventory callback may reenter while automation owns this transition.
+        let _transition = match self.record_transition.try_lock() {
+            Ok(guard) => guard,
+            Err(TryLockError::Poisoned(error)) => error.into_inner(),
+            Err(TryLockError::WouldBlock) => return false,
+        };
+        let Some(entities) = world.block_entities.get(&self.position.chunk_position()) else {
+            return false;
+        };
+        if !entities
+            .get(&self.position)
+            .is_some_and(|entity| self.is_current_instance(entity.as_ref()))
+        {
+            return false;
+        }
+
+        let mut record = self
+            .record_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.retiring.load(Ordering::Relaxed)
+            || stack.is_empty()
+            || !record.is_empty()
+            || !commit_source()
+        {
+            return false;
+        }
+        *record = stack;
+        self.start_playing(length_in_ticks);
+        true
+    }
+
+    pub(crate) fn has_live_record(&self, world: &World, uid: NonZero<i32>) -> bool {
+        let Some(entities) = world.block_entities.get(&self.position.chunk_position()) else {
+            return false;
+        };
+        if !entities
+            .get(&self.position)
+            .is_some_and(|entity| self.is_current_instance(entity.as_ref()))
+        {
+            return false;
+        }
+        let record = self
+            .record_stack
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        !self.retiring.load(Ordering::Relaxed) && !record.is_empty() && record.uid == uid
+    }
+
+    fn is_current_instance(&self, entity: &dyn BlockEntity) -> bool {
+        entity
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|current| std::ptr::eq(current, self))
     }
 
     /// Clear the stack and return what was there - used for dropping

@@ -1,8 +1,10 @@
-use pumpkin_data::BlockState;
+use std::sync::Arc;
+
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -11,6 +13,7 @@ use pumpkin_world::world::BlockFlags;
 
 use crate::block::{BlockBehaviour, OnEntityCollisionArgs, OnLandedUponArgs, PathComputationType};
 use crate::entity::EntityBase;
+use crate::world::World;
 
 #[pumpkin_block("minecraft:powder_snow")]
 pub struct PowderSnowBlock;
@@ -80,6 +83,23 @@ pub(crate) fn inside_collision_shape_for_entity(
     collision_shape_for_entity(entity, position).unwrap_or_else(BoundingBox::full_block)
 }
 
+pub(crate) fn melt_if_burning(world: &Arc<World>, carrier: &dyn EntityBase, position: &BlockPos) {
+    if carrier
+        .get_entity()
+        .fire_ticks
+        .load(std::sync::atomic::Ordering::Relaxed)
+        > 0
+        && (carrier.get_player().is_some() || world.level_info.load().game_rules.mob_griefing)
+        && world.get_block(position) == &Block::POWDER_SNOW
+    {
+        let _ = world.break_block(
+            position,
+            None,
+            BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
+        );
+    }
+}
+
 impl BlockBehaviour for PowderSnowBlock {
     fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
         if args.entity.get_living_entity().is_some() && args.fall_distance >= 4.0 {
@@ -93,18 +113,7 @@ impl BlockBehaviour for PowderSnowBlock {
         let entity = args.entity.get_entity();
         entity.slow_movement(args.state, Vector3::new(0.9, 1.5, 0.9));
 
-        if entity.fire_ticks.load(std::sync::atomic::Ordering::Relaxed) > 0 {
-            let can_destroy = args.entity.get_player().is_some()
-                || args.world.level_info.load().game_rules.mob_griefing;
-            if can_destroy {
-                let _ = args.world.break_block(
-                    args.position,
-                    None,
-                    BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
-                );
-            }
-        }
-
+        melt_if_burning(args.world, args.entity, args.position);
         entity.extinguish();
     }
 

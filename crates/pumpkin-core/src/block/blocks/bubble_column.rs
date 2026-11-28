@@ -165,7 +165,14 @@ fn bubble_column_velocity(
 /// Pushes an entity in a bubble column. One at the top of the column gets the stronger push.
 pub fn entity_inside(world: &World, pos: &BlockPos, state: BlockStateId, entity: &dyn EntityBase) {
     let drag_down = kind_from_state(state) == BubbleColumnKind::Downward;
-    if world.get_block(&pos.up()) == &Block::AIR {
+    let above = pos.up();
+    let nothing_above = world.get_fluid(&above) == &Fluid::EMPTY
+        && world
+            .get_block_state(&above)
+            .get_block_collision_shapes_at(&above)
+            .next()
+            .is_none();
+    if nothing_above {
         entity.on_above_bubble_column(drag_down, pos);
     } else {
         entity.on_inside_bubble_column(drag_down);
@@ -288,9 +295,11 @@ impl BlockBehaviour for BubbleColumnBlock {
 #[cfg(test)]
 mod tests {
     use pumpkin_data::BlockStateId;
+    use pumpkin_data::entity::EntityType;
     use pumpkin_data::fluid::{Falling, FlowingFluidProperties, Level};
 
     use super::*;
+    use crate::block::fluid::{flowing_trait::FlowingFluid, water::FlowingWater};
 
     fn flowing_water_state() -> BlockStateId {
         FlowingFluidProperties {
@@ -311,6 +320,69 @@ mod tests {
             Some(BubbleColumnKind::Downward)
         );
         assert_eq!(kind_from_support(&Block::STONE), None);
+    }
+
+    #[tokio::test]
+    async fn bubble_surface_requires_open_collision_and_empty_fluid()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let pos = BlockPos::new(8, 64, 8);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        let column = bubble_column_state(BubbleColumnKind::Upward);
+        chunk.set_block_absolute_y(8, 64, 8, column);
+        world
+            .level
+            .loaded_chunks
+            .insert(pos.chunk_position(), chunk);
+        let entity = Entity::new(
+            world.clone(),
+            Vector3::new(8.5, 64.0, 8.5),
+            &EntityType::ITEM,
+        );
+
+        for (above, expected) in [
+            (&Block::SHORT_GRASS, SURFACE_UPWARD_ACCELERATION),
+            (&Block::WATER, UPWARD_ACCELERATION),
+            (&Block::STONE, UPWARD_ACCELERATION),
+        ] {
+            world
+                .level
+                .loaded_chunks
+                .get(&pos.chunk_position())
+                .ok_or("bubble column test chunk is missing")?
+                .set_block_absolute_y(8, 65, 8, above.default_state.id);
+            entity.velocity.store(Vector3::default());
+            entity_inside(&world, &pos, column, &entity);
+            assert_eq!(entity.velocity.load(), Vector3::new(0.0, expected, 0.0));
+        }
+
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn water_spread_keeps_a_bubble_column() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let chunk = pumpkin_world::chunk::ChunkData::empty_sync(0, 0);
+        let pos = BlockPos::new(8, 64, 8);
+        let column = bubble_column_state(BubbleColumnKind::Upward);
+        chunk.set_block_absolute_y(8, 64, 8, column);
+        world
+            .level
+            .loaded_chunks
+            .insert(pos.chunk_position(), chunk);
+
+        FlowingWater.spread_to(
+            &world,
+            &Fluid::FLOWING_WATER,
+            &pos,
+            FlowingWater.get_flowing(Level::L1, false),
+        );
+        assert_eq!(world.get_block_state_id(&pos), column);
+        world.level.shutdown().await;
+        Ok(())
     }
 
     #[test]

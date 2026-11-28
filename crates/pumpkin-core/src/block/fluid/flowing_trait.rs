@@ -48,14 +48,12 @@ pub trait FlowingFluid: Send + Sync {
 
     fn can_convert_to_source(&self, world: &Arc<World>) -> bool;
 
-    /// Returns true if `state_id` represents the given fluid — either as a direct fluid state
-    /// or as a waterlogged block (when the fluid is water-type).
+    /// Returns true if the block contains the given fluid, including water held by another block.
     fn has_fluid_at(&self, fluid: &'static Fluid, state_id: BlockStateId) -> bool {
         self.get_effective_props(fluid, state_id).is_some()
     }
 
-    /// Returns correct fluid properties for a state, treating waterlogged blocks as water sources
-    /// (level 8, non-falling). Returns `None` if the state doesn't contain this fluid.
+    /// Returns the fluid properties, including source water held by another block.
     fn get_effective_props(
         &self,
         fluid: &'static Fluid,
@@ -64,12 +62,9 @@ pub trait FlowingFluid: Send + Sync {
         if let Some(props) = FlowingFluidProperties::from_state_id(state_id, fluid) {
             return Some(props);
         }
-        // TODO: vanilla reads `getFluidState()`, so kelp, seagrass and bubble columns are water sources too.
-        if fluid.matches_type(&Fluid::WATER) {
-            let block = Block::from_state_id(state_id);
-            if block.is_waterlogged(state_id) {
-                return Some(self.get_source(false));
-            }
+        if fluid.matches_type(&Fluid::WATER) && Fluid::of_block_state(state_id).matches_type(fluid)
+        {
+            return Some(self.get_source(false));
         }
         None
     }

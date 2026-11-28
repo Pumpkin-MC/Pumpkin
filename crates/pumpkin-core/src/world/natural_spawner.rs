@@ -332,7 +332,15 @@ impl PotentialCalculator {
     }
 }
 
+#[derive(Clone, Copy)]
+struct SpawnContribution {
+    category: &'static MobCategory,
+    charge: Option<(BlockPos, f64)>,
+    local_chunk: Option<Vector2<i32>>,
+}
+
 pub struct SpawnState {
+    contributions: std::sync::Mutex<rustc_hash::FxHashMap<i32, SpawnContribution>>,
     spawnable_chunk_count: i32,
     pub mob_category_counts: MobCounts,
     spawn_potential: PotentialCalculator,
@@ -341,7 +349,12 @@ pub struct SpawnState {
 
 impl Clone for SpawnState {
     fn clone(&self) -> Self {
+        let contributions = self
+            .contributions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         Self {
+            contributions: std::sync::Mutex::new(contributions.clone()),
             spawnable_chunk_count: self.spawnable_chunk_count,
             mob_category_counts: self.mob_category_counts.clone(),
             spawn_potential: self.spawn_potential.clone(),
@@ -357,7 +370,7 @@ impl fmt::Debug for SpawnState {
             .field("mob_category_counts", &self.mob_category_counts)
             .field("spawn_potential", &self.spawn_potential)
             .field("local_mob_cap_calculator", &self.local_mob_cap_calculator)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -365,6 +378,7 @@ impl SpawnState {
     #[must_use]
     pub fn empty() -> Self {
         Self {
+            contributions: std::sync::Mutex::default(),
             spawnable_chunk_count: 0,
             mob_category_counts: MobCounts::default(),
             spawn_potential: PotentialCalculator::default(),
@@ -388,46 +402,50 @@ impl SpawnState {
         if entity_type.category == &MobCategory::MISC {
             return;
         }
-        let entity_pos = base_entity.block_pos.load();
         let biome = base_entity.current_biome.load();
-        if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
-            self.spawn_potential.add_charge(&entity_pos, cost.charge);
+        let contribution = SpawnContribution {
+            category: entity_type.category,
+            charge: biome
+                .spawn_costs
+                .get(entity_type.resource_name)
+                .map(|cost| (base_entity.block_pos.load(), cost.charge)),
+            local_chunk: (entity.get_mob().is_some() || entity_type.mob)
+                .then(|| base_entity.chunk_pos.load()),
+        };
+        let mut contributions = self
+            .contributions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            contributions.entry(base_entity.entity_id)
+        {
+            entry.insert(contribution);
+            if let Some((position, charge)) = contribution.charge {
+                self.spawn_potential.add_charge(&position, charge);
+            }
+            if let Some(chunk) = contribution.local_chunk {
+                self.local_mob_cap_calculator
+                    .add_mob(chunk, world, contribution.category);
+            }
+            self.mob_category_counts.add(contribution.category);
         }
-        if entity.get_mob().is_some() || entity_type.mob {
-            self.local_mob_cap_calculator.add_mob(
-                base_entity.chunk_pos.load(),
-                world,
-                entity_type.category,
-            );
-        }
-        self.mob_category_counts.add(entity_type.category);
     }
 
     pub fn remove_entity(&self, world: &World, entity: &dyn EntityBase) {
-        if let Some(mob) = entity.get_mob()
-            && (mob.get_mob_entity().persistence_required.load(Relaxed)
-                || mob.requires_custom_persistence())
-        {
-            return;
+        let mut contributions = self
+            .contributions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(contribution) = contributions.remove(&entity.get_entity().entity_id) {
+            if let Some((position, charge)) = contribution.charge {
+                self.spawn_potential.remove_charge(&position, charge);
+            }
+            if let Some(chunk) = contribution.local_chunk {
+                self.local_mob_cap_calculator
+                    .remove_mob(chunk, world, contribution.category);
+            }
+            self.mob_category_counts.remove(contribution.category);
         }
-        let base_entity = entity.get_entity();
-        let entity_type = base_entity.entity_type;
-        if entity_type.category == &MobCategory::MISC {
-            return;
-        }
-        let entity_pos = base_entity.block_pos.load();
-        let biome = base_entity.current_biome.load();
-        if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
-            self.spawn_potential.remove_charge(&entity_pos, cost.charge);
-        }
-        if entity.get_mob().is_some() || entity_type.mob {
-            self.local_mob_cap_calculator.remove_mob(
-                base_entity.chunk_pos.load(),
-                world,
-                entity_type.category,
-            );
-        }
-        self.mob_category_counts.remove(entity_type.category);
     }
 
     pub fn new(
@@ -435,38 +453,17 @@ impl SpawnState {
         entities: &ArcSwap<Vec<Arc<dyn EntityBase>>>,
         world: &World,
     ) -> Self {
-        let potential = PotentialCalculator::default();
-        let local_mob_cap = LocalMobCapCalculator::for_world(world);
-        let counter = MobCounts::default();
-        for entity in entities.load().iter() {
-            if let Some(mob) = entity.get_mob()
-                && (mob.get_mob_entity().persistence_required.load(Relaxed)
-                    || mob.requires_custom_persistence())
-            {
-                continue;
-            }
-            let base_entity = entity.get_entity();
-            let entity_type = base_entity.entity_type;
-            if entity_type.category == &MobCategory::MISC {
-                continue;
-            }
-            let chunk_pos = base_entity.chunk_pos.load();
-            let entity_pos = base_entity.block_pos.load();
-            let biome = base_entity.current_biome.load();
-            if let Some(cost) = biome.spawn_costs.get(entity_type.resource_name) {
-                potential.add_charge(&entity_pos, cost.charge);
-            }
-            if entity.get_mob().is_some() || entity_type.mob {
-                local_mob_cap.add_mob(chunk_pos, world, entity_type.category);
-            }
-            counter.add(entity_type.category);
-        }
-        Self {
+        let state = Self {
             spawnable_chunk_count: chunk_count,
-            mob_category_counts: counter,
-            spawn_potential: potential,
-            local_mob_cap_calculator: local_mob_cap,
+            local_mob_cap_calculator: LocalMobCapCalculator::for_world(world),
+            ..Self::empty()
+        };
+        for entity in entities.load().iter() {
+            if !entity.get_entity().is_removed() {
+                state.add_entity(world, entity.as_ref());
+            }
         }
+        state
     }
 
     #[inline]
@@ -1201,6 +1198,181 @@ mod tests {
             state.mob_category_counts.0[MobCategory::MONSTER.id].load(Relaxed),
             1
         );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn spawn_accounting_only_removes_a_registered_mob()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{ai::test_support::world, r#type::from_type};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let count = || {
+            world.spawn_state.load().mob_category_counts.0[MobCategory::MONSTER.id].load(Relaxed)
+        };
+        let zombie = || {
+            from_type(
+                &EntityType::ZOMBIE,
+                Vector3::new(8.0, 64.0, 8.0),
+                &world,
+                Uuid::new_v4(),
+            )
+        };
+        let initial = count();
+
+        let removed_first = zombie();
+        removed_first.get_entity().remove();
+        world.add_entity_silent(removed_first.clone());
+        assert!(
+            world
+                .get_entity_by_id(removed_first.get_entity().entity_id)
+                .is_none()
+        );
+        assert_eq!(count(), initial);
+
+        let registered = zombie();
+        world.add_entity_silent(registered.clone());
+        assert_eq!(count(), initial + 1);
+        registered.get_entity().remove();
+        assert!(
+            world
+                .get_entity_by_id(registered.get_entity().entity_id)
+                .is_none()
+        );
+        assert_eq!(count(), initial);
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn spawn_accounting_removes_an_axolotl_that_mounted_after_registration()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{ai::test_support::world, r#type::from_type};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let position = Vector3::new(8.0, 64.0, 8.0);
+        let axolotl = from_type(&EntityType::AXOLOTL, position, &world, Uuid::new_v4());
+        let boat = from_type(&EntityType::OAK_BOAT, position, &world, Uuid::new_v4());
+        let count = || {
+            world.spawn_state.load().mob_category_counts.0[EntityType::AXOLOTL.category.id]
+                .load(Relaxed)
+        };
+        let initial = count();
+
+        world.add_entity_silent(boat.clone());
+        world.add_entity_silent(axolotl.clone());
+        assert_eq!(count(), initial + 1);
+        boat.get_entity()
+            .add_passenger_silently(boat.clone(), axolotl.clone());
+        assert!(
+            axolotl
+                .get_mob()
+                .is_some_and(crate::entity::mob::Mob::requires_custom_persistence)
+        );
+
+        axolotl.get_entity().remove();
+        assert_eq!(count(), initial);
+        assert!(!boat.get_entity().has_passengers());
+        assert!(
+            world
+                .get_entity_by_id(axolotl.get_entity().entity_id)
+                .is_none()
+        );
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn concurrent_registration_and_removal_leave_no_spawn_count()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{ai::test_support::world, r#type::from_type};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let count = || {
+            world.spawn_state.load().mob_category_counts.0[MobCategory::MONSTER.id].load(Relaxed)
+        };
+        let initial = count();
+        for _ in 0..16 {
+            let zombie = from_type(
+                &EntityType::ZOMBIE,
+                Vector3::new(8.0, 64.0, 8.0),
+                &world,
+                Uuid::new_v4(),
+            );
+            let start = std::sync::Barrier::new(2);
+            std::thread::scope(|scope| {
+                scope.spawn(|| {
+                    start.wait();
+                    world.add_entity_silent(zombie.clone());
+                });
+                start.wait();
+                zombie.get_entity().remove();
+            });
+            assert!(
+                world
+                    .get_entity_by_id(zombie.get_entity().entity_id)
+                    .is_none()
+            );
+            assert_eq!(count(), initial);
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn spawn_accounting_removes_the_original_charge_and_local_cap_after_movement()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{ai::test_support::world, r#type::from_type};
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let origin = Vector3::new(8.0, 64.0, 8.0);
+        let destination = origin.add_raw(320.0, 0.0, 0.0);
+        let player_id = 1;
+        let state = SpawnState {
+            local_mob_cap_calculator: LocalMobCapCalculator {
+                active_players: Some(Arc::from([ActiveSpawnPlayer {
+                    entity_id: player_id,
+                    chunk_pos: Vector2::new(0, 0),
+                    pos: origin,
+                }])),
+                ..LocalMobCapCalculator::default()
+            },
+            ..SpawnState::empty()
+        };
+        let skeleton = from_type(&EntityType::SKELETON, origin, &world, Uuid::new_v4());
+        let base = skeleton.get_entity();
+        base.current_biome.store(Arc::new(&Biome::SOUL_SAND_VALLEY));
+        let local_count = || {
+            state
+                .local_mob_cap_calculator
+                .player_mob_counts
+                .get(&player_id)
+                .map_or(0, |counts| counts.0[MobCategory::MONSTER.id].load(Relaxed))
+        };
+        let has_charge = || {
+            !state
+                .spawn_potential
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+        };
+
+        state.add_entity(&world, skeleton.as_ref());
+        assert!(has_charge());
+        assert_eq!(local_count(), 1);
+        let original_chunk = base.chunk_pos.load();
+        base.set_pos(destination);
+        assert_ne!(base.chunk_pos.load(), original_chunk);
+
+        state.remove_entity(&world, skeleton.as_ref());
+        assert!(!has_charge());
+        assert_eq!(local_count(), 0);
         world.level.shutdown().await;
         Ok(())
     }

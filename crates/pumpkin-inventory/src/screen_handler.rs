@@ -29,7 +29,7 @@ use crate::{
     container_click::MouseClick,
     player::player_inventory::PlayerInventory,
     slot::{NormalSlot, Slot},
-    sync_handler::{SyncHandler, TrackedStack},
+    sync_handler::{ScreenPacket, ScreenUpdateContext, SyncHandler, TrackedStack},
 };
 use crate::{
     inventory::{ComparableInventory, Inventory},
@@ -37,10 +37,7 @@ use crate::{
 };
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
-    Enchantment,
-    data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
-    screen::WindowType,
-    sound::Sound,
+    Enchantment, data_component_impl::EquipmentSlot, screen::WindowType, sound::Sound,
     statistic::StatisticCategory,
 };
 use pumpkin_protocol::{
@@ -71,7 +68,7 @@ pub const fn player_screen_equipment_slot(screen_slot: usize) -> Option<Equipmen
     }
 }
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::{any::Any, collections::HashMap, sync::Arc};
 use tracing::warn;
 
@@ -193,14 +190,52 @@ pub trait InventoryPlayer: Send + Sync {
         window_type: Option<WindowType>,
     );
 
+    fn enqueue_screen_packet(
+        &self,
+        packet: ScreenPacket<'_>,
+        is_current: Option<ScreenUpdateContext<'_>>,
+    ) {
+        let _guard = match is_current {
+            Some(context) => {
+                let Some(guard) = context.lock_if_current() else {
+                    return;
+                };
+                Some(guard)
+            }
+            None => None,
+        };
+        match packet {
+            ScreenPacket::Content(packet, window) => self.enqueue_inventory_packet(&packet, window),
+            ScreenPacket::Slot(packet, window, slots) => {
+                self.enqueue_slot_packet(&packet, window, slots);
+            }
+            ScreenPacket::Cursor(packet) => self.enqueue_cursor_packet(&packet),
+            ScreenPacket::Property(packet, window) => self.enqueue_property_packet(&packet, window),
+        }
+    }
+
     /// Sends a player inventory slot update.
     fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory);
+
+    /// Whether authoritative inventory packets distinguish otherwise equal stacks by network ID.
+    fn uses_stack_network_ids(&self) -> bool {
+        false
+    }
 
     /// Sends a selected slot update.
     fn enqueue_set_held_item_packet(&self, packet: &CSetSelectedSlot);
 
     /// Sends an equipment change packet.
     fn enqueue_equipment_change(&self, slot: &EquipmentSlot, stack: &ItemStack);
+
+    fn enqueue_equipment_transition(
+        &self,
+        slot: &EquipmentSlot,
+        _previous: &ItemStack,
+        stack: &ItemStack,
+    ) {
+        self.enqueue_equipment_change(slot, stack);
+    }
 
     /// Awards experience points to the player (used for furnace smelting, etc.)
     fn award_experience(&self, amount: i32);
@@ -377,6 +412,7 @@ pub trait ScreenHandler: Send + Sync {
     fn set_received_stack(&mut self, slot: usize, stack: ItemStack) {
         let behaviour = self.get_behaviour_mut();
         behaviour.previous_tracked_stacks[slot].set_received_stack(stack);
+        behaviour.invalidate_sync();
     }
 
     /// Records a received cursor hash (for sync tracking).
@@ -468,6 +504,7 @@ pub trait ScreenHandler: Send + Sync {
     /// Captures current slot states and sends a full update packet.
     fn sync_state(&mut self) {
         let behaviour = self.get_behaviour_mut();
+        behaviour.needs_full_sync = false;
         let mut previous_tracked_stacks = Vec::new();
 
         for i in 0..behaviour.slots.len() {
@@ -538,7 +575,6 @@ pub trait ScreenHandler: Send + Sync {
 
         for (idx, value) in prop_vec {
             self.update_tracked_properties(idx as i32, value);
-            self.check_property_updates(idx as i32, value);
         }
 
         self.sync_state();
@@ -547,11 +583,8 @@ pub trait ScreenHandler: Send + Sync {
     /// Updates a tracked property value.
     fn update_tracked_properties(&mut self, idx: i32, value: i32) {
         let behaviour = self.get_behaviour_mut();
-        if idx <= behaviour.tracked_property_values.len() as i32 {
-            behaviour.tracked_property_values[idx as usize] = value;
-            for listener in &behaviour.listeners {
-                listener.on_property_update(behaviour, idx as u8, value);
-            }
+        for listener in &behaviour.listeners {
+            listener.on_property_update(behaviour, idx as u8, value);
         }
     }
 
@@ -559,16 +592,12 @@ pub trait ScreenHandler: Send + Sync {
     fn check_property_updates(&mut self, idx: i32, value: i32) {
         let behaviour = self.get_behaviour_mut();
         if !behaviour.disable_sync
-            && let Some(old_value) = behaviour.tracked_property_values.get(idx as usize)
+            && let Some(old_value) = behaviour.tracked_property_values.get_mut(idx as usize)
+            && *old_value != value
         {
-            let old_value = *old_value;
-            if old_value != value {
-                behaviour
-                    .tracked_property_values
-                    .insert(idx as usize, value);
-                if let Some(ref sync_handler) = behaviour.sync_handler {
-                    sync_handler.update_property(behaviour, idx, value);
-                }
+            *old_value = value;
+            if let Some(ref sync_handler) = behaviour.sync_handler {
+                sync_handler.update_property(behaviour, idx, value);
             }
         }
     }
@@ -592,7 +621,11 @@ pub trait ScreenHandler: Send + Sync {
         if !behaviour.disable_sync {
             let prev_stack = &mut behaviour.previous_tracked_stacks[slot];
 
-            if !prev_stack.is_in_sync(&stack) {
+            let compare_uid = behaviour
+                .sync_handler
+                .as_ref()
+                .is_some_and(|sync| sync.uses_stack_network_ids());
+            if !prev_stack.is_in_sync_with_identity(&stack, compare_uid) {
                 prev_stack.set_received_stack(stack.clone());
                 let next_revision = behaviour.next_revision();
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
@@ -610,12 +643,19 @@ pub trait ScreenHandler: Send + Sync {
                 .cursor_stack
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if !behaviour.previous_cursor_stack.is_in_sync(&cursor_stack) {
+            let compare_uid = behaviour
+                .sync_handler
+                .as_ref()
+                .is_some_and(|sync| sync.uses_stack_network_ids());
+            if !behaviour
+                .previous_cursor_stack
+                .is_in_sync_with_identity(&cursor_stack, compare_uid)
+            {
                 behaviour
                     .previous_cursor_stack
                     .set_received_stack(cursor_stack.clone());
                 if let Some(sync_handler) = behaviour.sync_handler.as_ref() {
-                    sync_handler.update_cursor_stack(&cursor_stack);
+                    sync_handler.update_cursor_stack(behaviour, &cursor_stack);
                 }
             }
         }
@@ -623,6 +663,10 @@ pub trait ScreenHandler: Send + Sync {
 
     /// Sends all content updates to listeners and sync handler.
     fn send_content_updates(&mut self) {
+        if self.get_behaviour().needs_full_sync && !self.get_behaviour().disable_sync {
+            self.update_to_client();
+            return;
+        }
         let slots_len = self.get_behaviour().slots.len();
 
         for i in 0..slots_len {
@@ -639,13 +683,13 @@ pub trait ScreenHandler: Send + Sync {
         let mut prop_vec = vec![];
         for (idx, prop) in behaviour.properties.iter_mut().enumerate() {
             let value = prop.get();
-            if prop.has_changed() {
-                prop_vec.push((idx, value));
-            }
+            prop_vec.push((idx, value, prop.has_changed()));
         }
 
-        for (idx, value) in prop_vec {
-            self.update_tracked_properties(idx as i32, value);
+        for (idx, value, changed) in prop_vec {
+            if changed {
+                self.update_tracked_properties(idx as i32, value);
+            }
             self.check_property_updates(idx as i32, value);
         }
     }
@@ -994,31 +1038,22 @@ pub trait ScreenHandler: Send + Sync {
                                 break;
                             }
                             slot.on_take_item(player, &drop_stack);
-                            player.drop_item(drop_stack, true);
+                            self.get_behaviour_mut().drop_item(player, drop_stack, true);
                         }
                     } else {
                         let drop_stack = slot.safe_take(1, u8::MAX, player);
                         if !drop_stack.is_empty() {
                             slot.on_take_item(player, &drop_stack);
-                            player.drop_item(drop_stack, true);
+                            self.get_behaviour_mut().drop_item(player, drop_stack, true);
                         }
                     }
-                    if self.window_type().is_none() {
+                    if !self.get_behaviour().defers_equipment && self.window_type().is_none() {
                         let remaining = slot.get_cloned_stack();
-                        if (5..9).contains(&slot_index) && remaining.is_empty() {
-                            let eq_slot = prev_stack
-                                .get_data_component::<EquippableImpl>()
-                                .map_or(&EquipmentSlot::MAIN_HAND, |e| e.slot);
-                            player.enqueue_equipment_change(eq_slot, ItemStack::EMPTY);
-                        } else if slot_index == OFF_HAND_SCREEN_SLOT {
-                            player.enqueue_equipment_change(
-                                &EquipmentSlot::OFF_HAND,
-                                if remaining.is_empty() {
-                                    ItemStack::EMPTY
-                                } else {
-                                    &remaining
-                                },
-                            );
+                        if let Some(slot) = player_screen_equipment_slot(slot_index as usize)
+                            && (remaining.uid != prev_stack.uid
+                                || !remaining.are_equal(&prev_stack))
+                        {
+                            player.enqueue_equipment_transition(&slot, &prev_stack, &remaining);
                         }
                     }
                 }
@@ -1054,13 +1089,14 @@ pub trait ScreenHandler: Send + Sync {
                     .cursor_stack
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if !cursor_stack.is_empty() {
-                    if click_type == MouseClick::Left {
-                        player.drop_item(cursor_stack.clone(), true);
-                        *cursor_stack = ItemStack::EMPTY.clone();
-                    } else {
-                        player.drop_item(cursor_stack.split(1), true);
-                    }
+                let dropped = if click_type == MouseClick::Left {
+                    std::mem::replace(&mut *cursor_stack, ItemStack::EMPTY.clone())
+                } else {
+                    cursor_stack.split(1)
+                };
+                drop(cursor_stack);
+                if !dropped.is_empty() {
+                    self.get_behaviour_mut().drop_item(player, dropped, true);
                 }
             } else if action_type == SlotActionType::QuickMove {
                 if slot_index < 0 {
@@ -1220,10 +1256,6 @@ pub trait ScreenHandler: Send + Sync {
                     }
                 }
 
-                let equipment_slot = cursor_stack
-                    .get_data_component::<EquippableImpl>()
-                    .map_or(&EquipmentSlot::MAIN_HAND, |equippable| equippable.slot);
-
                 if self.handle_slot_click(
                     player,
                     click_type.clone(),
@@ -1236,24 +1268,6 @@ pub trait ScreenHandler: Send + Sync {
 
                 if slot_stack.is_empty() {
                     if can_put && !cursor_stack.is_empty() {
-                        if self.window_type().is_none()
-                            && equipment_slot.slot_type() == EquipmentType::HumanoidArmor
-                            && (5..9).contains(&slot_index)
-                            && slot.can_insert(&cursor_stack)
-                        {
-                            let equipped = cursor_stack.copy_with_count(1);
-                            player.enqueue_equipment_change(equipment_slot, &equipped);
-                        } else if self.window_type().is_none() && slot_index == OFF_HAND_SCREEN_SLOT
-                        {
-                            let transfer_count = if click_type == MouseClick::Left {
-                                cursor_stack.item_count
-                            } else {
-                                1
-                            };
-                            let equipped = cursor_stack.copy_with_count(transfer_count);
-                            player.enqueue_equipment_change(&EquipmentSlot::OFF_HAND, &equipped);
-                        }
-
                         let transfer_count = if click_type == MouseClick::Left {
                             cursor_stack.item_count
                         } else {
@@ -1274,28 +1288,6 @@ pub trait ScreenHandler: Send + Sync {
                             // Reverse order of operations, shouldn't affect anything
                             *cursor_stack = taken.clone();
                             slot.on_take_item(player, &taken);
-
-                            if self.window_type().is_none() && (5..9).contains(&slot_index) {
-                                let equipment_slot = cursor_stack
-                                    .get_data_component::<EquippableImpl>()
-                                    .map_or(&EquipmentSlot::MAIN_HAND, |equippable| {
-                                        equippable.slot
-                                    });
-                                player.enqueue_equipment_change(equipment_slot, ItemStack::EMPTY);
-                            } else if self.window_type().is_none()
-                                && slot_index == OFF_HAND_SCREEN_SLOT
-                            {
-                                // A right click leaves half the stack in the offhand
-                                let remaining = slot.get_cloned_stack();
-                                player.enqueue_equipment_change(
-                                    &EquipmentSlot::OFF_HAND,
-                                    if remaining.is_empty() {
-                                        ItemStack::EMPTY
-                                    } else {
-                                        &remaining
-                                    },
-                                );
-                            }
                         }
                     } else if can_put && slot.can_insert(&cursor_stack) {
                         let matching_stack =
@@ -1303,17 +1295,6 @@ pub trait ScreenHandler: Send + Sync {
                         if !matching_stack && !can_grab {
                             return;
                         }
-                        if self.window_type().is_none()
-                            && equipment_slot.slot_type() == EquipmentType::HumanoidArmor
-                            && (5..9).contains(&slot_index)
-                        {
-                            player.enqueue_equipment_change(equipment_slot, &cursor_stack);
-                        } else if self.window_type().is_none() && slot_index == OFF_HAND_SCREEN_SLOT
-                        {
-                            player
-                                .enqueue_equipment_change(&EquipmentSlot::OFF_HAND, &cursor_stack);
-                        }
-
                         if matching_stack {
                             let insert_count = if click_type == MouseClick::Left {
                                 cursor_stack.item_count
@@ -1326,7 +1307,7 @@ pub trait ScreenHandler: Send + Sync {
                             <= slot.get_max_item_count_for_stack(&cursor_stack)
                         {
                             let old_cursor_stack = cursor_stack.clone();
-                            *cursor_stack = slot_stack;
+                            *cursor_stack = slot_stack.clone();
                             slot.set_stack(old_cursor_stack);
                         }
                     } else if can_grab
@@ -1347,6 +1328,19 @@ pub trait ScreenHandler: Send + Sync {
                     }
                 }
 
+                if !self.get_behaviour().defers_equipment
+                    && self.window_type().is_none()
+                    && let Some(equipment_slot) = player_screen_equipment_slot(slot_index as usize)
+                {
+                    let equipped = slot.get_cloned_stack();
+                    if equipped.uid != slot_stack.uid || !equipped.are_equal(&slot_stack) {
+                        player.enqueue_equipment_transition(
+                            &equipment_slot,
+                            &slot_stack,
+                            &equipped,
+                        );
+                    }
+                }
                 slot.mark_dirty();
             }
         } else if action_type == SlotActionType::Swap && ((0..9).contains(&button) || button == 40)
@@ -1358,6 +1352,26 @@ pub trait ScreenHandler: Send + Sync {
             let mut button_stack = player_inventory.get_stack(button as usize);
             let source_slot = self.get_behaviour().slots[slot_index as usize].clone();
             let source_stack = source_slot.get_cloned_stack();
+            let direct = !self.get_behaviour().defers_equipment;
+            let source_equipment = if direct && self.window_type().is_none() {
+                if slot_index == 36 + i32::from(player_inventory.get_selected_slot()) {
+                    Some(EquipmentSlot::MAIN_HAND)
+                } else {
+                    player_screen_equipment_slot(slot_index as usize)
+                }
+            } else {
+                None
+            };
+            let button_equipment = if !direct {
+                None
+            } else if button == 40 {
+                Some(EquipmentSlot::OFF_HAND)
+            } else if i32::from(player_inventory.get_selected_slot()) == button {
+                Some(EquipmentSlot::MAIN_HAND)
+            } else {
+                None
+            };
+            let button_before = button_equipment.as_ref().map(|_| button_stack.clone());
             let can_put = self.get_behaviour().can_put_in_slot(slot_index as usize);
             let can_grab = self.get_behaviour().can_grab_from_slot(slot_index as usize);
 
@@ -1391,16 +1405,29 @@ pub trait ScreenHandler: Send + Sync {
                         player_inventory.set_stack(button as usize, button_stack);
                         source_slot.on_take_item(player, &source_stack);
 
-                        let mut displaced_stack = source_stack;
+                        let mut displaced_stack = source_stack.clone();
                         player_inventory.insert_stack_anywhere(&mut displaced_stack);
                         if !displaced_stack.is_empty() {
-                            player.drop_item(displaced_stack, true);
+                            self.get_behaviour_mut()
+                                .drop_item(player, displaced_stack, true);
                         }
                     } else {
                         player_inventory.set_stack(button as usize, source_stack.clone());
                         source_slot.set_stack(button_stack);
                         source_slot.on_take_item(player, &source_stack);
                     }
+                }
+            }
+            if let Some(slot) = source_equipment {
+                let after = source_slot.get_cloned_stack();
+                if source_stack.uid != after.uid || !source_stack.are_equal(&after) {
+                    player.enqueue_equipment_transition(&slot, &source_stack, &after);
+                }
+            }
+            if let Some((slot, before)) = button_equipment.zip(button_before) {
+                let after = player_inventory.get_stack(button as usize);
+                if before.uid != after.uid || !before.are_equal(&after) {
+                    player.enqueue_equipment_transition(&slot, &before, &after);
                 }
             }
         }
@@ -1425,6 +1452,18 @@ pub trait ScreenHandlerListener: Send + Sync {
 }
 
 pub type SharedScreenHandler = Arc<Mutex<dyn ScreenHandler>>;
+
+/// Maps a slot in the personal screen to a physical player inventory index.
+#[must_use]
+pub const fn player_screen_inventory_index(slot: i32) -> Option<usize> {
+    match slot {
+        5..=8 => Some((44 - slot) as usize),
+        9..=35 => Some(slot as usize),
+        36..=44 => Some((slot - 36) as usize),
+        45 => Some(PlayerInventory::OFF_HAND_SLOT),
+        _ => None,
+    }
+}
 
 pub trait ScreenHandlerFactory: Send + Sync {
     fn create_screen_handler(
@@ -1456,8 +1495,13 @@ pub struct ScreenHandlerBehaviour {
     pub previous_cursor_stack: TrackedStack,
     /// Revision counter for sync tracking (increments on each change).
     pub revision: AtomicU32,
+    // The wire revision does not move for cursor and property updates.
+    pub(crate) sync_epoch: AtomicU64,
+    pub(crate) needs_full_sync: bool,
     /// Whether sync is temporarily disabled (for batch operations).
     pub disable_sync: bool,
+    pub(crate) defers_equipment: bool,
+    pub(crate) deferred_effects: Arc<Mutex<DeferredScreenEffects>>,
     /// Container properties (furnace progress, enchantment levels, etc.).
     pub properties: Vec<ScreenProperty>,
     /// Tracked property values for detecting changes.
@@ -1472,6 +1516,53 @@ pub struct ScreenHandlerBehaviour {
     pub allow_put_items: bool,
     /// Number of slots that belong to the container (not the player inventory).
     pub container_slots: usize,
+}
+
+/// A callback-visible consequence of a committed screen action.
+pub enum ScreenEffect {
+    Drop(ItemStack, bool),
+    Crafted(ItemStack),
+}
+
+impl ScreenEffect {
+    pub fn publish(self, player: &dyn InventoryPlayer) {
+        match self {
+            Self::Drop(stack, retain) => player.drop_item(stack, retain),
+            Self::Crafted(stack) => {
+                player.increment_stat(
+                    StatisticCategory::Crafted,
+                    i32::from(stack.item.id),
+                    i32::from(stack.item_count),
+                );
+                player.on_recipe_crafted(&stack);
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct DeferredScreenEffects {
+    recording: bool,
+    effects: Vec<ScreenEffect>,
+}
+
+impl DeferredScreenEffects {
+    pub(crate) fn publish_or_record(
+        buffer: Option<&Mutex<Self>>,
+        player: &dyn InventoryPlayer,
+        effect: ScreenEffect,
+    ) {
+        if let Some(buffer) = buffer {
+            let mut deferred = buffer
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if deferred.recording {
+                deferred.effects.push(effect);
+                return;
+            }
+        }
+        effect.publish(player);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1501,7 +1592,11 @@ impl ScreenHandlerBehaviour {
             previous_tracked_stacks: Vec::new(),
             previous_cursor_stack: TrackedStack::EMPTY,
             revision: AtomicU32::new(0),
+            sync_epoch: AtomicU64::new(0),
+            needs_full_sync: false,
             disable_sync: false,
+            defers_equipment: false,
+            deferred_effects: Arc::default(),
             properties: Vec::new(),
             tracked_property_values: Vec::new(),
             window_type,
@@ -1512,12 +1607,69 @@ impl ScreenHandlerBehaviour {
         }
     }
 
+    /// Starts capturing packets for an action whose caller owns the handler lock.
+    pub fn defer_updates(&mut self) -> Option<Arc<SyncHandler>> {
+        self.defers_equipment = true;
+        self.deferred_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .recording = true;
+        let previous = self.sync_handler.take();
+        self.sync_handler = previous
+            .as_ref()
+            .map(|handler| Arc::new(handler.deferred()));
+        previous
+    }
+
+    pub fn finish_deferred_updates(
+        &mut self,
+        previous: Option<Arc<SyncHandler>>,
+    ) -> Option<Arc<SyncHandler>> {
+        self.defers_equipment = false;
+        self.deferred_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .recording = false;
+        std::mem::replace(&mut self.sync_handler, previous)
+    }
+
+    /// Records a committed drop for publication after the caller releases the
+    /// screen lock. Direct screen API calls retain their immediate behavior.
+    pub fn drop_item(&mut self, player: &dyn InventoryPlayer, stack: ItemStack, retain: bool) {
+        DeferredScreenEffects::publish_or_record(
+            Some(&self.deferred_effects),
+            player,
+            ScreenEffect::Drop(stack, retain),
+        );
+    }
+
+    #[must_use]
+    pub fn take_deferred_effects(&mut self) -> Vec<ScreenEffect> {
+        std::mem::take(
+            &mut self
+                .deferred_effects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .effects,
+        )
+    }
+
     const fn can_put_in_slot(&self, index: usize) -> bool {
         index >= self.container_slots || self.allow_put_items
     }
 
     const fn can_grab_from_slot(&self, index: usize) -> bool {
         index >= self.container_slots || self.allow_grab_items
+    }
+
+    #[must_use]
+    pub fn sync_epoch(&self) -> u64 {
+        self.sync_epoch.load(Ordering::Relaxed)
+    }
+
+    /// Retires captured packet batches when a client action commits a change.
+    pub fn invalidate_sync(&self) {
+        self.sync_epoch.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn next_revision(&self) -> u32 {

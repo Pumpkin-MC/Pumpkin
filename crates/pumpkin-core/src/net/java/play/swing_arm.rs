@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 impl JavaClient {
     pub fn handle_swing_arm(
@@ -12,6 +13,15 @@ impl JavaClient {
         let Ok(hand) = Hand::from_packet_id(swing_arm.hand.0) else {
             self.try_kick(&TextComponent::text("Invalid hand"));
             return;
+        };
+
+        let is_punch = self.version.load() >= JavaMinecraftVersion::V_26_3;
+        let swing = || {
+            if is_punch {
+                player.swing_java_punch(hand);
+            } else {
+                player.swing_hand(hand, false);
+            }
         };
 
         let mut anim_event = crate::plugin::api::events::player::player_animation::PlayerAnimationEvent::new(
@@ -43,11 +53,11 @@ impl JavaClient {
                 &server;
                 event;
                 'after: {
-                    player.swing_hand(hand, false);
+                    swing();
                 }
             }}
         } else {
-            player.swing_hand(hand, false);
+            swing();
         }
     }
 }

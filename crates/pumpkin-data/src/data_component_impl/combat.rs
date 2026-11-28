@@ -2,6 +2,7 @@ use super::Digest;
 use crate::Block;
 use crate::Enchantment;
 use crate::attributes::Attributes;
+use crate::block_state::BlockStateId;
 use crate::damage::DamageType;
 use crate::data_component_impl::basic::SoundEvent;
 use crate::data_component_impl::{
@@ -313,22 +314,85 @@ impl DataComponentImpl for EnchantmentsImpl {
     default_impl!(Enchantments);
 }
 
-fn block_predicate_matches(predicate: &NbtTag, block: &Block) -> bool {
+fn block_state_property_matches(
+    block: &Block,
+    state: BlockStateId,
+    key: &str,
+    predicate: &NbtTag,
+) -> bool {
+    let Some(slot) = block
+        .property_slots
+        .iter()
+        .find(|slot| slot.key.to_str() == key)
+    else {
+        return false;
+    };
+    let Some(actual) = block.get_property(state, slot.key) else {
+        return false;
+    };
+    let actual = actual.value_str();
+    match predicate {
+        NbtTag::String(expected) => actual == expected.as_ref(),
+        NbtTag::Compound(bounds) => {
+            let order = |value: &str| {
+                let index = slot
+                    .values
+                    .iter()
+                    .position(|candidate| candidate.value_str() == value)?;
+                // Java state storage orders true first, but Boolean.compareTo orders false first.
+                Some(match value {
+                    "false" => 0,
+                    "true" => 1,
+                    _ => index,
+                })
+            };
+            let Some(actual) = order(actual) else {
+                return false;
+            };
+            let bound = |key: &str, accepts: fn(usize, usize) -> bool| {
+                bounds.get(key).is_none_or(|tag| {
+                    tag.extract_string()
+                        .and_then(order)
+                        .is_some_and(|value| accepts(actual, value))
+                })
+            };
+            bound("min", |actual, min| actual >= min) && bound("max", |actual, max| actual <= max)
+        }
+        _ => false,
+    }
+}
+
+fn block_predicate_matches(predicate: &NbtTag, block: &Block, state: Option<BlockStateId>) -> bool {
     match predicate {
         NbtTag::Compound(c) => {
             if let Some(list) = c.get_list("predicates") {
-                return list.iter().any(|p| block_predicate_matches(p, block));
+                return list
+                    .iter()
+                    .any(|p| block_predicate_matches(p, block, state));
             }
-            if let Some(blocks_tag) = c.get("blocks") {
+            let matches_block = c.get("blocks").is_none_or(|blocks_tag| {
                 IDSet::<Block>::read(blocks_tag).is_some_and(|idset| match &idset {
                     IDSet::Tag(tag) => block.is_tagged_with(tag).unwrap_or(false),
                     IDSet::IDs(blocks) => blocks.iter().any(|b| b.id == block.id),
                 })
-            } else {
-                true
-            }
+            });
+            matches_block
+                && state.is_none_or(|state| {
+                    c.get("nbt").is_none()
+                        && c.get("components").is_none()
+                        && c.get("predicates").is_none()
+                        && c.get("state").is_none_or(|properties| {
+                            properties.extract_compound().is_some_and(|properties| {
+                                properties.child_tags.iter().all(|(key, predicate)| {
+                                    block_state_property_matches(block, state, key, predicate)
+                                })
+                            })
+                        })
+                })
         }
-        NbtTag::List(list) => list.iter().any(|p| block_predicate_matches(p, block)),
+        NbtTag::List(list) => list
+            .iter()
+            .any(|p| block_predicate_matches(p, block, state)),
         _ => false,
     }
 }
@@ -349,7 +413,13 @@ impl CanPlaceOnImpl {
 
     #[must_use]
     pub fn matches_block(&self, block: &Block) -> bool {
-        block_predicate_matches(&self.predicate, block)
+        block_predicate_matches(&self.predicate, block, None)
+    }
+
+    /// Checks the Adventure predicate on a block state with no block entity.
+    #[must_use]
+    pub fn matches_block_state_without_entity(&self, state: BlockStateId) -> bool {
+        block_predicate_matches(&self.predicate, Block::from_state_id(state), Some(state))
     }
 }
 impl DataComponentImpl for CanPlaceOnImpl {
@@ -375,7 +445,7 @@ impl CanBreakImpl {
 
     #[must_use]
     pub fn matches_block(&self, block: &Block) -> bool {
-        block_predicate_matches(&self.predicate, block)
+        block_predicate_matches(&self.predicate, block, None)
     }
 }
 impl DataComponentImpl for CanBreakImpl {

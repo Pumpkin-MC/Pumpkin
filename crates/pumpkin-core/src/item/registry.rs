@@ -5,6 +5,7 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
+use pumpkin_data::data_component_impl::{BlocksAttacksImpl, ConsumableImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::Hand;
@@ -21,16 +22,58 @@ pub(crate) const fn should_try_block_placement(result: &BlockActionResult) -> bo
 
 #[derive(Default)]
 pub struct ItemRegistry {
-    items: FxHashMap<u16, Arc<dyn ItemBehaviour>>,
+    items: FxHashMap<u16, (Arc<dyn ItemBehaviour>, bool)>,
 }
 
 impl ItemRegistry {
     pub fn register<T: ItemBehaviour + ItemMetadata + 'static>(&mut self, item: T) {
-        let val = Arc::new(item);
-        self.items.reserve(T::ids().len());
-        for i in T::ids() {
-            self.items.insert(i, val.clone());
+        self.register_item(item, |_| false);
+    }
+
+    /// Registers an item whose Java class overrides `Item.use`.
+    pub fn register_air_use<T: ItemBehaviour + ItemMetadata + 'static>(&mut self, item: T) {
+        self.register_item(item, |_| true);
+    }
+
+    pub(crate) fn register_air_use_except<T: ItemBehaviour + ItemMetadata + 'static>(
+        &mut self,
+        item: T,
+        inherited_use: u16,
+    ) {
+        self.register_item(item, |id| id != inherited_use);
+    }
+
+    fn register_item<T: ItemBehaviour + ItemMetadata + 'static>(
+        &mut self,
+        item: T,
+        overrides_air_use: impl Fn(u16) -> bool,
+    ) {
+        let behaviour = Arc::new(item);
+        let ids = T::ids();
+        self.items.reserve(ids.len());
+        for id in ids {
+            self.items
+                .insert(id, (behaviour.clone(), overrides_air_use(id)));
         }
+    }
+
+    pub(crate) fn overrides_air_use(&self, id: u16) -> bool {
+        self.items.get(&id).is_some_and(|(_, overrides)| *overrides)
+    }
+
+    pub(crate) fn boat_item(&self, id: u16) -> Option<&crate::item::items::boat::BoatItem> {
+        self.items.get(&id)?.0.as_any().downcast_ref()
+    }
+
+    pub(crate) fn minecart_item(
+        &self,
+        id: u16,
+    ) -> Option<&crate::item::items::minecart::MinecartItem> {
+        self.get_pumpkin_item(id)?.as_any().downcast_ref()
+    }
+
+    pub(crate) fn uses_boat_placement(&self, id: u16) -> bool {
+        self.boat_item(id).is_some()
     }
 
     pub fn on_use(&self, stack: &ItemStack, player: &Player, hand: Hand) {
@@ -47,6 +90,26 @@ impl ItemRegistry {
         hand: Hand,
     ) {
         let item = stack.item;
+        let registration = self.items.get(&item.id);
+        if let Some(boat) = self.boat_item(item.id) {
+            boat.place_from_hand(stack, player, yaw, pitch, hand);
+            return;
+        }
+        if self.minecart_item(item.id).is_some() {
+            if let Some(slot) = player
+                .inventory()
+                .equipment_slot_index(&crate::entity::hand_equipment_slot(hand))
+            {
+                crate::item::items::cart_air_use::use_cart_in_air(
+                    player,
+                    hand,
+                    slot,
+                    stack,
+                    &player.world(),
+                );
+            }
+            return;
+        }
         let cooldown = stack.get_use_cooldown();
         let cooldown_group = cooldown
             .and_then(|c| c.cooldown_group.clone())
@@ -56,7 +119,22 @@ impl ItemRegistry {
             return;
         }
 
-        if let Some(pumpkin_item) = self.get_pumpkin_item(item.id) {
+        // Native use overrides take precedence over base item use.
+        if !registration.is_some_and(|(_, overrides_air_use)| *overrides_air_use)
+            && stack.get_data_component::<BlocksAttacksImpl>().is_some()
+            && stack.get_data_component::<ConsumableImpl>().is_none()
+        {
+            let held = player.inventory().get_stack_in_hand(hand);
+            if held.uid == stack.uid && held.are_equal(stack) {
+                let duration = held.get_max_use_time();
+                player
+                    .living_entity
+                    .start_blocking_if_idle(hand, held, duration);
+            }
+            return;
+        }
+
+        if let Some((pumpkin_item, _)) = registration {
             pumpkin_item.normal_use_with_hand(item, player, yaw, pitch, hand);
         } else if stack
             .get_data_component::<pumpkin_data::data_component_impl::KineticWeaponImpl>()
@@ -92,6 +170,13 @@ impl ItemRegistry {
         }
     }
 
+    pub(crate) fn release_item(&self, player: &Player) {
+        player.living_entity.release_active_hand(
+            |hand| player.inventory().get_stack_in_hand(hand),
+            |held| self.on_stopped_using(held, player),
+        );
+    }
+
     pub fn on_spear_jab(&self, stack: &ItemStack, player: &Player) {
         if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
             behaviour.on_spear_jab(stack, player);
@@ -109,6 +194,10 @@ impl ItemRegistry {
         user: &dyn crate::entity::EntityBase,
         remaining_use_ticks: i32,
     ) {
+        // Guarded cart ticks are driven by the living entity that owns the source slot.
+        if self.minecart_item(stack.item.id).is_some() {
+            return;
+        }
         if let Some(behaviour) = self.get_pumpkin_item(stack.item.id) {
             behaviour.on_use_tick(stack, user, remaining_use_ticks);
         } else if stack
@@ -139,6 +228,10 @@ impl ItemRegistry {
         block: &Block,
         server: &Server,
     ) -> BlockActionResult {
+        if let Some(cart) = self.minecart_item(stack.item.id) {
+            return cart.use_on_block(stack, player, location, face, cursor_pos, block, server);
+        }
+
         let cooldown = stack.get_use_cooldown().cloned();
         let cooldown_group = cooldown
             .as_ref()
@@ -208,7 +301,7 @@ impl ItemRegistry {
 
     #[must_use]
     pub fn get_pumpkin_item(&self, item: u16) -> Option<&Arc<dyn ItemBehaviour>> {
-        self.items.get(&item)
+        self.items.get(&item).map(|(behaviour, _)| behaviour)
     }
 }
 

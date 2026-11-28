@@ -865,6 +865,10 @@ impl EnderDragonEntity {
 }
 
 impl Mob for EnderDragonEntity {
+    fn mob_can_ride(&self, _vehicle: &dyn EntityBase) -> bool {
+        false
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

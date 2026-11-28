@@ -3,10 +3,11 @@
 
 use std::collections::VecDeque;
 
-#[cfg(debug_assertions)]
 use std::sync::Arc;
 
-use pumpkin_data::{Block, attributes::Attributes, entity::EntityType, tag, tag::Taggable};
+use pumpkin_data::{
+    Block, attributes::Attributes, entity::EntityType, game_event::GameEvent, tag, tag::Taggable,
+};
 use pumpkin_util::math::{
     boundingbox::BoundingBox, get_section_cord, position::BlockPos, vector2::Vector2,
     vector3::Vector3,
@@ -17,14 +18,31 @@ use pumpkin_config::world::EntityIslandsConfig;
 use pumpkin_world::chunk::CHUNK_WIDTH;
 
 use crate::block::blocks::redstone::SIGNAL_MAX;
-use crate::entity::{DelayedLeash, EntityBase, PUSH_STRENGTH, tnt::TNTEntity};
-use crate::plugin::api::events::block::entity_block_form::EntityBlockFormEvent;
+use crate::entity::{
+    DelayedLeash, Entity, EntityBase, PUSH_STRENGTH,
+    tnt::TNTEntity,
+    vehicle::boat::{BoatEntity, PICKUP_RANGE},
+};
+use crate::plugin::api::events::block::{
+    block_break::BlockBreakEvent, block_drop_item::BlockDropItemEvent,
+    block_physics::BlockPhysicsEvent, block_redstone::BlockRedstoneEvent,
+    cauldron_level_change::CauldronLevelChangeEvent, entity_block_form::EntityBlockFormEvent,
+};
 use crate::plugin::api::events::entity::{
-    entity_breed::EntityBreedEvent, entity_target::EntityTargetEvent,
-    entity_toggle_sit::EntityToggleSitEvent, pig_zombie_anger::PigZombieAngerEvent,
+    entity_breed::EntityBreedEvent, entity_dismount::EntityDismountEvent,
+    entity_mount::EntityMountEvent, entity_pose_change::EntityPoseChangeEvent,
+    entity_target::EntityTargetEvent, entity_toggle_sit::EntityToggleSitEvent,
+    pig_zombie_anger::PigZombieAngerEvent,
 };
 use crate::plugin::{
-    api::events::vehicle::vehicle_update::VehicleUpdateEvent, server::packet::PacketSentEvent,
+    api::events::{
+        vehicle::{
+            vehicle_enter::VehicleEnterEvent, vehicle_exit::VehicleExitEvent,
+            vehicle_move::VehicleMoveEvent, vehicle_update::VehicleUpdateEvent,
+        },
+        world::generic_game::GenericGameEvent,
+    },
+    server::packet::PacketSentEvent,
 };
 use crate::server::Server;
 use crate::world::World;
@@ -42,6 +60,9 @@ const PUSH_SPEED: f64 = PUSH_STRENGTH * std::f64::consts::SQRT_2;
 
 /// Extra motion covered by the contact block scan.
 const SCAN_SLACK: f64 = 0.5;
+
+// A crossing may update a hook 41 blocks away, then run its redstone neighbors.
+const TRIPWIRE_REACH: f64 = 41.0;
 
 /// Minimum probe margin for conservative neighbour effects.
 const PUSH_SLACK: f64 = 3.0 * PUSH_SPEED;
@@ -137,6 +158,14 @@ pub fn plugins_observe_entity_ticks(server: &Server) -> bool {
         || plugins.has_handlers::<PigZombieAngerEvent>()
         || plugins.has_handlers::<EntityToggleSitEvent>()
         || plugins.has_handlers::<EntityBlockFormEvent>()
+        || plugins.has_handlers::<EntityMountEvent>()
+        || plugins.has_handlers::<EntityDismountEvent>()
+        || plugins.has_handlers::<VehicleEnterEvent>()
+        || plugins.has_handlers::<VehicleExitEvent>()
+        || plugins.has_handlers::<VehicleUpdateEvent>()
+        || plugins.has_handlers::<EntityPoseChangeEvent>()
+        || plugins.has_handlers::<GenericGameEvent>()
+        || plugins.has_handlers::<PacketSentEvent>()
 }
 
 /// What one entity can read or change next tick.
@@ -262,6 +291,8 @@ fn changes_on_contact(block: &Block) -> bool {
             &Block::SCULK_SENSOR,
             &Block::CALIBRATED_SCULK_SENSOR,
             &Block::LILY_PAD,
+            &Block::WATER_CAULDRON,
+            &Block::POWDER_SNOW_CAULDRON,
             &Block::FARMLAND,
             &Block::NETHER_PORTAL,
             &Block::END_PORTAL,
@@ -273,13 +304,115 @@ fn changes_on_contact(block: &Block) -> bool {
 pub enum EntityReach {
     Audited(AuditedReach),
     Conservative(TickReach),
+    Boat {
+        reach: TickReach,
+        start: BoundingBox,
+        world: Arc<World>,
+    },
+}
+
+fn vehicle_can_drop_leash(world: &World, area: &BoundingBox) -> bool {
+    world
+        .get_entities_at_box(area)
+        .iter()
+        .any(|candidate| candidate.get_entity().has_leash_data())
+}
+
+fn leash_restoration_needs_serial_tick(entity: &dyn EntityBase, body: &BoundingBox) -> bool {
+    let base = entity.get_entity();
+    // Restoring a leash can dismount a rider or precede a nearby vehicle's pickup.
+    base.has_leash_data()
+        && entity.get_mob().is_some()
+        && (base.has_vehicle()
+            || base
+                .world
+                .load()
+                .get_entities_at_box(&body.expand(PICKUP_RANGE, 0.0, PICKUP_RANGE))
+                .iter()
+                .any(|candidate| {
+                    let kind = candidate.get_entity().entity_type;
+                    kind.boat.is_some() || kind == &EntityType::MINECART
+                }))
+}
+
+fn include_vehicle_block_reach(reach: &mut TickReach, base: &Entity, bounds: BoundingBox) {
+    // Historical movement can visit blocks no longer near the vehicle's body.
+    let contact = bounds.expand_all(base.vehicle_block_effect_reach());
+    reach.block_reads = union(&reach.block_reads, &contact);
+    if base.world.load().is_raining() {
+        // Rain checks the motion-blocking height of the whole column.
+        reach.block_reads.min.y = f64::NEG_INFINITY;
+        reach.block_reads.max.y = f64::INFINITY;
+    }
+    reach.block_writes =
+        Some(union(&reach.body, &contact).expand_all(BLOCK_UPDATE_REACH + TRIPWIRE_REACH));
+}
+
+fn vehicle_event_area(body: &BoundingBox) -> BoundingBox {
+    let radius = [
+        GameEvent::EntityMount,
+        GameEvent::EntityDismount,
+        GameEvent::Splash,
+        GameEvent::Step,
+        GameEvent::Bounce,
+    ]
+    .into_iter()
+    .map(GameEvent::notification_radius)
+    .max()
+    .unwrap_or_default();
+    union(
+        &super::game_event::notified_area(body.min, radius),
+        &super::game_event::notified_area(body.max, radius),
+    )
+}
+
+fn include_vehicle_event_links(reach: &mut TickReach, world: &World) {
+    let area = vehicle_event_area(&reach.body);
+    reach.links.extend(
+        world
+            .entity_index
+            .listeners(world.entities.load_full(), area)
+            .map(|listener| listener.get_entity().entity_id),
+    );
+}
+
+/// Link tickable listeners whose next-tick body can enter a vehicle's notification area.
+pub(crate) fn include_moving_vehicle_event_listeners<'a>(
+    reaches: &mut [TickReach],
+    entities: impl Iterator<Item = &'a dyn EntityBase>,
+) -> Option<()> {
+    let mut listener_bounds = Vec::new();
+    let mut vehicles = Vec::new();
+    for (index, (reach, entity)) in reaches.iter().zip(entities).enumerate() {
+        if entity
+            .get_mob()
+            .is_some_and(crate::entity::mob::has_game_event_listener)
+        {
+            listener_bounds.push((entity.get_entity().entity_id, reach.body));
+        }
+        if entity.vehicle_contact_tick_reach().is_some() {
+            vehicles.push(index);
+        }
+    }
+    let mut budget = PlanningBudget::default();
+    budget.spend(vehicles.len().saturating_mul(listener_bounds.len()))?;
+    for vehicle in vehicles {
+        let reach = &mut reaches[vehicle];
+        let area = vehicle_event_area(&reach.body);
+        for &(id, bounds) in &listener_bounds {
+            if overlaps(&area, &bounds) && !reach.links.contains(&id) {
+                reach.links.push(id);
+            }
+        }
+    }
+    Some(())
 }
 
 #[derive(Clone, Copy)]
 pub(crate) enum BlockWriteCheck {
     Unconditional,
     Contact,
-    DetectorRail(BlockPos),
+    VehicleContact(BoundingBox),
 }
 
 impl EntityReach {
@@ -287,24 +420,15 @@ impl EntityReach {
     pub(crate) fn block_write_check(&self, entity: &dyn EntityBase) -> BlockWriteCheck {
         match self {
             Self::Audited(audited) if !audited.changes_blocks => BlockWriteCheck::Contact,
-            Self::Conservative(reach)
-                if entity.get_entity().entity_type == &EntityType::CHEST_MINECART
-                    && entity
-                        .cast_any()
-                        .is::<crate::entity::vehicle::minecart::MinecartEntity>()
-                    && reach.links.is_empty() =>
+            Self::Conservative(reach) | Self::Boat { reach, .. }
+                if entity.vehicle_contact_tick_reach().is_some() && !reach.global =>
             {
                 let base = entity.get_entity();
-                let world = base.world.load();
-                if world.server.upgrade().is_some_and(|server| {
-                    server.plugin_manager.has_handlers::<VehicleUpdateEvent>()
-                        || server.plugin_manager.has_handlers::<PacketSentEvent>()
-                }) {
-                    return BlockWriteCheck::Unconditional;
-                }
-                // Chest carts only activate the rail inspected before movement. Their tick
-                // does not run Entity's general contact callbacks.
-                BlockWriteCheck::DetectorRail(BlockPos::floored_v(base.pos.load()))
+                let history = base
+                    .bounding_box
+                    .load()
+                    .expand_all(base.vehicle_block_effect_reach());
+                BlockWriteCheck::VehicleContact(union(&reach.body, &history))
             }
             _ => BlockWriteCheck::Unconditional,
         }
@@ -312,14 +436,21 @@ impl EntityReach {
 
     #[must_use]
     pub fn of(entity: &dyn EntityBase, config: &EntityIslandsConfig) -> Self {
-        if let Some(reach) = entity.audited_reach() {
+        let grows_up = entity
+            .get_mob()
+            .and_then(|mob| mob.as_ageable())
+            .is_some_and(|ageable| ageable.get_age() == -1 && ageable.can_age_up());
+        if !grows_up && let Some(reach) = entity.audited_reach() {
             return Self::Audited(reach);
         }
         let base = entity.get_entity();
+        let boat = entity.cast_any().downcast_ref::<BoatEntity>();
+        let vehicle_contact_reach = entity.vehicle_contact_tick_reach();
         let movement = base.velocity.load().length()
             + entity
                 .get_mob()
-                .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement);
+                .map_or(0.0, crate::entity::mob::Mob::additional_tick_movement)
+            + vehicle_contact_reach.unwrap_or(0.0);
         let radius = movement
             + config.unaudited_reach
             + entity.get_living_entity().map_or(0.0, |living| {
@@ -327,8 +458,27 @@ impl EntityReach {
                     .get_attribute_value(&Attributes::FOLLOW_RANGE)
                     .max(0.0)
             });
+        let bounds = base.bounding_box.load();
+        let vertical = boat.map_or(0.0, BoatEntity::additional_vertical_tick_movement);
         let mut reach =
-            TickReach::conservative(&base.bounding_box.load(), radius, links_of(entity));
+            TickReach::conservative(&bounds.expand(0.0, vertical, 0.0), radius, links_of(entity));
+        if vehicle_contact_reach.is_some() {
+            include_vehicle_block_reach(&mut reach, base, bounds);
+        }
+        if base.entity_type.boat.is_some() {
+            // Ride chains and a dropped leash's holder can extend beyond the pickup area.
+            reach.global |= base.has_vehicle()
+                || vehicle_can_drop_leash(
+                    &base.world.load(),
+                    &bounds.expand(PICKUP_RANGE, 0.0, PICKUP_RANGE),
+                );
+        }
+        if base.entity_type == &EntityType::MINECART {
+            // Fast pickup can release a leash and remove its knot outside cart reach.
+            reach.global |= vehicle_can_drop_leash(&base.world.load(), &reach.body);
+        }
+        // Growth can dismount a mob, including one picked up before its turn this tick.
+        reach.global |= grows_up || leash_restoration_needs_serial_tick(entity, &reach.body);
         if let Some(mob) = entity.get_mob() {
             let player_radius = radius.max(mob.player_tick_range() + movement);
             reach.players =
@@ -344,14 +494,43 @@ impl EntityReach {
             }
         }
         // Blast power and chained block effects can exceed the configured margins.
-        reach.global = entity
+        reach.global |= entity
             .get_mob()
             .is_some_and(crate::entity::mob::Mob::has_global_tick_reach)
             || entity
                 .cast_any()
                 .downcast_ref::<TNTEntity>()
-                .is_some_and(TNTEntity::is_about_to_explode);
-        Self::Conservative(reach)
+                .is_some_and(TNTEntity::is_about_to_explode)
+            || entity.vehicle_requires_serial_tick()
+            || (base.uses_vehicle_collisions()
+                && base.world.load().server.upgrade().is_some_and(|server| {
+                    let plugins = &server.plugin_manager;
+                    plugins.has_handlers::<VehicleUpdateEvent>()
+                        || (boat.is_some() && plugins.has_handlers::<VehicleMoveEvent>())
+                        || plugins.has_handlers::<crate::plugin::api::events::entity::entity_combust::EntityCombustEvent>()
+                        || plugins.has_handlers::<PacketSentEvent>()
+                        || plugins.has_handlers::<crate::plugin::api::events::world::generic_game::GenericGameEvent>()
+                        || plugins.has_handlers::<crate::plugin::api::events::entity::entity_spawn::EntitySpawnEvent>()
+                        || plugins.has_handlers::<crate::plugin::api::events::entity::entity_portal::EntityPortalEvent>()
+                        || plugins.has_handlers::<crate::plugin::api::events::vehicle::vehicle_damage::VehicleDamageEvent>()
+                        || plugins.has_handlers::<crate::plugin::api::events::vehicle::vehicle_destroy::VehicleDestroyEvent>()
+                        || (base.has_passengers()
+                            && (plugins.has_handlers::<EntityDismountEvent>()
+                                || plugins.has_handlers::<VehicleExitEvent>()
+                                || plugins.has_handlers::<EntityPoseChangeEvent>()))
+                }));
+        if boat.is_some() {
+            Self::Boat {
+                reach,
+                start: bounds,
+                world: base.world.load_full(),
+            }
+        } else {
+            if vehicle_contact_reach.is_some() && !reach.global {
+                include_vehicle_event_links(&mut reach, &base.world.load());
+            }
+            Self::Conservative(reach)
+        }
     }
 }
 
@@ -421,10 +600,13 @@ pub fn links_of(entity: &dyn EntityBase) -> Vec<i32> {
 /// `knockback_reach` within reach of an unaudited entity.
 /// Returns `None` when the tick needs serial execution or planning exceeds its budget.
 #[must_use]
-pub fn resolve(reports: Vec<EntityReach>, config: &EntityIslandsConfig) -> Option<Vec<TickReach>> {
+pub fn resolve(
+    mut reports: Vec<EntityReach>,
+    config: &EntityIslandsConfig,
+) -> Option<Vec<TickReach>> {
     if reports.iter().any(|report| match report {
         EntityReach::Audited(reach) => reach.global,
-        EntityReach::Conservative(reach) => reach.global,
+        EntityReach::Conservative(reach) | EntityReach::Boat { reach, .. } => reach.global,
     }) {
         return None;
     }
@@ -432,17 +614,47 @@ pub fn resolve(reports: Vec<EntityReach>, config: &EntityIslandsConfig) -> Optio
     budget.spend(reports.len())?;
     let mut pushers = Grid::default();
     let mut threats = Grid::default();
-    for report in &reports {
-        if let EntityReach::Conservative(reach) = report {
-            pushers.insert(pushers.boxes.len(), reach.body, &mut budget)?;
-            threats.insert(threats.boxes.len(), reach.entities, &mut budget)?;
-        }
+    let mut earlier_hulls = Grid::default();
+    let mut hull_query = Query::new(reports.len());
+    for report in &mut reports {
+        let reach = match report {
+            EntityReach::Audited(_) => continue,
+            EntityReach::Conservative(reach) => reach,
+            EntityReach::Boat {
+                reach,
+                start,
+                world,
+            } => {
+                let mut count = 0;
+                earlier_hulls
+                    .for_each_overlapping(&mut hull_query, start, &mut budget, |_| count += 1)?;
+                if count > 0 {
+                    let distance = PUSH_SPEED * f64::from(count);
+                    let grow = |bounds: BoundingBox| bounds.expand(distance, 0.0, distance);
+                    reach.body = grow(reach.body);
+                    reach.entities = grow(reach.entities);
+                    reach.players = grow(reach.players);
+                    reach.block_reads = grow(reach.block_reads);
+                    reach.block_writes = reach.block_writes.map(grow);
+                }
+                if vehicle_can_drop_leash(world, &reach.body) {
+                    return None;
+                }
+                earlier_hulls.insert(earlier_hulls.boxes.len(), reach.entities, &mut budget)?;
+                include_vehicle_event_links(reach, world);
+                reach
+            }
+        };
+        pushers.insert(pushers.boxes.len(), reach.body, &mut budget)?;
+        threats.insert(threats.boxes.len(), reach.entities, &mut budget)?;
     }
     let mut query = Query::new(reports.len());
     let mut reaches = Vec::with_capacity(reports.len());
     for report in reports {
         match report {
-            EntityReach::Conservative(reach) => reaches.push(reach),
+            EntityReach::Conservative(reach) | EntityReach::Boat { reach, .. } => {
+                reaches.push(reach);
+            }
             EntityReach::Audited(audited) => {
                 let mut count = 0;
                 pushers.for_each_overlapping(
@@ -473,6 +685,15 @@ pub fn resolve(reports: Vec<EntityReach>, config: &EntityIslandsConfig) -> Optio
     Some(reaches)
 }
 
+fn observes_vehicle_contact_writes(server: &Server) -> bool {
+    let plugins = &server.plugin_manager;
+    plugins.has_handlers::<BlockBreakEvent>()
+        || plugins.has_handlers::<BlockDropItemEvent>()
+        || plugins.has_handlers::<BlockPhysicsEvent>()
+        || plugins.has_handlers::<BlockRedstoneEvent>()
+        || plugins.has_handlers::<CauldronLevelChangeEvent>()
+}
+
 /// Removes contact-write fallbacks that no writer can make necessary.
 pub(crate) fn prune_block_writes(
     world: &World,
@@ -486,37 +707,43 @@ pub(crate) fn prune_block_writes(
     budget.spend(reaches.len())?;
     let mut candidates = Vec::new();
     let mut contacts = Grid::default();
+    let observes_contact_writes = world
+        .server
+        .upgrade()
+        .is_some_and(|server| observes_vehicle_contact_writes(&server));
     let mut sections = FxHashMap::default();
     let mut active: Vec<bool> = reaches
         .iter()
         .map(|reach| reach.block_writes.is_some())
         .collect();
-    for (slot, reach) in reaches.iter().enumerate() {
+    for (slot, reach) in reaches.iter_mut().enumerate() {
         if !active[slot] {
             continue;
         }
         let contact = match checks[slot] {
             BlockWriteCheck::Unconditional => continue,
-            BlockWriteCheck::Contact => {
-                let area = reach.body.expand_towards(0.0, -1.0, 0.0);
+            BlockWriteCheck::Contact | BlockWriteCheck::VehicleContact(_) => {
+                let area = match checks[slot] {
+                    BlockWriteCheck::VehicleContact(bounds) => union(&bounds, &reach.body),
+                    _ => reach.body,
+                }
+                .expand_towards(0.0, -1.0, 0.0);
                 let contact = BoundingBox::new(
                     area.min_block_pos().0.to_f64(),
                     area.max_block_pos().0.to_f64() + Vector3::new(1.0, 1.0, 1.0),
                 );
-                if contact_may_change_blocks(world, &contact, &mut sections) {
+                let effects = contact_effects(world, &contact, &mut sections);
+                if matches!(checks[slot], BlockWriteCheck::VehicleContact(_))
+                    && (effects == ContactEffects::Global
+                        || (observes_contact_writes && effects == ContactEffects::Local))
+                {
+                    reach.global = true;
+                    return Some(());
+                }
+                if effects != ContactEffects::None {
                     continue;
                 }
                 contact
-            }
-            BlockWriteCheck::DetectorRail(pos) => {
-                if !world.level.is_chunk_loaded(&pos.chunk_position())
-                    || [pos, pos.down()]
-                        .iter()
-                        .any(|pos| world.get_block(pos).id == Block::DETECTOR_RAIL.id)
-                {
-                    continue;
-                }
-                BoundingBox::from_block(&pos).expand_towards(0.0, -1.0, 0.0)
             }
         };
         active[slot] = false;
@@ -547,16 +774,28 @@ pub(crate) fn prune_block_writes(
     for slot in candidates {
         if !active[slot] {
             reaches[slot].block_writes = None;
+        } else if observes_contact_writes
+            && matches!(checks[slot], BlockWriteCheck::VehicleContact(_))
+        {
+            // Another writer can make a contact block active before the vehicle ticks.
+            reaches[slot].global = true;
         }
     }
     Some(())
 }
 
-fn contact_may_change_blocks(
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum ContactEffects {
+    None,
+    Local,
+    Global,
+}
+
+fn contact_effects(
     world: &World,
     contact: &BoundingBox,
-    sections: &mut FxHashMap<(i32, i32, i32), bool>,
-) -> bool {
+    sections: &mut FxHashMap<(i32, i32, i32), ContactEffects>,
+) -> ContactEffects {
     if [
         contact.min.x,
         contact.min.y,
@@ -568,14 +807,14 @@ fn contact_may_change_blocks(
     .iter()
     .any(|value| !value.is_finite())
     {
-        return true;
+        return ContactEffects::Global;
     }
     let bottom = world.dimension.min_y;
     let top = bottom + world.dimension.height;
     let min_y = (contact.min.y as i32).max(bottom);
     let max_y = ((contact.max.y - 1.0) as i32).min(top - 1);
     if min_y > max_y {
-        return false;
+        return ContactEffects::None;
     }
     let min = [
         get_section_cord(contact.min.x as i32),
@@ -591,24 +830,30 @@ fn contact_may_change_blocks(
         volume.saturating_mul(i64::from(max[axis]) - i64::from(min[axis]) + 1)
     });
     if volume > MAX_CONTACT_SECTIONS {
-        return true;
+        return ContactEffects::Global;
     }
+    let mut effects = ContactEffects::None;
     for x in min[0]..=max[0] {
         for z in min[2]..=max[2] {
             for y in min[1]..=max[1] {
-                if *sections
+                let section = *sections
                     .entry((x, y, z))
-                    .or_insert_with(|| contact_section_may_change_blocks(world, x, y, z))
-                {
-                    return true;
+                    .or_insert_with(|| contact_section_effects(world, x, y, z));
+                effects = effects.max(section);
+                if effects == ContactEffects::Global {
+                    return effects;
                 }
             }
         }
     }
-    false
+    effects
 }
 
 fn contact_section_may_change_blocks(world: &World, x: i32, y: i32, z: i32) -> bool {
+    contact_section_effects(world, x, y, z) != ContactEffects::None
+}
+
+fn contact_section_effects(world: &World, x: i32, y: i32, z: i32) -> ContactEffects {
     world
         .level
         .read_chunk_sync(&Vector2::new(x, z), |chunk| {
@@ -618,17 +863,30 @@ fn contact_section_may_change_blocks(world: &World, x: i32, y: i32, z: i32) -> b
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let index = y - get_section_cord(chunk.section.min_y);
-            usize::try_from(index)
+            let Some(palette) = usize::try_from(index)
                 .ok()
                 .and_then(|index| blocks.get(index))
-                .is_none_or(|palette| {
-                    palette.contains_matching(|state| {
-                        let block = Block::from_state_id(state);
-                        block.id == Block::END_GATEWAY.id || changes_on_contact(block)
-                    })
-                })
+            else {
+                return ContactEffects::Local;
+            };
+            if palette.contains_matching(|state| {
+                matches!(
+                    Block::from_state_id(state).id,
+                    pumpkin_data::BlockId::END_GATEWAY
+                        | pumpkin_data::BlockId::NETHER_PORTAL
+                        | pumpkin_data::BlockId::END_PORTAL
+                )
+            }) {
+                ContactEffects::Global
+            } else if palette
+                .contains_matching(|state| changes_on_contact(Block::from_state_id(state)))
+            {
+                ContactEffects::Local
+            } else {
+                ContactEffects::None
+            }
         })
-        .unwrap_or(true)
+        .unwrap_or(ContactEffects::Local)
 }
 
 fn grown_body(audited: &AuditedReach, extra: f64) -> BoundingBox {
@@ -793,6 +1051,11 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+#[cfg(all(test, debug_assertions))]
+thread_local! {
+    static OBSERVED_REACH: std::cell::RefCell<Option<Vec<i32>>> = const { std::cell::RefCell::new(None) };
+}
+
 #[cfg(debug_assertions)]
 static REPORTED_ESCAPES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
@@ -824,6 +1087,12 @@ pub fn check_reached(entity_id: i32) {
                 let other = island_of.get(&entity_id)?;
                 (own != other).then_some(*ticking)
             })
+        });
+        #[cfg(test)]
+        OBSERVED_REACH.with_borrow_mut(|reached| {
+            if let Some(reached) = reached {
+                reached.push(entity_id);
+            }
         });
         if let Some(ticking) = escaped
             && REPORTED_ESCAPES.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < 20
@@ -1127,6 +1396,16 @@ mod tests {
             .islands
     }
 
+    fn partition_test_reaches(reaches: &[TickReach]) -> Vec<Vec<usize>> {
+        let nodes: Vec<_> = reaches
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(id, reach)| (id as i32, reach))
+            .collect();
+        islands(&nodes, &[], &[])
+    }
+
     fn cube(x: f64, size: f64) -> BoundingBox {
         BoundingBox::new(
             Vector3::new(x, 64.0, 0.0),
@@ -1317,6 +1596,584 @@ mod tests {
             node(13, 200.0, 0.5),
         ];
         assert_eq!(islands(&nodes, &[], &[]), [vec![0, 2], vec![1], vec![3]]);
+    }
+
+    #[cfg(debug_assertions)]
+    #[tokio::test]
+    async fn boat_pickup_reach_includes_idle_mobs() -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{Entity, passive::pig::PigEntity, vehicle::boat::BoatEntity};
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let boat = BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::OAK_BOAT,
+        ));
+        let pig = PigEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(1.2, 64.0, 0.0),
+            &EntityType::PIG,
+        ));
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            knockback_reach: 0.0,
+        };
+        let reaches = resolve(vec![EntityReach::of(&boat, &config)], &config)
+            .ok_or("unexpected serial fallback")?;
+        let nodes = vec![(boat.get_entity().entity_id, reaches[0].clone())];
+        let idle = [(
+            pig.get_entity().entity_id,
+            pig.get_entity().bounding_box.load(),
+        )];
+        let result = partition(&nodes, &idle, &[]).ok_or("unexpected serial fallback")?;
+        assert_eq!(result.island_of.get(&pig.get_entity().entity_id), Some(&0));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn moving_boat_links_listeners_beyond_its_initial_event_area()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{Entity, passive::allay::AllayEntity, vehicle::boat::BoatEntity};
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let boat = BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(14.0, 64.0, 0.0),
+            &EntityType::OAK_BOAT,
+        ));
+        let allay = AllayEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(32.5, 64.0, 0.0),
+            &EntityType::ALLAY,
+        ));
+        world.add_entity_silent(allay.clone());
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            knockback_reach: 0.0,
+        };
+        let listener_id = allay.get_entity().entity_id;
+        let initial_area = crate::world::game_event::notified_area(
+            boat.get_entity().pos.load(),
+            GameEvent::EntityMount.notification_radius(),
+        );
+        assert!(allay.get_entity().pos.load().x > initial_area.max.x);
+        boat.get_entity()
+            .velocity
+            .store(Vector3::new(5.0, 0.0, 0.0));
+        let reaches = resolve(vec![EntityReach::of(&boat, &config)], &config)
+            .ok_or("unexpected serial fallback")?;
+        assert!(reaches[0].links.contains(&listener_id));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cart_links_game_event_listeners_outside_its_contact_area()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{
+            Entity, passive::allay::AllayEntity, vehicle::minecart::MinecartEntity,
+        };
+
+        let directory = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&directory);
+        let cart = MinecartEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(14.0, 64.0, 0.0),
+            &EntityType::MINECART,
+        ));
+        let listener = AllayEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(29.5, 64.0, 0.0),
+            &EntityType::ALLAY,
+        ));
+        world.add_entity_silent(listener.clone());
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            knockback_reach: 0.0,
+        };
+        let reaches =
+            resolve(vec![EntityReach::of(&cart, &config)], &config).ok_or("unexpected fallback")?;
+        let cart_reach = &reaches[0];
+        let listener_id = listener.get_entity().entity_id;
+        assert!(cart_reach.entities.max.x < listener.get_entity().pos.load().x);
+        assert!(cart_reach.links.contains(&listener_id));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn vehicle_links_a_listener_that_can_move_into_event_range()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{passive::allay::AllayEntity, vehicle::minecart::MinecartEntity};
+
+        let directory = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&directory);
+        let cart = MinecartEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(14.0, 64.0, 0.0),
+            &EntityType::MINECART,
+        ));
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            knockback_reach: 0.0,
+        };
+        let mut reaches =
+            resolve(vec![EntityReach::of(&cart, &config)], &config).ok_or("unexpected fallback")?;
+        let area = vehicle_event_area(&reaches[0].body);
+        let listener = AllayEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(area.max.x + 1.0, 64.0, 0.0),
+            &EntityType::ALLAY,
+        ));
+        world.add_entity_silent(listener.clone());
+        let listener_id = listener.get_entity().entity_id;
+        let bounds = listener.get_entity().bounding_box.load();
+        assert!(!overlaps(&area, &bounds));
+        assert!(!reaches[0].links.contains(&listener_id));
+        reaches.push(TickReach::conservative(&bounds, 2.0, Vec::new()));
+        include_moving_vehicle_event_listeners(
+            &mut reaches,
+            [&cart as &dyn EntityBase, listener.as_ref()].into_iter(),
+        )
+        .ok_or("unexpected link budget fallback")?;
+        assert!(reaches[0].links.contains(&listener_id));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[cfg(debug_assertions)]
+    fn tick_and_check_splash_dispatch(
+        cart: &crate::entity::vehicle::minecart::MinecartEntity,
+        server: &crate::server::Server,
+        islands: &Islands,
+        listener_id: i32,
+        expect_escape: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::collections::BTreeSet;
+        use std::sync::atomic::Ordering;
+
+        let base = cart.get_entity();
+        OBSERVED_REACH.replace(Some(Vec::new()));
+        enter(islands, base.entity_id);
+        cart.tick(cart, server);
+        leave();
+        let reached = OBSERVED_REACH
+            .take()
+            .ok_or("missing cart reach observations")?;
+        assert!(base.touching_water.load(Ordering::Relaxed));
+        assert!(
+            reached.contains(&listener_id),
+            "no splash reached the loaded listener: {reached:?}"
+        );
+        let own_island = islands
+            .island_of
+            .get(&base.entity_id)
+            .ok_or("cart has no tick island")?;
+        let outside: BTreeSet<_> = reached
+            .into_iter()
+            .filter(|entity_id| islands.island_of.get(entity_id) != Some(own_island))
+            .collect();
+        let expected = expect_escape.then_some(listener_id).into_iter().collect();
+        assert_eq!(outside, expected);
+        Ok(())
+    }
+
+    #[cfg(debug_assertions)]
+    #[tokio::test]
+    async fn cart_splash_dispatch_reaches_a_loaded_idle_listener()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{passive::allay::AllayEntity, vehicle::minecart::MinecartEntity};
+        use pumpkin_world::chunk::ChunkData;
+        use std::sync::atomic::Ordering;
+
+        let directory = tempfile::tempdir()?;
+        let (server, world) = crate::world::vehicle_tests::vehicle_world(&directory).await?;
+        for (chunk_x, local_x) in [(0, 14), (2, 12)] {
+            let chunk = ChunkData::empty_sync(chunk_x, 0);
+            chunk.set_block_absolute_y(local_x, 64, 8, Block::WATER.default_state.id);
+            world
+                .level
+                .loaded_chunks
+                .insert(Vector2::new(chunk_x, 0), chunk);
+        }
+        world
+            .level
+            .loaded_chunks
+            .insert(Vector2::new(1, 0), ChunkData::empty_sync(1, 0));
+
+        let listener = AllayEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(29.5, 64.0, 8.5),
+            &EntityType::ALLAY,
+        ));
+        world.add_entity_silent(listener.clone());
+        let listener_base = listener.get_entity();
+        let listener_id = listener_base.entity_id;
+        let idle = [(listener_id, listener_base.bounding_box.load())];
+        let mut carts = [14.5, 44.5].map(|x| {
+            let start = Vector3::new(x, 65.25, 8.5);
+            let cart = Arc::new(MinecartEntity::new(Entity::new(
+                world.clone(),
+                start,
+                &EntityType::MINECART,
+            )));
+            world.add_entity_silent(cart.clone());
+            cart.get_entity().set_has_no_gravity(true);
+            (cart, start)
+        });
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            knockback_reach: 0.0,
+        };
+        for _ in 0..2 {
+            for use_event_link in [true, false] {
+                for (cart, start) in &carts {
+                    let base = cart.get_entity();
+                    base.set_pos(*start);
+                    base.velocity.store(Vector3::new(0.0, -0.55, 0.0));
+                    base.first_tick.store(false, Ordering::Relaxed);
+                    base.touching_water.store(false, Ordering::Relaxed);
+                }
+                let reports: Vec<_> = carts
+                    .iter()
+                    .map(|(cart, _)| EntityReach::of(cart.as_ref(), &config))
+                    .collect();
+                let block_checks: Vec<_> = reports
+                    .iter()
+                    .zip(&carts)
+                    .map(|(report, (cart, _))| report.block_write_check(cart.as_ref()))
+                    .collect();
+                let mut reaches = resolve(reports, &config).ok_or("unexpected serial reach")?;
+                prune_block_writes(&world, &mut reaches, &block_checks)
+                    .ok_or("unexpected block write fallback")?;
+                for reach in &reaches {
+                    assert!(!overlaps(&reach.entities, &idle[0].1));
+                    assert!(reach.links.contains(&listener_id));
+                }
+                if !use_event_link {
+                    reaches[0].links.retain(|id| *id != listener_id);
+                }
+                let nodes: Vec<_> = carts
+                    .iter()
+                    .map(|(cart, _)| cart.get_entity().entity_id)
+                    .zip(reaches)
+                    .collect();
+                let islands = partition(&nodes, &idle, &[]).ok_or("unexpected serial partition")?;
+                assert_eq!(islands.islands.len(), if use_event_link { 1 } else { 2 });
+                for (index, (cart, _)) in carts.iter().enumerate() {
+                    tick_and_check_splash_dispatch(
+                        cart,
+                        &server,
+                        &islands,
+                        listener_id,
+                        !use_event_link && index == 0,
+                    )?;
+                }
+            }
+            carts.reverse();
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn vehicle_pickup_serializes_leash_side_effects() -> Result<(), Box<dyn std::error::Error>>
+    {
+        use std::sync::Arc;
+
+        use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
+
+        use crate::entity::{
+            Entity,
+            decoration::leash_knot::LeashKnotEntity,
+            passive::pig::PigEntity,
+            vehicle::{boat::BoatEntity, minecart::MinecartEntity},
+        };
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let boat = Arc::new(BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::OAK_BOAT,
+        )));
+        let cart = MinecartEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.0, 64.0, 0.0),
+            &EntityType::MINECART,
+        ));
+        let pig = PigEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(1.2, 64.0, 0.0),
+            &EntityType::PIG,
+        ));
+        let holder: Arc<dyn EntityBase> = Arc::new(LeashKnotEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(50.0, 64.0, 0.0),
+            &EntityType::LEASH_KNOT,
+        )));
+        assert!(pig.audited_reach().is_some());
+        let config = EntityIslandsConfig::default();
+        assert!(resolve(vec![EntityReach::of(&cart, &config)], &config).is_some());
+        pig.get_entity().attach_leash(&holder);
+        world.add_entity_silent(boat.clone());
+        world.add_entity_silent(pig.clone());
+        assert!(resolve(vec![EntityReach::of(boat.as_ref(), &config)], &config).is_none());
+        assert!(resolve(vec![EntityReach::of(&cart, &config)], &config).is_none());
+
+        pig.get_entity().set_pos(Vector3::new(1.35, 64.0, 0.0));
+        pig.get_entity()
+            .velocity
+            .store(Vector3::new(-0.25, 0.0, 0.0));
+        let boat_reach = EntityReach::of(boat.as_ref(), &config);
+        let EntityReach::Boat { reach, .. } = &boat_reach else {
+            return Err("expected conservative boat reach".into());
+        };
+        assert!(!reach.global);
+        assert!(
+            resolve(
+                vec![EntityReach::of(pig.as_ref(), &config), boat_reach],
+                &config,
+            )
+            .is_none()
+        );
+
+        holder.get_entity().set_pos(Vector3::new(5.0, 64.0, 0.0));
+        world.add_entity_silent(holder.clone());
+        let mut holder_nbt = NbtCompound::new();
+        holder_nbt.put_uuid("UUID", holder.get_entity().entity_uuid);
+        for saved in [
+            NbtTag::Compound(holder_nbt),
+            NbtTag::IntArray(vec![5, 64, 0]),
+        ] {
+            let entity = pig.get_entity();
+            let mut nbt = NbtCompound::new();
+            nbt.put("leash", saved);
+            entity.read_leash_data(&nbt);
+            assert!(!entity.is_leashed());
+            assert!(pig.audited_reach().is_none());
+            for (x, in_pickup_range) in [(1.2, true), (1.35, false)] {
+                entity.set_pos(Vector3::new(x, 64.0, 0.0));
+                let boat_reach = EntityReach::of(boat.as_ref(), &config);
+                let EntityReach::Boat { reach, .. } = &boat_reach else {
+                    return Err("expected conservative boat reach".into());
+                };
+                assert_eq!(reach.global, in_pickup_range);
+                assert!(
+                    resolve(
+                        vec![EntityReach::of(pig.as_ref(), &config), boat_reach],
+                        &config,
+                    )
+                    .is_none()
+                );
+            }
+            boat.get_entity().add_passenger(boat.clone(), pig.clone());
+            entity.tick_leash(pig.as_ref());
+            assert!(entity.is_leashed());
+            assert!(!entity.has_vehicle());
+            assert!(!boat.get_entity().has_passenger(entity.entity_id));
+        }
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn boat_ejection_preserves_world_tick_order() -> super::super::vehicle_tests::TestResult {
+        for ejection_first in [true, false] {
+            let serial = tick_ejection_at_peer(ejection_first, false).await?;
+            let planned = tick_ejection_at_peer(ejection_first, true).await?;
+            assert_eq!(planned, serial);
+            if ejection_first {
+                assert!(planned.x < 0.0, "the peer pushed the player after ejection");
+            } else {
+                assert_eq!(
+                    planned,
+                    Vector3::default(),
+                    "the peer ticked before ejection"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    async fn tick_ejection_at_peer(
+        ejection_first: bool,
+        plan_ejection_tick: bool,
+    ) -> Result<Vector3<f64>, Box<dyn std::error::Error>> {
+        use std::sync::{PoisonError, atomic::Ordering::Relaxed};
+
+        use crate::world::vehicle_tests::java_rider;
+
+        let folder = tempfile::tempdir()?;
+        let server = low_margin_ejection_server(&folder).await?;
+        let world = server.worlds.load().first().cloned().ok_or("No world")?;
+        world.set_game_rule(
+            &pumpkin_data::game_rules::GameRule::SpawnMobs,
+            pumpkin_data::game_rules::GameRuleValue::Bool(false),
+        );
+        add_ejection_test_column(&world);
+
+        let start = Vector3::new(8.5, 64.45, 8.5);
+        let ejecting = Arc::new(BoatEntity::new(Entity::new(
+            world.clone(),
+            start,
+            &EntityType::OAK_BOAT,
+        )));
+        let peer = Arc::new(BoatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(6.25, 64.0, 8.5),
+            &EntityType::OAK_BOAT,
+        )));
+        let boats = if ejection_first {
+            [&ejecting, &peer]
+        } else {
+            [&peer, &ejecting]
+        };
+        for boat in boats {
+            world.add_entity_silent(boat.clone());
+        }
+        let (rider, _connection) = java_rider(&server, &world, "Notch")?;
+        let passenger = rider.get_entity();
+        passenger.set_pos(start);
+        passenger.set_rotation(90.0, 0.0);
+        assert!(ejecting.get_entity().add_passenger_with_capacity(
+            ejecting.clone(),
+            rider.clone(),
+            2
+        ));
+
+        let population = add_ejection_planner_population(&world);
+        assert!(!plugins_observe_entity_ticks(&server));
+
+        for _ in 0..58 {
+            ejecting.tick(ejecting.as_ref(), &server);
+            assert!(passenger.has_vehicle());
+        }
+        assert!(!ejecting.vehicle_requires_serial_tick());
+        world.tick(&server);
+        assert!(passenger.has_vehicle());
+        assert_eq!(peer.get_entity().velocity.load(), Vector3::default());
+        {
+            let mut schedule = world
+                .island_schedule
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            assert_eq!(schedule.entity_count, population);
+            assert_eq!(
+                schedule.ticks_until_probe, 0,
+                "the preceding world tick used islands"
+            );
+            if !plan_ejection_tick {
+                assert!(!schedule.record_plan(population));
+            }
+        }
+        assert!(ejecting.vehicle_requires_serial_tick());
+
+        world.tick(&server);
+
+        let serial_ticks_left = world
+            .island_schedule
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .ticks_until_probe;
+        let expected = SERIAL_PROBE_INTERVAL - if plan_ejection_tick { 1 } else { 2 };
+        assert_eq!(
+            serial_ticks_left, expected,
+            "the planner rejected the ejection tick"
+        );
+        assert_eq!(peer.get_entity().tick_count.load(Relaxed), 2);
+        assert!(!passenger.has_vehicle());
+        assert!(!ejecting.get_entity().has_passengers());
+        let exit = passenger.pos.load();
+        assert!(
+            (7.1..7.3).contains(&exit.x),
+            "the rider exited west to the stone floor"
+        );
+        assert!(
+            (exit.y - 64.0).abs() < 1.0e-9,
+            "the rider found the dry exit"
+        );
+        let peer_velocity = peer.get_entity().velocity.load();
+        world.level.shutdown().await;
+        Ok(peer_velocity)
+    }
+
+    fn add_ejection_test_column(world: &World) {
+        use pumpkin_data::block_properties::BubbleColumnLikeProperties;
+        use pumpkin_world::chunk::ChunkData;
+
+        let chunk = ChunkData::empty_sync(0, 0);
+        for x in 5..=9 {
+            for z in 7..=9 {
+                chunk.set_block_absolute_y(x, 63, z, Block::STONE.default_state.id);
+            }
+        }
+        let column = BubbleColumnLikeProperties { r#drag: true }.to_state_id(&Block::BUBBLE_COLUMN);
+        chunk.set_block_absolute_y(8, 64, 8, column);
+        world.level.loaded_chunks.insert(Vector2::new(0, 0), chunk);
+    }
+
+    fn add_ejection_planner_population(world: &Arc<World>) -> usize {
+        use crate::entity::Entity;
+        use pumpkin_world::chunk::ChunkData;
+        use std::sync::PoisonError;
+
+        // Two distant groups meet the minimum tick population without creating a dominant island.
+        let population = MIN_PARALLEL_ENTITIES;
+        let distant_chunks = [5, 10];
+        world
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .extend([0, 5, 10].map(|x| Vector2::new(x, 0)));
+        for chunk_x in distant_chunks {
+            world
+                .level
+                .loaded_chunks
+                .insert(Vector2::new(chunk_x, 0), ChunkData::empty_sync(chunk_x, 0));
+            for _ in 0..(population - 2) / 2 {
+                let pos = Vector3::new(f64::from(chunk_x * 16) + 8.5, 64.0, 8.5);
+                world.add_entity_silent(Arc::new(Entity::new(
+                    world.clone(),
+                    pos,
+                    &EntityType::MARKER,
+                )));
+            }
+        }
+        assert_eq!(world.entities.load().len(), population);
+        population
+    }
+
+    async fn low_margin_ejection_server(
+        folder: &tempfile::TempDir,
+    ) -> Result<Arc<Server>, Box<dyn std::error::Error>> {
+        use crate::data::VanillaData;
+        use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
+
+        let basic = BasicConfiguration {
+            default_level_name: folder.path().join("world").to_string_lossy().into_owned(),
+            allow_nether: false,
+            allow_end: false,
+            allow_chat_reports: false,
+            ..Default::default()
+        };
+        let mut advanced = AdvancedConfiguration::default();
+        advanced.networking.bedrock.online_mode = false;
+        advanced.world.entity_islands = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            knockback_reach: 0.0,
+        };
+        Ok(Server::new(
+            basic,
+            advanced,
+            TelemetryConfig::default(),
+            VanillaData::default(),
+            vec![],
+        )
+        .await?)
     }
 
     #[test]
@@ -1722,9 +2579,67 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn chest_cart_writes_only_bridge_elevated_readers_when_a_rail_can_activate()
+    async fn vehicle_contact_planner_covers_history_and_remote_tripwire_hooks()
     -> Result<(), Box<dyn std::error::Error>> {
-        use crate::entity::{Entity, vehicle::minecart::MinecartEntity};
+        use crate::{entity::Entity, world::vehicle_tests::TestContactVehicle};
+        use pumpkin_world::chunk::ChunkData;
+
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        let center = ChunkData::empty_sync(0, 0);
+        for (x, z) in (-1..=1).flat_map(|x| (-1..=1).map(move |z| (x, z))) {
+            let chunk = if (x, z) == (0, 0) {
+                center.clone()
+            } else {
+                ChunkData::empty_sync(x, z)
+            };
+            world.level.loaded_chunks.insert(Vector2::new(x, z), chunk);
+        }
+        let position = Vector3::new(8.5, 64.0, 8.5);
+        let vehicle =
+            TestContactVehicle(Entity::new(world.clone(), position, &EntityType::MINECART));
+        let config = EntityIslandsConfig {
+            unaudited_reach: 0.0,
+            ..Default::default()
+        };
+        let plan = |peer: TickReach| {
+            let report = EntityReach::of(&vehicle, &config);
+            let checks = [
+                report.block_write_check(&vehicle),
+                BlockWriteCheck::Unconditional,
+            ];
+            let mut reaches = resolve(vec![report], &config)?;
+            reaches.push(peer);
+            prune_block_writes(&world, &mut reaches, &checks)?;
+            Some(partition_test_reaches(&reaches))
+        };
+        let remote = BoundingBox::from_block(&BlockPos::new(48, 64, 8));
+        let mut hook_reader = TickReach::conservative(&remote, 0.0, vec![]);
+        hook_reader.block_reads = remote;
+        hook_reader.block_writes = None;
+        assert_eq!(plan(hook_reader.clone()), Some(vec![vec![0], vec![1]]));
+        center.set_block_absolute_y(8, 64, 8, Block::TRIPWIRE.default_state.id);
+        assert_eq!(plan(hook_reader), Some(vec![vec![0, 1]]));
+
+        center.set_block_absolute_y(8, 64, 8, Block::AIR.default_state.id);
+        let motion = Vector3::new(23.0, 0.0, 0.0);
+        let earlier = BoundingBox::from_block(&BlockPos::floored_v(position - motion));
+        let mut earlier_writer = TickReach::conservative(&earlier, 0.0, vec![]);
+        earlier_writer.block_reads = earlier;
+        earlier_writer.block_writes = Some(earlier);
+        assert_eq!(plan(earlier_writer.clone()), Some(vec![vec![0], vec![1]]));
+        vehicle
+            .get_entity()
+            .record_vehicle_movement(position - motion, motion, motion);
+        assert_eq!(plan(earlier_writer), Some(vec![vec![0, 1]]));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn vehicle_contact_writes_only_bridge_elevated_readers_when_blocks_can_react()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::{entity::Entity, world::vehicle_tests::TestContactVehicle};
 
         let folder = tempfile::tempdir()?;
         let world = crate::entity::ai::test_support::world(&folder);
@@ -1733,8 +2648,16 @@ mod tests {
             .level
             .loaded_chunks
             .insert(Vector2::new(0, 0), chunk.clone());
-        let pos = BlockPos::new(8, 40, 8);
-        let cart = MinecartEntity::new(Entity::new(
+        for (x, z) in (-1..=1)
+            .flat_map(|x| (-1..=1).map(move |z| (x, z)))
+            .filter(|&pos| pos != (0, 0))
+        {
+            world.level.loaded_chunks.insert(
+                Vector2::new(x, z),
+                pumpkin_world::chunk::ChunkData::empty_sync(x, z),
+            );
+        }
+        let vehicle = TestContactVehicle(Entity::new(
             world.clone(),
             Vector3::new(8.5, 40.0, 8.5),
             &EntityType::CHEST_MINECART,
@@ -1742,16 +2665,16 @@ mod tests {
         let config = EntityIslandsConfig::default();
         let custom = Entity::new(
             world.clone(),
-            cart.get_entity().pos.load(),
+            vehicle.get_entity().pos.load(),
             &EntityType::CHEST_MINECART,
         );
         assert!(matches!(
             EntityReach::of(&custom, &config).block_write_check(&custom),
             BlockWriteCheck::Unconditional
         ));
-        let report = EntityReach::of(&cart, &config);
+        let report = EntityReach::of(&vehicle, &config);
         assert!(matches!(report, EntityReach::Conservative(_)));
-        let check = report.block_write_check(&cart);
+        let check = report.block_write_check(&vehicle);
         let mut reader = node(1, 8.0, 0.0).1;
         reader.body =
             BoundingBox::new(Vector3::new(8.0, 200.0, 8.0), Vector3::new(9.0, 201.0, 9.0));
@@ -1762,16 +2685,7 @@ mod tests {
         reader.block_reads.max.y = f64::INFINITY;
         let mut original = resolve(vec![report], &config).ok_or("unexpected serial fallback")?;
         original.push(reader);
-        let partitioned = |reaches: &[TickReach]| {
-            let nodes: Vec<_> = reaches
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(|(id, reach)| (id as i32, reach))
-                .collect();
-            islands(&nodes, &[], &[])
-        };
-        assert_eq!(partitioned(&original), [vec![0, 1]]);
+        assert_eq!(partition_test_reaches(&original), [vec![0, 1]]);
         let mut reaches = original.clone();
         prune_block_writes(
             &world,
@@ -1779,7 +2693,7 @@ mod tests {
             &[check, BlockWriteCheck::Unconditional],
         )
         .ok_or("unexpected pruning budget exhaustion")?;
-        assert_eq!(partitioned(&reaches), [vec![0], vec![1]]);
+        assert_eq!(partition_test_reaches(&reaches), [vec![0], vec![1]]);
         assert_box(&reaches[0].body, &original[0].body);
         assert_box(&reaches[0].entities, &original[0].entities);
         assert_box(&reaches[0].block_reads, &original[0].block_reads);
@@ -1792,12 +2706,12 @@ mod tests {
             &[check, BlockWriteCheck::Unconditional],
         )
         .ok_or("unexpected pruning budget exhaustion")?;
-        assert_eq!(partitioned(&reaches), [vec![0, 1]]);
+        assert_eq!(partition_test_reaches(&reaches), [vec![0, 1]]);
 
         chunk.set_block_absolute_y(8, 39, 8, Block::AIR.default_state.id);
         let mut reaches = original.clone();
         let mut writer = node(2, 100.0, 0.0).1;
-        writer.block_writes = Some(BoundingBox::from_block(&pos.down()));
+        writer.block_writes = Some(BoundingBox::from_block(&BlockPos::new(8, 39, 8)));
         reaches.push(writer);
         prune_block_writes(
             &world,

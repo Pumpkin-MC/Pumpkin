@@ -23,7 +23,9 @@ use crate::crafting::crafting_inventory::CraftingInventory;
 use crate::crafting::crafting_screen_handler::CraftingScreenHandler;
 use crate::crafting::recipes::{RecipeFinderScreenHandler, RecipeInputInventory};
 use crate::inventory::Inventory;
-use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
+use crate::screen_handler::{
+    InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, player_screen_equipment_slot,
+};
 use crate::slot::{ArmorSlot, NormalSlot, Slot};
 use pumpkin_data::data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl};
 use pumpkin_data::item_stack::ItemStack;
@@ -157,6 +159,7 @@ impl ScreenHandler for PlayerScreenHandler {
                 .get_data_component::<EquippableImpl>()
                 .map_or(&EquipmentSlot::MAIN_HAND, |equippable| equippable.slot);
 
+            let mut equipped_destination = None;
             // Quick move logic based on source slot
             let success = if slot_index == 0 {
                 // From crafting result slot (0) -> Player Inventory (9-45, from end)
@@ -166,12 +169,7 @@ impl ScreenHandler for PlayerScreenHandler {
                 self.insert_item(&mut slot_stack, 9, 45, false)
             } else if (5..9).contains(&slot_index) {
                 // From armour slots (5-8) -> Player Inventory (9-45, from start)
-                let result = self.insert_item(&mut slot_stack, 9, 45, false);
-
-                if result {
-                    player.enqueue_equipment_change(equipment_slot, ItemStack::EMPTY);
-                }
-                result
+                self.insert_item(&mut slot_stack, 9, 45, false)
             } else if equipment_slot.slot_type() == EquipmentType::HumanoidArmor
                 && self
                     .get_slot((8 - equipment_slot.get_entity_slot_id()) as usize)
@@ -183,39 +181,19 @@ impl ScreenHandler for PlayerScreenHandler {
             {
                 // Into empty armour slots (5-8)
                 let index = 8 - equipment_slot.get_entity_slot_id();
-                let result = self.insert_item(&mut slot_stack, index, index + 1, false);
-
-                if result {
-                    let equipped = self.get_slot(index as usize).get_cloned_stack();
-                    player.enqueue_equipment_change(equipment_slot, &equipped);
-                }
-                result
+                equipped_destination = Some(index as usize);
+                self.insert_item(&mut slot_stack, index, index + 1, false)
             } else if matches!(equipment_slot, EquipmentSlot::OffHand(_))
                 && slot_index != 45
                 && self.get_slot(45).get_cloned_stack().is_empty()
             {
                 // Into empty offhand slot (45)
                 let index = 45;
-                let result = self.insert_item(&mut slot_stack, index, index + 1, false);
-
-                if result {
-                    player.enqueue_equipment_change(&EquipmentSlot::OFF_HAND, &stack_prev);
-                }
-                result
+                equipped_destination = Some(index as usize);
+                self.insert_item(&mut slot_stack, index, index + 1, false)
             } else if slot_index == 45 {
                 // From offhand (45) -> Player Inventory (9-44)
-                let result = self.insert_item(&mut slot_stack, 9, 45, false);
-
-                if result {
-                    // The remainder stays in the offhand, an empty one clears it
-                    let remaining = if slot_stack.is_empty() {
-                        ItemStack::EMPTY
-                    } else {
-                        &slot_stack
-                    };
-                    player.enqueue_equipment_change(&EquipmentSlot::OFF_HAND, remaining);
-                }
-                result
+                self.insert_item(&mut slot_stack, 9, 45, false)
             } else if (9..36).contains(&slot_index) {
                 // From main inventory (9-35) -> Hotbar (36-44)
                 self.insert_item(&mut slot_stack, 36, 45, false)
@@ -243,6 +221,23 @@ impl ScreenHandler for PlayerScreenHandler {
                 return ItemStack::EMPTY.clone();
             }
 
+            if !self.get_behaviour().defers_equipment
+                && let Some(equipment_slot) = player_screen_equipment_slot(slot_index as usize)
+            {
+                player.enqueue_equipment_transition(
+                    &equipment_slot,
+                    &stack_prev,
+                    &slot.get_cloned_stack(),
+                );
+            }
+            if !self.get_behaviour().defers_equipment
+                && let Some(index) = equipped_destination
+                && let Some(equipment_slot) = player_screen_equipment_slot(index)
+            {
+                let equipped = self.get_slot(index).get_cloned_stack();
+                player.enqueue_equipment_transition(&equipment_slot, ItemStack::EMPTY, &equipped);
+            }
+
             let mut taken_stack = stack_prev.clone();
             taken_stack.set_count(stack_prev.item_count - stack.item_count);
             slot.on_take_item(player, &taken_stack);
@@ -253,7 +248,7 @@ impl ScreenHandler for PlayerScreenHandler {
                 slot.on_quick_move_crafted(stack.clone(), stack_prev.clone());
                 // For crafting result slot, drop any remaining items
                 if !stack.is_empty() {
-                    player.drop_item(stack, false);
+                    self.get_behaviour_mut().drop_item(player, stack, false);
                 }
             }
 

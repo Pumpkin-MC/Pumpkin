@@ -341,10 +341,14 @@ impl EntityBase for ItemFrameEntity {
             .set_synced_data(pumpkin_data::tracked_data::item_frame::ROTATION, rotation);
     }
 
-    fn send_java_spawn_packet(&self, client: &crate::net::java::JavaClient) {
+    fn send_java_spawn_packets(
+        &self,
+        client: &crate::net::java::JavaClient,
+        send: &mut dyn FnMut(bytes::Bytes),
+    ) {
         let spawn_packet = self.entity.create_spawn_packet();
         if let Ok(data) = client.serialize_packet(&spawn_packet) {
-            client.try_enqueue_packet(data);
+            send(data);
         }
 
         let ver = pumpkin_data::packet::CURRENT_MC_VERSION;
@@ -367,7 +371,7 @@ impl EntityBase for ItemFrameEntity {
             data.push(255);
             let meta_packet = CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
             if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                client.try_enqueue_packet(meta_data);
+                send(meta_data);
             }
         }
     }

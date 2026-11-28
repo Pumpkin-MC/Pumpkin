@@ -5,6 +5,7 @@ use std::sync::atomic::Ordering;
 
 use crate::entity::combat;
 use crate::entity::player::Player;
+use crate::entity::player::advancement::trigger::AdvancementTrigger;
 use crate::entity::{Entity, EntityBase};
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -91,12 +92,15 @@ impl ItemBehaviour for SpearItem {
 
         let damage = Self::attack_damage(player, stack) as f32;
         let mut hit_count = 0;
-        for target in Self::targets_in_range(player, &server, stack) {
+        for target in Self::targets_in_range(player, &server, stack, false) {
             if Self::stab_attack(
                 player,
                 &server,
-                Hand::Right,
-                stack,
+                StabItem {
+                    hand: Hand::Right,
+                    stack,
+                    cart_slot: None,
+                },
                 &target,
                 damage,
                 StabEffects {
@@ -110,11 +114,7 @@ impl ItemBehaviour for SpearItem {
         }
         let hit_something = hit_count > 0;
         if hit_something {
-            player.trigger_advancement(
-                crate::entity::player::advancement::trigger::AdvancementTrigger::SpearMobs {
-                    count: hit_count,
-                },
-            );
+            player.trigger_advancement(AdvancementTrigger::SpearMobs { count: hit_count });
         }
         player.last_attacked_ticks.store(0, Ordering::Relaxed);
 
@@ -129,6 +129,111 @@ impl ItemBehaviour for SpearItem {
     }
 
     fn on_use_tick(&self, stack: &ItemStack, user: &dyn EntityBase, remaining_use_ticks: i32) {
+        Self::tick_kinetic_use(user, Self::USE_DURATION, remaining_use_ticks, |held| {
+            held.item.id == stack.item.id
+        });
+    }
+
+    fn get_use_duration(&self) -> i32 {
+        Self::USE_DURATION
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StabEffects {
+    damage: bool,
+    knockback: bool,
+    dismount: bool,
+}
+
+impl StabEffects {
+    fn for_kinetic(
+        weapon: &KineticWeaponImpl,
+        ticks_used: i32,
+        attacker_speed: f64,
+        relative_speed: f64,
+        action_factor: f64,
+    ) -> Self {
+        let test = |condition: &pumpkin_data::data_component_impl::KineticConditionImpl| {
+            condition.test(ticks_used, attacker_speed, relative_speed, action_factor)
+        };
+        Self {
+            damage: weapon.damage_conditions.as_ref().is_some_and(test),
+            knockback: weapon.knockback_conditions.as_ref().is_some_and(test),
+            dismount: weapon.dismount_conditions.as_ref().is_some_and(test),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StabItem<'a> {
+    hand: Hand,
+    stack: &'a ItemStack,
+    cart_slot: Option<usize>,
+}
+
+#[derive(Clone, Copy)]
+struct CartKineticUse<'a> {
+    player: &'a Player,
+    slot: usize,
+    revision: u64,
+}
+
+impl CartKineticUse<'_> {
+    fn current_stack(
+        self,
+        world: &Arc<World>,
+        hand: Hand,
+        original: &ItemStack,
+    ) -> Option<ItemStack> {
+        if !Arc::ptr_eq(world, &self.player.world()) {
+            return None;
+        }
+        self.player.living_entity.cart_use_live_source(
+            self.player,
+            hand,
+            self.slot,
+            original,
+            self.revision,
+        )
+    }
+}
+
+impl SpearItem {
+    const USE_DURATION: i32 = 72_000;
+
+    pub(crate) fn tick_cart_kinetic_use(
+        stack: &ItemStack,
+        player: &Player,
+        hand: Hand,
+        slot: usize,
+        remaining_use_ticks: i32,
+        revision: u64,
+    ) {
+        Self::kinetic_attack(
+            stack,
+            player,
+            hand,
+            stack.get_max_use_time(),
+            remaining_use_ticks,
+            Some(CartKineticUse {
+                player,
+                slot,
+                revision,
+            }),
+        );
+    }
+
+    fn tick_kinetic_use(
+        user: &dyn EntityBase,
+        use_duration: i32,
+        remaining_use_ticks: i32,
+        matches_active_stack: impl FnOnce(&ItemStack) -> bool,
+    ) {
         let Some(living) = user.get_living_entity() else {
             return;
         };
@@ -149,41 +254,26 @@ impl ItemBehaviour for SpearItem {
             },
             |player| player.inventory().get_stack_in_hand(hand),
         );
-        if held.item.id != stack.item.id {
+        if !matches_active_stack(&held) {
             living.clear_active_hand();
             return;
         }
-        Self::kinetic_attack(&held, user, hand, remaining_use_ticks);
+        Self::kinetic_attack(&held, user, hand, use_duration, remaining_use_ticks, None);
     }
-
-    fn get_use_duration(&self) -> i32 {
-        Self::USE_DURATION
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-#[derive(Clone, Copy)]
-struct StabEffects {
-    damage: bool,
-    knockback: bool,
-    dismount: bool,
-}
-
-impl SpearItem {
-    const USE_DURATION: i32 = 72_000;
 
     fn stab_attack(
         player: &Player,
         server: &Server,
-        hand: Hand,
-        stack: &ItemStack,
+        item: StabItem<'_>,
         target: &Arc<dyn EntityBase>,
         base_damage: f32,
         effects: StabEffects,
     ) -> bool {
+        let StabItem {
+            hand,
+            stack,
+            cart_slot,
+        } = item;
         let target_entity = target.get_entity();
         let mut base_damage = base_damage;
         let mut magic_boost = Self::enchantment_damage(stack, target_entity) as f32;
@@ -260,12 +350,17 @@ impl SpearItem {
         if target.get_living_entity().is_some()
             && let Some(weapon) = stack.get_data_component::<WeaponImpl>()
         {
-            let slot = if hand == Hand::Right {
-                EquipmentSlot::MAIN_HAND
+            let slot = Self::slot_of(hand);
+            if let Some(index) = cart_slot {
+                player.damage_item_in_slot_matching(
+                    &slot,
+                    index,
+                    stack,
+                    weapon.item_damage_per_attack as i32,
+                );
             } else {
-                EquipmentSlot::OFF_HAND
-            };
-            player.damage_item_in_slot(&slot, weapon.item_damage_per_attack as i32);
+                player.damage_item_in_slot(&slot, weapon.item_damage_per_attack as i32);
+            }
         }
         player.add_exhaustion(0.1);
         true
@@ -283,7 +378,9 @@ impl SpearItem {
         stack: &ItemStack,
         user: &dyn EntityBase,
         hand: Hand,
+        use_duration: i32,
         remaining_use_ticks: i32,
+        cart: Option<CartKineticUse<'_>>,
     ) {
         let Some(weapon) = stack.get_data_component::<KineticWeaponImpl>() else {
             return;
@@ -291,7 +388,7 @@ impl SpearItem {
         let Some(living) = user.get_living_entity() else {
             return;
         };
-        let ticks_used = Self::USE_DURATION - remaining_use_ticks - weapon.delay_ticks;
+        let ticks_used = use_duration - remaining_use_ticks - weapon.delay_ticks;
         if ticks_used < 0 {
             return;
         }
@@ -310,8 +407,19 @@ impl SpearItem {
         let base_damage = living.get_attribute_base(&Attributes::ATTACK_DAMAGE) as f32;
         let now = user.get_entity().tick_count.load(Ordering::Relaxed);
         let mut affected = false;
+        let mut remembered_cart_targets = 0;
 
-        for target in Self::targets_in_range(user, &server, stack) {
+        for target in Self::targets_in_range(user, &server, stack, cart.is_some()) {
+            let live_stack;
+            let impact_stack = if let Some(cart) = cart {
+                let Some(current) = cart.current_stack(&world, hand, stack) else {
+                    break;
+                };
+                live_stack = current;
+                &live_stack
+            } else {
+                stack
+            };
             let target_entity = target.get_entity();
             if living.was_recently_stabbed(
                 target_entity.entity_id,
@@ -321,26 +429,28 @@ impl SpearItem {
                 continue;
             }
             living.remember_stabbed_entity(target_entity.entity_id, now);
+            if cart.is_some() {
+                // Only living targets enter this set. Capture the count before callbacks
+                // can finish this use and clear its remembered contacts.
+                remembered_cart_targets = i32::try_from(
+                    living
+                        .recent_kinetic_enemies
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .len(),
+                )
+                .unwrap_or(i32::MAX);
+            }
 
             let target_speed = look.dot(&Self::known_speed(target_entity));
             let relative_speed = (attacker_speed - target_speed).max(0.0);
-            let effects = StabEffects {
-                damage: weapon.damage_conditions.as_ref().is_some_and(|condition| {
-                    condition.test(ticks_used, attacker_speed, relative_speed, action_factor)
-                }),
-                knockback: weapon
-                    .knockback_conditions
-                    .as_ref()
-                    .is_some_and(|condition| {
-                        condition.test(ticks_used, attacker_speed, relative_speed, action_factor)
-                    }),
-                dismount: weapon
-                    .dismount_conditions
-                    .as_ref()
-                    .is_some_and(|condition| {
-                        condition.test(ticks_used, attacker_speed, relative_speed, action_factor)
-                    }),
-            };
+            let effects = StabEffects::for_kinetic(
+                weapon,
+                ticks_used,
+                attacker_speed,
+                relative_speed,
+                action_factor,
+            );
             if !effects.damage && !effects.knockback && !effects.dismount {
                 continue;
             }
@@ -349,7 +459,20 @@ impl SpearItem {
                 base_damage + (relative_speed * f64::from(weapon.damage_multiplier)).floor() as f32;
             affected |= user.get_player().map_or_else(
                 || Self::mob_stab_attack(user, stack, &target, damage, effects),
-                |player| Self::stab_attack(player, &server, hand, stack, &target, damage, effects),
+                |player| {
+                    Self::stab_attack(
+                        player,
+                        &server,
+                        StabItem {
+                            hand,
+                            stack: impact_stack,
+                            cart_slot: cart.map(|cart| cart.slot),
+                        },
+                        &target,
+                        damage,
+                        effects,
+                    )
+                },
             );
         }
 
@@ -359,6 +482,12 @@ impl SpearItem {
                 EntityStatus::KineticHit,
                 ActorEventID::KineticDamageDealt,
             );
+            if let Some(cart) = cart {
+                cart.player
+                    .trigger_advancement(AdvancementTrigger::SpearMobs {
+                        count: remembered_cart_targets,
+                    });
+            }
         }
     }
 
@@ -572,8 +701,23 @@ impl SpearItem {
         user: &dyn EntityBase,
         server: &Server,
         stack: &ItemStack,
+        cart_kinetic_use: bool,
     ) -> Vec<Arc<dyn EntityBase>> {
-        let Some(range) = stack.get_data_component::<AttackRangeImpl>() else {
+        let default_range;
+        let range = if let Some(range) = stack.get_data_component::<AttackRangeImpl>() {
+            range
+        } else if cart_kinetic_use && let Some(living) = user.get_living_entity() {
+            let reach = living.get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE) as f32;
+            default_range = AttackRangeImpl {
+                min_reach: 0.0,
+                max_reach: reach,
+                min_creative_reach: 0.0,
+                max_creative_reach: reach,
+                hitbox_margin: 0.0,
+                mob_factor: 1.0,
+            };
+            &default_range
+        } else {
             return Vec::new();
         };
         let entity = user.get_entity();

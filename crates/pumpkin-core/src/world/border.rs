@@ -21,6 +21,7 @@ pub struct Worldborder {
     pub warning_time: i32,
     pub damage_per_block: f32,
     pub buffer: f32,
+    lerp_ticks_remaining: i64,
 }
 
 impl Worldborder {
@@ -44,6 +45,7 @@ impl Worldborder {
             warning_time,
             damage_per_block: 0.0,
             buffer: 0.0,
+            lerp_ticks_remaining: 0,
         }
     }
 
@@ -51,9 +53,9 @@ impl Worldborder {
         if let Ok(data) = client.serialize_packet(&CInitializeWorldBorder::new(
             self.center_x,
             self.center_z,
-            self.old_diameter,
+            self.current_diameter(),
             self.new_diameter,
-            self.speed.into(),
+            (self.lerp_ticks_remaining * 50).into(),
             self.portal_teleport_boundary.into(),
             self.warning_blocks.into(),
             self.warning_time.into(),
@@ -70,25 +72,56 @@ impl Worldborder {
     }
 
     pub fn set_diameter(&mut self, world: &World, diameter: f64, speed: Option<i64>) {
-        self.old_diameter = self.new_diameter;
+        self.old_diameter = self.current_diameter();
         self.new_diameter = diameter;
-
-        match speed {
-            Some(speed) => {
-                world.broadcast_packet_all(&CSetBorderLerpSize::new(
-                    self.old_diameter,
-                    self.new_diameter,
-                    speed.into(),
-                ));
-            }
-            None => {
-                world.broadcast_packet_all(&CSetBorderSize::new(self.new_diameter));
-            }
+        self.lerp_ticks_remaining = speed.unwrap_or(0).max(0) / 50;
+        self.speed = self.lerp_ticks_remaining * 50;
+        if self.lerp_ticks_remaining > 0 {
+            world.broadcast_packet_all(&CSetBorderLerpSize::new(
+                self.old_diameter,
+                self.new_diameter,
+                self.speed.into(),
+            ));
+        } else {
+            world.broadcast_packet_all(&CSetBorderSize::new(self.new_diameter));
         }
     }
 
     pub fn add_diameter(&mut self, world: &World, offset: f64, speed: Option<i64>) {
-        self.set_diameter(world, self.new_diameter + offset, speed);
+        self.set_diameter(world, self.current_diameter() + offset, speed);
+    }
+
+    pub(super) const fn tick(&mut self) {
+        if self.lerp_ticks_remaining > 0 {
+            self.lerp_ticks_remaining -= 1;
+        }
+    }
+
+    pub(crate) const fn remaining_lerp_ticks(&self) -> i64 {
+        self.lerp_ticks_remaining
+    }
+
+    #[must_use]
+    pub fn current_diameter(&self) -> f64 {
+        self.diameter_at(self.lerp_ticks_remaining)
+    }
+
+    fn diameter_at(&self, remaining: i64) -> f64 {
+        let duration = self.speed / 50;
+        if remaining <= 0 || duration <= 0 {
+            return self.new_diameter;
+        }
+        let progress = (duration - remaining.min(duration)) as f64 / duration as f64;
+        self.old_diameter + progress * (self.new_diameter - self.old_diameter)
+    }
+
+    fn collision_diameter(&self) -> f64 {
+        // Java's border geometry uses a partial-tick value of zero for collisions.
+        if self.lerp_ticks_remaining == 0 {
+            self.new_diameter
+        } else {
+            self.diameter_at(self.lerp_ticks_remaining + 1)
+        }
     }
 
     pub fn set_warning_delay(&mut self, world: &World, delay: i32) {
@@ -117,6 +150,7 @@ impl Worldborder {
         self.old_diameter = 29_999_984.0;
         self.new_diameter = 29_999_984.0;
         self.speed = 0;
+        self.lerp_ticks_remaining = 0;
         self.portal_teleport_boundary = 29_999_984;
         self.warning_blocks = 5;
         self.warning_time = 15;
@@ -137,37 +171,26 @@ impl Worldborder {
 
     #[must_use]
     pub fn get_distance_to_border(&self, x: f64, z: f64) -> f64 {
-        let half = self.new_diameter / 2.0;
-        let from_west = x - (self.center_x - half);
-        let from_east = self.center_x + half - x;
-        let from_north = z - (self.center_z - half);
-        let from_south = self.center_z + half - z;
-        from_west.min(from_east).min(from_north).min(from_south)
+        let [min_x, max_x, min_z, max_z] = self.limits();
+        (x - min_x).min(max_x - x).min(z - min_z).min(max_z - z)
     }
 
     /// Pulls `x` and `z` just inside the border.
     #[must_use]
     pub fn clamp_to_bounds(&self, position: Vector3<f64>) -> Vector3<f64> {
-        let half = self.new_diameter / 2.0;
+        let [min_x, max_x, min_z, max_z] = self.limits();
         let inset = f64::from(1.0e-5f32);
         Vector3::new(
-            position
-                .x
-                .clamp(self.center_x - half, self.center_x + half - inset),
+            position.x.clamp(min_x, (max_x - inset).max(min_x)),
             position.y,
-            position
-                .z
-                .clamp(self.center_z - half, self.center_z + half - inset),
+            position.z.clamp(min_z, (max_z - inset).max(min_z)),
         )
     }
 
     #[must_use]
     pub fn is_within_bounds(&self, x: f64, z: f64, margin: f64) -> bool {
-        let half = self.new_diameter / 2.0;
-        x >= self.center_x - half - margin
-            && x < self.center_x + half + margin
-            && z >= self.center_z - half - margin
-            && z < self.center_z + half + margin
+        let [min_x, max_x, min_z, max_z] = self.limits();
+        x >= min_x - margin && x < max_x + margin && z >= min_z - margin && z < max_z + margin
     }
 
     #[must_use]
@@ -183,15 +206,39 @@ impl Worldborder {
 
     #[must_use]
     pub fn collision_shape_contains(&self, bounding_box: &BoundingBox) -> bool {
-        let half = self.new_diameter / 2.0;
-        let min_x = (self.center_x - half).floor();
-        let max_x = (self.center_x + half).ceil();
-        let min_z = (self.center_z - half).floor();
-        let max_z = (self.center_z + half).ceil();
+        let [min_x, max_x, min_z, max_z] = self.collision_limits();
         bounding_box.min.x >= min_x
             && bounding_box.max.x <= max_x
             && bounding_box.min.z >= min_z
             && bounding_box.max.z <= max_z
+    }
+
+    fn collision_limits(&self) -> [f64; 4] {
+        let [min_x, max_x, min_z, max_z] = self.limits();
+        [min_x.floor(), max_x.ceil(), min_z.floor(), max_z.ceil()]
+    }
+
+    fn limits(&self) -> [f64; 4] {
+        let half = self.collision_diameter() / 2.0;
+        let limit = f64::from(self.portal_teleport_boundary);
+        [
+            (self.center_x - half).clamp(-limit, limit),
+            (self.center_x + half).clamp(-limit, limit),
+            (self.center_z - half).clamp(-limit, limit),
+            (self.center_z + half).clamp(-limit, limit),
+        ]
+    }
+
+    pub(super) fn collision_walls(&self) -> [BoundingBox; 4] {
+        let [min_x, max_x, min_z, max_z] = self.collision_limits();
+        let low = f64::NEG_INFINITY;
+        let high = f64::INFINITY;
+        [
+            BoundingBox::new_array([low, low, low], [min_x, high, high]),
+            BoundingBox::new_array([max_x, low, low], [high, high, high]),
+            BoundingBox::new_array([low, low, low], [high, high, min_z]),
+            BoundingBox::new_array([low, low, max_z], [high, high, high]),
+        ]
     }
 
     #[must_use]
@@ -207,14 +254,14 @@ impl Worldborder {
 
     #[must_use]
     pub fn clamp_block(&self, x: i32, z: i32) -> (i32, i32) {
-        let half = self.new_diameter / 2.0;
+        let [min_x, max_x, min_z, max_z] = self.limits();
         // A border narrower than one block spans no block boundary, leaving `max`
         // below `min`. `Ord::clamp` panics on an inverted range, so collapse the
         // range onto the single block that holds the centre instead.
-        let min_x = (self.center_x - half).floor() as i32;
-        let max_x = ((self.center_x + half).floor() as i32 - 1).max(min_x);
-        let min_z = (self.center_z - half).floor() as i32;
-        let max_z = ((self.center_z + half).floor() as i32 - 1).max(min_z);
+        let min_x = min_x.floor() as i32;
+        let max_x = (max_x.floor() as i32 - 1).max(min_x);
+        let min_z = min_z.floor() as i32;
+        let max_z = (max_z.floor() as i32 - 1).max(min_z);
         (x.clamp(min_x, max_x), z.clamp(min_z, max_z))
     }
 
@@ -223,18 +270,18 @@ impl Worldborder {
     pub fn clamp_to_bound(&self, x: f64, z: f64) -> (f64, f64) {
         // Unlike `f64::clamp`, an inverted range does not panic.
         let clamp = |value: f64, min: f64, max: f64| if value < min { min } else { value.min(max) };
-        let half = self.new_diameter / 2.0;
+        let [min_x, max_x, min_z, max_z] = self.limits();
         let margin = f64::from(1.0E-5f32);
         (
-            clamp(x, self.center_x - half, self.center_x + half - margin),
-            clamp(z, self.center_z - half, self.center_z + half - margin),
+            clamp(x, min_x, (max_x - margin).max(min_x)),
+            clamp(z, min_z, (max_z - margin).max(min_z)),
         )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Worldborder;
+    use super::{BoundingBox, Worldborder};
 
     fn centered_border(diameter: f64) -> Worldborder {
         Worldborder::new(0.0, 0.0, diameter, 0, 5, 300)
@@ -280,5 +327,15 @@ mod tests {
         assert_eq!(border.clamp_block(100, 100), (4, 4));
         assert_eq!(border.clamp_block(-100, -100), (-5, -5));
         assert_eq!(border.clamp_block(2, -3), (2, -3));
+    }
+
+    #[test]
+    fn collision_walls_respect_the_absolute_border_limit() {
+        let border = Worldborder::new(25_000_000.0, 0.0, 20_000_000.0, 0, 5, 300);
+        let inside = BoundingBox::new_array([29_999_982.0, 64.0, 0.0], [29_999_984.0, 65.0, 1.0]);
+        let crossing = BoundingBox::new_array([29_999_983.0, 64.0, 0.0], [29_999_985.0, 65.0, 1.0]);
+        assert!(border.collision_shape_contains(&inside));
+        assert!(!border.collision_shape_contains(&crossing));
+        assert_eq!(border.collision_walls()[1].min.x, 29_999_984.0);
     }
 }

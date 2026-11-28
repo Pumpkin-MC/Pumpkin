@@ -1,7 +1,7 @@
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::entity::EntityArgumentType;
 use crate::command::context::command_context::CommandContext;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
@@ -25,6 +25,10 @@ static ERROR_LOOP: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_RIDE_MOUNT_FAILURE_LOOP,
     "Cannot ride recursively",
 );
+static ERROR_MOUNT_FAILED: CommandErrorType<2> = CommandErrorType::new(
+    translation::java::COMMANDS_RIDE_MOUNT_FAILURE_GENERIC,
+    "Could not start riding",
+);
 static ERROR_ALREADY_RIDING: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_RIDE_ALREADY_RIDING,
     "Already riding",
@@ -33,6 +37,8 @@ static ERROR_NOT_RIDING: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_RIDE_NOT_RIDING,
     "Not riding anything",
 );
+static ERROR_STILL_MOUNTED: LiteralCommandErrorType =
+    LiteralCommandErrorType::new("The rider is still mounted");
 
 fn is_riding_recursive(entity: &dyn EntityBase, possible_vehicle: &dyn EntityBase) -> bool {
     let mut current = possible_vehicle.get_entity().get_vehicle();
@@ -74,9 +80,14 @@ impl CommandExecutor for RideMountExecutor {
             return Err(ERROR_WRONG_DIMENSION.create_without_context());
         }
 
-        vehicle
-            .get_entity()
-            .add_passenger(vehicle.clone(), target.clone());
+        if !vehicle.get_entity().add_passenger_with_capacity(
+            vehicle.clone(),
+            target.clone(),
+            usize::MAX,
+        ) {
+            return Err(ERROR_MOUNT_FAILED
+                .create_without_context(target.get_display_name(), vehicle.get_display_name()));
+        }
 
         let msg = TextComponent::translate_cross(
             translation::java::COMMANDS_RIDE_MOUNT_SUCCESS,
@@ -100,7 +111,19 @@ impl CommandExecutor for RideDismountExecutor {
             || Err(ERROR_NOT_RIDING.create_without_context(target.get_display_name())),
             |vehicle| {
                 let target_id = target.get_entity().entity_id;
-                vehicle.get_entity().remove_passenger_sync(target_id);
+                let carrier = vehicle.get_entity();
+                if carrier.uses_vehicle_collisions() {
+                    carrier.remove_passenger(target_id);
+                    if target
+                        .get_entity()
+                        .get_vehicle()
+                        .is_some_and(|current| std::ptr::eq(current.get_entity(), carrier))
+                    {
+                        return Err(ERROR_STILL_MOUNTED.create_without_context());
+                    }
+                } else {
+                    carrier.remove_passenger_sync(target_id);
+                }
 
                 let msg = TextComponent::translate_cross(
                     translation::java::COMMANDS_RIDE_DISMOUNT_SUCCESS,

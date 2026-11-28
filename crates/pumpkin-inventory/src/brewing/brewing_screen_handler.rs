@@ -58,20 +58,6 @@ impl BrewingScreenHandler {
         inventory: Arc<dyn Inventory>,
         property_delegate: &Arc<dyn PropertyDelegate>,
     ) -> Self {
-        struct BrewingScreenListener;
-        impl crate::screen_handler::ScreenHandlerListener for BrewingScreenListener {
-            fn on_property_update(
-                &self,
-                screen_handler: &ScreenHandlerBehaviour,
-                property: u8,
-                value: i32,
-            ) {
-                if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
-                    sync_handler.update_property(screen_handler, i32::from(property), value);
-                }
-            }
-        }
-
         let mut handler = Self {
             inventory: inventory.clone(),
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(WindowType::BrewingStand)),
@@ -82,8 +68,6 @@ impl BrewingScreenHandler {
         handler.add_property(ScreenProperty::new(property_delegate.clone(), 1));
         handler.add_property(ScreenProperty::new(property_delegate.clone(), 2));
         handler.add_property(ScreenProperty::new(property_delegate.clone(), 3));
-
-        handler.add_listener(Arc::new(BrewingScreenListener));
 
         for i in 0..3 {
             handler.add_slot(Arc::new(BrewingPotionSlot::new(inventory.clone(), i)));

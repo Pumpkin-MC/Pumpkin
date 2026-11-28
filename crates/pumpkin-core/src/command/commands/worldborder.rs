@@ -60,15 +60,24 @@ const ERROR_SAME_DAMAGE_AMOUNT: CommandErrorType<0> = CommandErrorType::new(
 fn set_size(
     source: &CommandSource,
     distance: f64,
-    time_in_ticks: i64,
+    time_in_ticks: Option<i64>,
+    is_add: bool,
 ) -> Result<i32, CommandSyntaxError> {
     let world = source.world().clone();
-    let (current, diff) = {
+    let (current, distance, time_in_ticks, diff) = {
         let mut border = world
             .worldborder
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let current = border.new_diameter;
+        let current = border.current_diameter();
+        let distance = if is_add { current + distance } else { distance };
+        let time_in_ticks = time_in_ticks.map_or(0, |ticks| {
+            if is_add {
+                ticks + border.remaining_lerp_ticks()
+            } else {
+                ticks
+            }
+        });
 
         if (current - distance).abs() < f64::EPSILON {
             return Err(ERROR_SAME_SIZE.create_without_context());
@@ -83,7 +92,12 @@ fn set_size(
         let speed = (time_in_ticks > 0).then(|| time_in_ticks * 50); // ticks to milliseconds
 
         border.set_diameter(&world, distance, speed);
-        (current, (distance - current) as i32)
+        (
+            current,
+            distance,
+            time_in_ticks,
+            (distance - current) as i32,
+        )
     };
 
     let formatted_distance = format!("{distance:.1}");
@@ -169,7 +183,7 @@ fn get_size(source: &CommandSource) -> Result<i32, CommandSyntaxError> {
         .worldborder
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .new_diameter;
+        .current_diameter();
 
     source.send_feedback(
         TextComponent::translate_cross(
@@ -295,25 +309,12 @@ impl CommandExecutor for SetSizeExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let distance = DoubleArgumentType::get(context, "distance")?;
         let time = if self.has_time {
-            i64::from(TimeArgumentType::get(context, "time")?)
+            Some(i64::from(TimeArgumentType::get(context, "time")?))
         } else {
-            0
+            None
         };
 
-        let target_distance = if self.is_add {
-            let current = context
-                .source
-                .world()
-                .worldborder
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .new_diameter;
-            current + distance
-        } else {
-            distance
-        };
-
-        set_size(&context.source, target_distance, time)
+        set_size(&context.source, distance, time, self.is_add)
     }
 }
 

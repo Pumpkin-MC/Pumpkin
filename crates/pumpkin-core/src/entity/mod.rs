@@ -39,7 +39,9 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-use pumpkin_protocol::bedrock::client::{CAddActor, CSetActorMotion};
+use pumpkin_protocol::bedrock::client::{
+    CAddActor, CSetActorLink, CSetActorMotion, common::ActorLink,
+};
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::{
     PositionFlag,
@@ -47,12 +49,15 @@ use pumpkin_protocol::{
         CSetActorData, MetadataValue, PropertySyncData, SyncedActorDataList, entity_data_flag,
         entity_data_key,
     },
-    codec::var_int::VarInt,
     codec::var_ulong::VarULong,
+    codec::{var_int::VarInt, var_uint::VarUInt},
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CPlayerPosition, CSetEntityMetadata, CSetPassengers,
         CSpawnEntity, Metadata, MetadataSerializer,
     },
+    packet::{MultiVersionJavaPacket, Packet},
+    ser::NetworkReadExt,
+    serial::PacketRead,
 };
 use pumpkin_util::math::vector3::Axis;
 use pumpkin_util::math::{
@@ -137,7 +142,7 @@ const MAX_VERTICAL_POSITION: f64 = 2.0E7;
 /// Fluid current speeds of `updateFluidHeightAndDoFluidPushing`.
 const WATER_PUSH_SPEED: f64 = 0.014;
 const FAST_LAVA_PUSH_SPEED: f64 = 0.007;
-const LAVA_PUSH_SPEED: f64 = 0.002_333_333;
+const LAVA_PUSH_SPEED: f64 = FAST_LAVA_PUSH_SPEED / 3.0;
 
 /// Speed range of `moveTowardsClosestSpace`.
 const PUSH_OUT_MIN_SPEED: f64 = 0.1;
@@ -428,6 +433,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn get_gravity(&self) -> f64 {
         0.0
+    }
+
+    /// Air drag used by the shared landing solver for vehicles that use vanilla restitution.
+    fn vehicle_bounce_air_drag(&self) -> Option<f64> {
+        None
     }
 
     /// Extra metadata to accompany this entity when spawned for Bedrock clients (e.g. falling block variant, TNT fuse).
@@ -887,7 +897,18 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         )
     }
 
+    /// Direct spawn. Override `send_bedrock_spawn_packets` to customize tracked pairing.
     fn send_bedrock_spawn_packet(&self, client: &BedrockClient) {
+        self.send_bedrock_spawn_packets(client, false, &mut |data| client.try_enqueue_packet(data));
+    }
+
+    /// Emits Bedrock spawn packets. Tracked pairing sends the current passenger links separately.
+    fn send_bedrock_spawn_packets(
+        &self,
+        client: &BedrockClient,
+        tracked: bool,
+        send: &mut dyn FnMut(bytes::Bytes),
+    ) {
         let entity = self.get_entity();
         let runtime_id = entity.entity_id as u64;
         let identifier = self
@@ -920,25 +941,35 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 int_entries_list: std::collections::HashMap::new(),
                 float_entries_list: std::collections::HashMap::new(),
             },
-            actor_links: entity.bedrock_actor_links(),
+            actor_links: if tracked {
+                Vec::new()
+            } else {
+                entity.bedrock_actor_links()
+            },
             passenger_of_block: None,
         };
         if let Ok(data) = client.serialize_packet(&packet) {
-            client.try_enqueue_packet(data);
+            send(data);
         }
     }
 
+    /// Direct spawn. Override `send_java_spawn_packets` to customize tracked pairing.
     fn send_java_spawn_packet(&self, client: &JavaClient) {
+        self.send_java_spawn_packets(client, &mut |data| client.try_enqueue_packet(data));
+    }
+
+    /// Emits the Java spawn and follow-up packets through the caller's delivery guard.
+    fn send_java_spawn_packets(&self, client: &JavaClient, send: &mut dyn FnMut(bytes::Bytes)) {
         let entity = self.get_entity();
         let metadata = self.java_spawn_metadata(CURRENT_MC_VERSION);
         let spawn_packet = entity.create_spawn_packet();
         if let Ok(data) = client.serialize_packet(&spawn_packet) {
-            client.try_enqueue_packet(data);
+            send(data);
         }
         if let Some(meta) = metadata {
             let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
             if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                client.try_enqueue_packet(meta_data);
+                send(meta_data);
             }
         }
         let holder = entity
@@ -951,7 +982,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 true,
             );
             if let Ok(link_data) = client.serialize_packet(&link_packet) {
-                client.try_enqueue_packet(link_data);
+                send(link_data);
             }
         }
     }
@@ -1032,6 +1063,13 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         self.get_entity().has_vehicle()
     }
 
+    fn can_ride(&self, vehicle: &dyn EntityBase) -> bool {
+        let entity = self.get_entity();
+        !entity.is_sneaking()
+            && entity.riding_cooldown.load(Ordering::Relaxed) <= 0
+            && self.get_mob().is_none_or(|mob| mob.mob_can_ride(vehicle))
+    }
+
     fn is_vehicle(&self) -> bool {
         self.get_entity().has_passengers()
     }
@@ -1075,7 +1113,38 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         self.get_mob().is_some_and(mob::Mob::ignores_block_triggers)
     }
 
+    fn can_push_contact(&self, _other: &dyn EntityBase) -> bool {
+        true
+    }
+
+    /// Extra tick reach for a vehicle that applies block contact effects.
+    fn vehicle_contact_tick_reach(&self) -> Option<f64> {
+        None
+    }
+
+    /// Whether vehicle tick behavior can reach beyond the island planner's bounds.
+    fn vehicle_requires_serial_tick(&self) -> bool {
+        false
+    }
+
+    fn client_vehicle_float_threshold(&self) -> Option<f64> {
+        None
+    }
+
+    fn vehicle_dismount_position(
+        &self,
+        passenger: &dyn EntityBase,
+        still_current: &dyn Fn() -> bool,
+    ) -> Option<Vector3<f64>> {
+        dismount_helper::default_vehicle_exit(self.get_entity(), passenger, still_current)
+    }
+
     fn push(&self, entity: &dyn EntityBase) {
+        // A Java player predicts the other half of a living pusher's own contact.
+        self.push_contact(entity, Entity::push_back_by);
+    }
+
+    fn push_contact(&self, entity: &dyn EntityBase, push_other: fn(&Entity, Vector3<f64>)) {
         // Vanilla `LivingEntity.push`: sleeping entities neither push nor get pushed here.
         if self.get_living_entity().is_some()
             && self.get_entity().pose.load() == EntityPose::Sleeping
@@ -1088,6 +1157,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
         if self_entity.no_physics.load(Ordering::Relaxed)
             || other_entity.no_physics.load(Ordering::Relaxed)
+            || !self.can_push_contact(entity)
         {
             return;
         }
@@ -1116,130 +1186,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 self_entity.push_by(Vector3::new(-dx, 0.0, -dz));
             }
 
-            // A Java client runs only the other side's `pushEntities` on its player, so
-            // the pusher's own half stays off the Bedrock impulse
             if !other_entity.has_passengers() && entity.is_pushable() {
-                other_entity.push_back_by(Vector3::new(dx, 0.0, dz));
+                push_other(other_entity, Vector3::new(dx, 0.0, dz));
             }
         }
-    }
-
-    #[allow(clippy::too_many_lines)]
-    fn push_entities(&self, dyn_self: &dyn EntityBase) -> bool {
-        let mut picked_up = false;
-        let mut pushed = false;
-        let self_entity = self.get_entity();
-        let entity_bb = self_entity.bounding_box.load();
-
-        if !self.is_pushable() {
-            return false;
-        }
-
-        let world = self_entity.world.load();
-
-        let is_rideable_minecart = self_entity.entity_type.id == EntityType::MINECART.id;
-        let is_abstract_minecart = is_rideable_minecart
-            || self_entity.entity_type.id == EntityType::CHEST_MINECART.id
-            || self_entity.entity_type.id == EntityType::COMMAND_BLOCK_MINECART.id
-            || self_entity.entity_type.id == EntityType::FURNACE_MINECART.id
-            || self_entity.entity_type.id == EntityType::HOPPER_MINECART.id
-            || self_entity.entity_type.id == EntityType::SPAWNER_MINECART.id
-            || self_entity.entity_type.id == EntityType::TNT_MINECART.id;
-
-        let is_minecart_fn = |id| -> bool {
-            id == EntityType::MINECART.id
-                || id == EntityType::CHEST_MINECART.id
-                || id == EntityType::COMMAND_BLOCK_MINECART.id
-                || id == EntityType::FURNACE_MINECART.id
-                || id == EntityType::HOPPER_MINECART.id
-                || id == EntityType::SPAWNER_MINECART.id
-                || id == EntityType::TNT_MINECART.id
-        };
-
-        if is_abstract_minecart {
-            let is_vehicle = self.is_vehicle();
-
-            if is_rideable_minecart && !is_vehicle {
-                let pickup_bb = entity_bb.expand(0.2, 0.0, 0.2);
-                let other_entities = world.get_entities_at_box(&pickup_bb);
-
-                for other in other_entities {
-                    if other.get_entity().entity_id != self_entity.entity_id {
-                        let other_type = other.get_entity().entity_type.id;
-                        let is_iron_golem = other_type == EntityType::IRON_GOLEM.id;
-                        let is_other_minecart = is_minecart_fn(other_type);
-
-                        if !is_iron_golem
-                            && !is_other_minecart
-                            && !other.is_passenger()
-                            && other.is_pushable()
-                            && other.get_entity().riding_cooldown.load(Relaxed) == 0
-                            && let Some(self_arc) = world.get_entity_by_id(self_entity.entity_id)
-                        {
-                            self_entity.add_passenger(self_arc, other.clone());
-                            picked_up = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            let push_bb = entity_bb.expand(1.0e-7, 1.0e-7, 1.0e-7);
-
-            let other_entities = world.get_entities_at_box(&push_bb);
-            for other in other_entities {
-                if other.get_entity().entity_id != self_entity.entity_id {
-                    let other_type = other.get_entity().entity_type.id;
-                    let is_other_minecart = is_minecart_fn(other_type);
-                    let is_iron_golem = other_type == EntityType::IRON_GOLEM.id;
-
-                    if is_rideable_minecart {
-                        if (is_iron_golem
-                            || is_other_minecart
-                            || is_vehicle
-                            || !other.get_entity().has_vehicle())
-                            && other.is_pushable()
-                        {
-                            dyn_self.push(other.as_ref());
-                            pushed = true;
-                        }
-                    } else if !self.has_passenger(other.as_ref())
-                        && other.is_pushable()
-                        && is_other_minecart
-                    {
-                        dyn_self.push(other.as_ref());
-                        pushed = true;
-                    }
-                }
-            }
-
-            let players = world.get_players_at_box(&push_bb);
-            for player in players {
-                if player.get_entity().entity_id != self_entity.entity_id && is_rideable_minecart {
-                    dyn_self.push(player.as_ref());
-                    pushed = true;
-                    // Non-rideable minecarts (hoppers, chests) do not push players in vanilla.
-                }
-            }
-        } else {
-            let other_entities = world.get_entities_at_box(&entity_bb);
-            for other in other_entities {
-                if other.get_entity().entity_id != self_entity.entity_id {
-                    dyn_self.push(other.as_ref());
-                    pushed = true;
-                }
-            }
-
-            let players = world.get_players_at_box(&entity_bb);
-            for player in players {
-                if player.get_entity().entity_id != self_entity.entity_id {
-                    dyn_self.push(player.as_ref());
-                    pushed = true;
-                }
-            }
-        }
-
-        picked_up && !pushed
     }
 
     fn on_hit(&self, _hit: crate::entity::projectile::ProjectileHit) {}
@@ -1378,6 +1328,27 @@ impl RemovalReason {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PassengerRemoval {
+    Dismount,
+    Teleport,
+    VehicleRemoved,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PassengerMount {
+    Gameplay,
+    Restoration,
+}
+
+#[derive(Clone, Copy)]
+struct CommittedPassengerMount {
+    revision: u64,
+    stood: bool,
+    displaced_driver: Option<i32>,
+    switch_placement_baseline: Option<(Vector3<f64>, i32)>,
+}
+
 // IMPORTANT: have that 1 and not 0 because fetch_add returns previous value and 0 would be invalid
 static CURRENT_ID: AtomicI32 = AtomicI32::new(1);
 
@@ -1491,31 +1462,34 @@ pub fn default_passenger_attachment_point(
 
 /// Moves `passenger` onto its seat on `vehicle`.
 pub fn position_rider(vehicle: &dyn EntityBase, passenger: &dyn EntityBase) {
+    if let Some(position) = rider_seat_position(vehicle, passenger) {
+        passenger.get_entity().set_pos(position);
+        vehicle.on_rider_positioned(passenger);
+    }
+}
+
+fn rider_seat_position(
+    vehicle: &dyn EntityBase,
+    passenger: &dyn EntityBase,
+) -> Option<Vector3<f64>> {
     let vehicle_entity = vehicle.get_entity();
     let passenger_entity = passenger.get_entity();
-    let Some(index) = vehicle_entity
+    let index = vehicle_entity
         .passengers
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .iter()
-        .position(|other| other.get_entity().entity_id == passenger_entity.entity_id)
-    else {
-        return;
-    };
-    let Some(seat) = vehicle
+        .position(|other| other.get_entity().entity_id == passenger_entity.entity_id)?;
+    let seat = vehicle
         .passenger_attachment_point(passenger, index)
-        .or_else(|| default_passenger_attachment_point(vehicle, index))
-    else {
-        return;
-    };
+        .or_else(|| default_passenger_attachment_point(vehicle, index))?;
     let offset = passenger
         .vehicle_attachment_point(vehicle)
         .unwrap_or_else(|| {
             let (own, own_scale) = attachments_of(passenger);
             attachment_point(own.vehicle, own_scale, passenger_entity.yaw.load())
         });
-    passenger_entity.set_pos(vehicle_entity.pos.load() + seat - offset);
-    vehicle.on_rider_positioned(passenger);
+    Some(vehicle_entity.pos.load() + seat - offset)
 }
 
 /// Places every rider of `vehicle`, and their riders, after the vehicle has moved.
@@ -1644,6 +1618,8 @@ pub struct Entity {
     /// Tracks a horizontal collision
     pub horizontal_collision: AtomicBool,
     pub vertical_collision: AtomicBool,
+    pub(crate) vertical_collision_below: AtomicBool,
+    vehicle_movements: Option<std::sync::Mutex<vehicle::movement_history::MovementHistory>>,
     /// Indicates whether the entity is on the ground (may not always be accurate).
     pub on_ground: AtomicBool,
     /// Indicates whether the entity is touching water
@@ -1690,8 +1666,11 @@ pub struct Entity {
     pub removal_reason: AtomicCell<Option<RemovalReason>>,
     // The passengers that entity has
     pub passengers: std::sync::Mutex<Vec<Arc<dyn EntityBase>>>,
+    pub(crate) tracking_pairing_lock: std::sync::Mutex<()>,
     /// The vehicle that entity is in
     pub vehicle: std::sync::Mutex<Option<Weak<dyn EntityBase>>>,
+    // Advanced under the vehicle mutex for each new or ended attachment.
+    riding_revision: std::sync::atomic::AtomicU64,
     /// The entity this entity is attached/leashed to (if any)
     pub leashed_to: std::sync::Mutex<Option<Weak<dyn EntityBase>>>,
     pub delayed_leash: std::sync::Mutex<Option<DelayedLeash>>,
@@ -1736,6 +1715,8 @@ pub struct Entity {
     pub bedrock_flags: std::sync::atomic::AtomicI64,
     /// Stores more Bedrock-specific entity boolean flags (bit 0-63)
     pub bedrock_flags_two: std::sync::atomic::AtomicI64,
+    bedrock_metadata_enqueue: std::sync::Mutex<()>,
+    bedrock_flags_dirty: AtomicBool,
     /// If true, the entity bypasses physics, collisions, and block effects (e.g. spectator, markers, display entities)
     pub no_physics: AtomicBool,
     /// Vanilla `firstTick`: true until the first base tick has run.
@@ -1747,6 +1728,7 @@ pub struct Entity {
     pub velocity_dirty: AtomicBool,
     /// velocity goes to the own client
     pub sync_velocity: AtomicBool,
+    pub(crate) sync_position: AtomicBool,
     /// Unsent entity pushes on a player. Bedrock clients don't predict them, so they stay
     /// pending at full size until `SetActorMotion` can layer them on the last client delta.
     pub push_impulse: AtomicCell<Vector3<f64>>,
@@ -1821,15 +1803,15 @@ impl EntityBoundingBox {
     }
 }
 
-/// Result of `Entity::collide`.
+/// Result of projecting movement before committing position or contact state.
 pub(crate) struct Collision {
-    /// Movement left after the blocks.
+    /// Movement allowed by the collision shapes.
     pub movement: Vector3<f64>,
     /// Block landed on.
     pub supporting: Option<BlockPos>,
-    /// A wall stopped X or Z.
+    /// A collision stopped X or Z.
     pub horizontal: bool,
-    /// A block stopped Y.
+    /// A collision stopped Y.
     pub vertical: bool,
 }
 
@@ -1946,6 +1928,10 @@ impl Entity {
             lava_height: AtomicCell::new(0.0),
             horizontal_collision: AtomicBool::new(false),
             vertical_collision: AtomicBool::new(false),
+            vertical_collision_below: AtomicBool::new(false),
+            vehicle_movements: (entity_type.boat.is_some()
+                || entity_type.has_tag(&tag::EntityType::C_MINECARTS))
+            .then(std::sync::Mutex::default),
             pos: AtomicCell::new(position),
             last_pos: AtomicCell::new(position),
             movement: AtomicCell::new(Vector3::default()),
@@ -1980,6 +1966,8 @@ impl Entity {
             flags: std::sync::atomic::AtomicI8::new(0),
             bedrock_flags: std::sync::atomic::AtomicI64::new(0),
             bedrock_flags_two: std::sync::atomic::AtomicI64::new(0),
+            bedrock_metadata_enqueue: std::sync::Mutex::new(()),
+            bedrock_flags_dirty: AtomicBool::new(false),
             fire_immune: AtomicBool::new(false),
             fire_ticks: AtomicI32::new(-1),
             has_visual_fire: AtomicBool::new(false),
@@ -1988,7 +1976,9 @@ impl Entity {
             was_in_powder_snow: AtomicBool::new(false),
             removal_reason: AtomicCell::new(None),
             passengers: std::sync::Mutex::new(Vec::new()),
+            tracking_pairing_lock: std::sync::Mutex::new(()),
             vehicle: std::sync::Mutex::new(None),
+            riding_revision: std::sync::atomic::AtomicU64::new(0),
             leashed_to: std::sync::Mutex::new(None),
             delayed_leash: std::sync::Mutex::new(None),
             leash_angular_momentum: AtomicCell::new(0.0),
@@ -2019,6 +2009,7 @@ impl Entity {
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
             sync_velocity: AtomicBool::new(false),
+            sync_position: AtomicBool::new(false),
             push_impulse: AtomicCell::new(Vector3::default()),
             removed: AtomicBool::new(false),
             last_sent_yaw: AtomicU8::new(0),
@@ -2062,9 +2053,26 @@ impl Entity {
         }
     }
 
-    pub fn bedrock_metadata(&self) -> SyncedActorDataList {
+    fn bedrock_flag_word(&self) -> i64 {
         self.init_bedrock_flags();
+        let mut flags = self.bedrock_flags.load(Relaxed);
+        if self.age.load(Relaxed) < 0 {
+            flags |= 1i64 << entity_data_flag::BABY;
+        }
+        if self.silent.load(Relaxed) {
+            flags |= 1i64 << entity_data_flag::SILENT;
+        }
+        if self.has_no_gravity.load(Relaxed) {
+            flags &= !(1i64 << entity_data_flag::HAS_GRAVITY);
+        }
+        if self.custom_name.load().is_some() && self.custom_name_visible.load(Relaxed) {
+            flags |= (1i64 << entity_data_flag::SHOW_NAME)
+                | (1i64 << entity_data_flag::ALWAYS_SHOW_NAME);
+        }
+        flags
+    }
 
+    pub fn bedrock_metadata(&self) -> SyncedActorDataList {
         let mut metadata = SyncedActorDataList::new();
         let dimension = self.entity_dimension.load();
         metadata.set(
@@ -2082,25 +2090,12 @@ impl Entity {
         );
         metadata.set(
             entity_data_key::FLAGS,
-            MetadataValue::Int64(self.bedrock_flags.load(Ordering::Relaxed)),
+            MetadataValue::Int64(self.bedrock_flag_word()),
         );
         metadata.set(
             entity_data_key::FLAGS_TWO,
             MetadataValue::Int64(self.bedrock_flags_two.load(Ordering::Relaxed)),
         );
-        if is_baby {
-            metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
-        }
-        if self.silent.load(Relaxed) {
-            metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::SILENT as u8, true);
-        }
-        if self.has_no_gravity.load(Relaxed) {
-            metadata.set_flag(
-                entity_data_key::FLAGS,
-                entity_data_flag::HAS_GRAVITY as u8,
-                false,
-            );
-        }
         if self.has_vehicle() {
             metadata.set_flag(entity_data_key::FLAGS, entity_data_flag::RIDING as u8, true);
         }
@@ -2123,18 +2118,6 @@ impl Entity {
                 entity_data_key::NAME,
                 MetadataValue::String(name.clone().get_text()),
             );
-            if self.custom_name_visible.load(Ordering::Relaxed) {
-                metadata.set_flag(
-                    entity_data_key::FLAGS,
-                    entity_data_flag::SHOW_NAME as u8,
-                    true,
-                );
-                metadata.set_flag(
-                    entity_data_key::FLAGS,
-                    entity_data_flag::ALWAYS_SHOW_NAME as u8,
-                    true,
-                );
-            }
         }
 
         metadata
@@ -2498,16 +2481,156 @@ impl Entity {
         self.supporting_block_pos.load()
     }
 
-    /// Block collisions, then stepping up onto what was hit.
-    #[expect(clippy::float_cmp)]
     fn adjust_movement_for_collisions(
         &self,
         movement: Vector3<f64>,
         caller: &dyn EntityBase,
     ) -> Vector3<f64> {
+        self.vertical_collision.store(false, Ordering::SeqCst);
+        self.vertical_collision_below.store(false, Ordering::SeqCst);
+        if movement.length_squared() == 0.0 {
+            return movement;
+        }
+        let collision = self.project_movement(movement, caller);
+        let on_ground = collision.vertical && movement.y < 0.0;
+        self.on_ground.store(on_ground, Ordering::SeqCst);
+        self.vertical_collision_below
+            .store(on_ground, Ordering::SeqCst);
+        self.supporting_block_pos.store(collision.supporting);
+        self.horizontal_collision
+            .store(collision.horizontal, Ordering::SeqCst);
+        self.vertical_collision
+            .store(collision.vertical, Ordering::SeqCst);
+        collision.movement
+    }
+
+    /// Client-controlled Java vehicles keep vertical flags on horizontal-only proposals.
+    pub(crate) fn apply_client_vehicle_collision(
+        &self,
+        requested: Vector3<f64>,
+        collision: &Collision,
+    ) {
+        self.horizontal_collision
+            .store(collision.horizontal, Relaxed);
+        if self.no_physics.load(Relaxed) {
+            self.vertical_collision.store(false, Relaxed);
+            self.vertical_collision_below.store(false, Relaxed);
+        } else if requested.y != 0.0 {
+            let on_ground = collision.vertical && requested.y < 0.0;
+            self.vertical_collision.store(collision.vertical, Relaxed);
+            self.vertical_collision_below.store(on_ground, Relaxed);
+            self.on_ground.store(on_ground, Relaxed);
+            self.supporting_block_pos.store(collision.supporting);
+        }
+    }
+
+    pub(crate) fn set_vehicle_packet_ground(
+        &self,
+        caller: &dyn EntityBase,
+        on_ground: bool,
+        movement: Vector3<f64>,
+    ) {
+        self.on_ground.store(on_ground, Relaxed);
+        let supporting = on_ground.then(|| {
+            let bounds = self.bounding_box.load();
+            let range =
+                Self::support_test_area(&bounds).expand_towards(-movement.x, 0.0, -movement.z);
+            let (colliders, block_positions) =
+                self.world.load().get_block_collisions(range, caller);
+            let from = self.pos.load() - movement;
+            Self::supporting_block_after(
+                &colliders,
+                &block_positions,
+                &bounds.shift(movement * -1.0),
+                movement,
+                from,
+            )
+        });
+        self.supporting_block_pos.store(supporting.flatten());
+    }
+
+    pub(crate) fn record_vehicle_movement(
+        &self,
+        from: Vector3<f64>,
+        movement: Vector3<f64>,
+        requested: Vector3<f64>,
+    ) -> bool {
+        self.vehicle_movements.as_ref().is_none_or(|history| {
+            history
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .record(from, movement, requested)
+        })
+    }
+
+    fn clear_vehicle_movement(&self) {
+        if let Some(history) = &self.vehicle_movements {
+            let mut history = history
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            history.pending.clear();
+        }
+    }
+
+    pub(crate) fn vehicle_motion_epoch(&self) -> u64 {
+        self.vehicle_movements.as_ref().map_or(0, |history| {
+            history
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .teleport_revision
+        })
+    }
+
+    pub(crate) fn lock_vehicle_motion_if_current(&self, epoch: u64) -> Option<impl Sized + '_> {
+        self.vehicle_movements.as_ref().map_or_else(
+            || (epoch == 0).then_some(None),
+            |history| {
+                let history = history
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                (history.teleport_revision == epoch).then_some(Some(history))
+            },
+        )
+    }
+
+    pub(crate) fn vehicle_block_effect_reach(&self) -> f64 {
+        self.vehicle_movements.as_ref().map_or(0.0, |history| {
+            let history = history
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let current = self.pos.load();
+            history.pending.iter().fold(0.0f64, |reach, movement| {
+                reach
+                    .max((movement.from - current).length())
+                    .max((movement.to - current).length())
+            })
+        })
+    }
+
+    pub(crate) fn discard_last_vehicle_movement(&self) {
+        if let Some(history) = &self.vehicle_movements {
+            history
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .pending
+                .pop_back();
+        }
+    }
+
+    /// Project the full move, including a living entity's step-up, without writing state.
+    #[expect(clippy::float_cmp)]
+    pub(crate) fn project_movement(
+        &self,
+        movement: Vector3<f64>,
+        caller: &dyn EntityBase,
+    ) -> Collision {
+        if movement.length_squared() == 0.0 || self.no_physics.load(Relaxed) {
+            return Collision::free(movement);
+        }
         let was_on_ground = self.on_ground.load(Ordering::SeqCst);
         let bounding_box = self.bounding_box.load();
-        let movement_step = self.collide_bounding_box(movement, caller);
+        let collision = self.collide(movement, caller);
+        let movement_step = collision.movement;
 
         let max_up_step = Self::max_up_step(caller);
         let horizontal_collision = movement.x != movement_step.x || movement.z != movement_step.z;
@@ -2516,7 +2639,7 @@ impl Entity {
             || !(on_ground_after_collision || was_on_ground)
             || !horizontal_collision
         {
-            return movement_step;
+            return collision;
         }
 
         let grounded_box = if on_ground_after_collision {
@@ -2548,9 +2671,6 @@ impl Entity {
                 let distance_to_ground = bounding_box.min.y - grounded_box.min.y;
                 let stepped = step_from_ground - Vector3::new(0.0, distance_to_ground, 0.0);
                 let on_ground = movement.y != stepped.y && movement.y < 0.0;
-                self.vertical_collision
-                    .store(movement.y != stepped.y, Ordering::SeqCst);
-                self.on_ground.store(on_ground, Ordering::SeqCst);
                 // Vanilla checks support after the step, the pre-step support is stale.
                 let supporting = on_ground
                     .then(|| {
@@ -2567,16 +2687,16 @@ impl Entity {
                         )
                     })
                     .flatten();
-                self.supporting_block_pos.store(supporting);
-                self.horizontal_collision.store(
-                    movement.x != stepped.x || movement.z != stepped.z,
-                    Ordering::SeqCst,
-                );
-                return stepped;
+                return Collision {
+                    movement: stepped,
+                    supporting,
+                    horizontal: movement.x != stepped.x || movement.z != stepped.z,
+                    vertical: movement.y != stepped.y,
+                };
             }
         }
 
-        movement_step
+        collision
     }
 
     /// Only living entities step up, and a player-ridden mob steps at least one block.
@@ -2674,36 +2794,19 @@ impl Entity {
         }
     }
 
-    fn collide_bounding_box(
-        &self,
-        movement: Vector3<f64>,
-        caller: &dyn EntityBase,
-    ) -> Vector3<f64> {
-        self.vertical_collision.store(false, Ordering::SeqCst);
-        if movement.length_squared() == 0.0 {
-            return movement;
-        }
-        let collision = self.collide(movement, caller);
-        // Vanilla `onGround`: stopped while moving down, even with no supporting block found.
-        self.on_ground
-            .store(collision.vertical && movement.y < 0.0, Ordering::SeqCst);
-        self.supporting_block_pos.store(collision.supporting);
-        self.horizontal_collision
-            .store(collision.horizontal, Ordering::SeqCst);
-        self.vertical_collision
-            .store(collision.vertical, Ordering::SeqCst);
-        collision.movement
-    }
-
     /// Vanilla `collide` without writing state.
     #[expect(clippy::float_cmp)]
     pub(crate) fn collide(&self, movement: Vector3<f64>, caller: &dyn EntityBase) -> Collision {
         let bounding_box = self.bounding_box.load();
 
-        let (collisions, block_positions) = self
-            .world
-            .load()
-            .get_block_collisions(bounding_box.stretch(movement), caller);
+        let world = self.world.load();
+        let swept_box = bounding_box.stretch(movement);
+        let (mut collisions, block_positions) = world.get_block_collisions(swept_box, caller);
+        if self.uses_vehicle_collisions() {
+            // Entity and border shapes stop motion, but cannot supply a supporting block.
+            // Block indices still refer to the initial span of this list.
+            world.add_vehicle_collision_shapes(caller, swept_box, &mut collisions);
+        }
 
         if collisions.is_empty() {
             return Collision::free(movement);
@@ -2751,6 +2854,10 @@ impl Entity {
             horizontal,
             vertical,
         }
+    }
+
+    pub(crate) fn uses_vehicle_collisions(&self) -> bool {
+        self.entity_type.boat.is_some() || self.entity_type.has_tag(&tag::EntityType::C_MINECARTS)
     }
 
     /// Vanilla `checkSupportingBlock`: a thin box under the final position, else under the start X/Z.
@@ -3116,31 +3223,38 @@ impl Entity {
     fn update_fluid_interaction(&self, caller: &dyn EntityBase) -> Vec<&'static Fluid> {
         let is_pushed = caller.is_pushed_by_fluids();
         let mut fluids = BTreeMap::new();
-
-        let water_push = Vector3::default();
-
-        let water_n = 0;
-
-        let lava_push = Vector3::default();
-
-        let lava_n = 0;
-
-        let mut fluid_push = [water_push, lava_push];
-
-        let mut fluid_n = [water_n, lava_n];
-
+        let mut fluid_push = [Vector3::default(); 2];
+        let mut fluid_n = [0; 2];
         let mut in_fluid = [false, false];
-
-        // The maximum fluid height found
-
-        let mut fluid_height: [f64; 2] = [0.0, 0.0];
+        let mut fluid_height: [f64; 2] = [0.0; 2];
 
         let entity_box = self.bounding_box.load();
         let bounding_box = entity_box.expand(-0.001, -0.001, -0.001);
+        let boat = self.get_vehicle();
+        let bounding_box = if let Some(boat) = boat.as_ref().and_then(|vehicle| {
+            vehicle
+                .cast_any()
+                .downcast_ref::<vehicle::boat::BoatEntity>()
+        }) {
+            let Some(bounds) = boat.modify_passenger_fluid_interaction_box(bounding_box) else {
+                self.water_height.store(0.0);
+                self.lava_height.store(0.0);
+                self.touching_water.store(false, Relaxed);
+                self.touching_lava.store(false, Relaxed);
+                return Vec::new();
+            };
+            bounds
+        } else {
+            bounding_box
+        };
 
         let min = bounding_box.min_block_pos();
 
-        let max = bounding_box.max_block_pos();
+        let max = BlockPos::new(
+            bounding_box.max.x.ceil() as i32 - 1,
+            bounding_box.max.y.ceil() as i32 - 1,
+            bounding_box.max.z.ceil() as i32 - 1,
+        );
 
         let world = self.world.load();
 
@@ -3162,10 +3276,10 @@ impl Entity {
                             fluid_height[i] = fluid_height[i].max(marginal_height);
 
                             in_fluid[i] = true;
+                            let family = fluid.to_flowing();
+                            fluids.insert(family.id, family);
 
                             if !is_pushed {
-                                fluids.insert(fluid.to_flowing().id, fluid.to_flowing());
-
                                 continue;
                             }
 
@@ -3178,23 +3292,18 @@ impl Entity {
                             fluid_push[i] += fluid_velo;
 
                             fluid_n[i] += 1;
-
-                            fluids.insert(fluid.to_flowing().id, fluid.to_flowing());
                         }
                     }
                 }
             }
         }
 
-        let lava_speed = lava_push_speed(world.dimension.fast_lava);
+        let [water_height, lava_height] = fluid_height;
+        let [in_water, in_lava] = in_fluid;
 
-        self.push_by_fluid(WATER_PUSH_SPEED, fluid_push[0], fluid_n[0]);
-
-        self.push_by_fluid(lava_speed, fluid_push[1], fluid_n[1]);
-
-        let water_height = fluid_height[0];
-
-        let in_water = in_fluid[0];
+        // Java refreshes the fluid depths before notifying the entry splash.
+        let previous_water_height = self.water_height.swap(water_height);
+        let previous_depths = [previous_water_height, self.lava_height.swap(lava_height)];
 
         if in_water {
             if let Some(living) = caller.get_living_entity() {
@@ -3204,17 +3313,17 @@ impl Entity {
             if !self.touching_water.load(Ordering::SeqCst)
                 && !self.first_tick.load(Ordering::Relaxed)
             {
+                let position = self.pos.load();
+                let motion_epoch = self.vehicle_motion_epoch();
                 caller.do_water_splash_effect(caller);
+                if !self.water_contact_is_current(&world, position, motion_epoch) {
+                    self.discard_obsolete_fluid_depths(fluid_height, previous_depths);
+                    return Vec::new();
+                }
             }
         }
 
-        self.water_height.store(water_height);
-
         self.touching_water.store(in_water, Ordering::SeqCst);
-
-        let lava_height = fluid_height[1];
-
-        let in_lava = in_fluid[1];
 
         if in_lava && let Some(living) = caller.get_living_entity() {
             let halved_fall = living.fall_distance.load() / 2.0;
@@ -3224,35 +3333,61 @@ impl Entity {
             }
         }
 
-        self.lava_height.store(lava_height);
-
         self.touching_lava.store(in_lava, Ordering::SeqCst);
+
+        // Java dispatches the entry splash and publishes the water transition before applying currents.
+        self.push_by_fluid(WATER_PUSH_SPEED, fluid_push[0], fluid_n[0]);
+        self.push_by_fluid(
+            lava_push_speed(world.dimension.fast_lava),
+            fluid_push[1],
+            fluid_n[1],
+        );
 
         // BTreeMap auto-sorts water before lava as in vanilla
         fluids.into_values().collect()
     }
 
-    fn push_by_fluid(&self, speed: f64, mut push: Vector3<f64>, n: usize) {
-        if push.length_squared() != 0.0 {
-            if n > 0 {
-                push = push * (1.0 / (n as f64));
+    /// Withdraw the obsolete sample while preserving a fluid update made by the callback.
+    fn discard_obsolete_fluid_depths(
+        &self,
+        [water_height, lava_height]: [f64; 2],
+        [previous_water_height, previous_lava_height]: [f64; 2],
+    ) {
+        if !self.touching_water.load(Relaxed)
+            && self.water_height.load().to_bits() == water_height.to_bits()
+        {
+            self.water_height.store(previous_water_height);
+            if self.lava_height.load().to_bits() == lava_height.to_bits() {
+                self.lava_height.store(previous_lava_height);
             }
-
-            if self.entity_type != &EntityType::PLAYER {
-                push = push.normalize();
-            }
-
-            push = push * speed;
-
-            let velo = self.velocity.load();
-
-            if velo.x.abs() < 0.003 && velo.z.abs() < 0.003 && velo.length_squared() < 0.000_020_25
-            {
-                push = push.normalize() * 0.0045;
-            }
-
-            self.velocity.store(velo + push);
         }
+    }
+
+    fn push_by_fluid(&self, speed: f64, mut push: Vector3<f64>, n: usize) {
+        const MIN_CURRENT_SPEED: f64 = 0.003;
+        const MIN_CURRENT_IMPULSE: f64 = MIN_CURRENT_SPEED * 1.5;
+        if n == 0 || push.length_squared() < f64::from(1.0e-5f32) {
+            return;
+        }
+        push = if self.entity_type == &EntityType::PLAYER {
+            push * (1.0 / n as f64)
+        } else {
+            push / push.length()
+        };
+        push = push * speed;
+        let velocity = self.velocity.load();
+        let impulse_length = push.length();
+        if velocity.x.abs() < MIN_CURRENT_SPEED
+            && velocity.z.abs() < MIN_CURRENT_SPEED
+            && impulse_length < MIN_CURRENT_IMPULSE
+        {
+            push = if impulse_length < f64::from(1.0e-5f32) {
+                Vector3::default()
+            } else {
+                push / impulse_length * MIN_CURRENT_IMPULSE
+            };
+        }
+        self.velocity.store(velocity + push);
     }
 
     fn get_pos_with_y_offset(
@@ -3396,50 +3531,54 @@ impl Entity {
         self.set_pos(self.pos.load() + delta);
     }
 
-    // Move by a delta, adjust for collisions, and send
-
-    // Does not send movement. That must be done separately
-    pub fn move_entity(&self, caller: &dyn EntityBase, mut motion: Vector3<f64>) {
+    /// Resolves and applies motion without sending a position packet.
+    /// Returns false after removal or a callback takes over a vehicle's movement.
+    pub fn move_entity(&self, caller: &dyn EntityBase, motion: Vector3<f64>) -> bool {
         if caller.get_player().is_some() {
-            return;
+            return true;
         }
 
         if self.no_physics.load(Ordering::Relaxed) {
             self.move_pos(motion);
             self.horizontal_collision.store(false, Ordering::Relaxed);
             self.vertical_collision.store(false, Ordering::Relaxed);
+            self.vertical_collision_below
+                .store(false, Ordering::Relaxed);
             self.on_ground.store(false, Ordering::Relaxed);
 
-            return;
+            return true;
         }
 
-        let movement_multiplier = self.movement_multiplier.swap(Vector3::default());
-
-        if movement_multiplier.length_squared() > 1.0e-7 {
-            motion = motion.multiply(
-                movement_multiplier.x,
-                movement_multiplier.y,
-                movement_multiplier.z,
-            );
-
-            self.velocity.store(Vector3::default());
-        }
-
+        let motion = self.apply_stuck_speed_multiplier(motion);
         let final_move = self.adjust_movement_for_collisions(motion, caller);
-
-        self.move_pos(final_move);
-
-        // Vanilla `Entity.move`: velocity is kept, a wall zeroes its axis, the speed factor only slows X/Z.
-        let speed_factor = f64::from(caller.get_block_speed_factor());
-        let mut velocity = self.velocity.load();
-        if (motion.x - final_move.x).abs() >= 1.0e-5 {
-            velocity.x = 0.0;
+        let records_vehicle_movement =
+            self.vehicle_movements.is_some() && caller.vehicle_contact_tick_reach().is_some();
+        if !records_vehicle_movement
+            || self.record_vehicle_movement(self.pos.load(), final_move, motion)
+        {
+            self.move_pos(final_move);
         }
-        if (motion.z - final_move.z).abs() >= 1.0e-5 {
-            velocity.z = 0.0;
+        let vehicle_move = self.vehicle_movements.as_ref().map(|_| {
+            (
+                self.pos.load(),
+                self.world.load_full(),
+                self.vehicle_motion_epoch(),
+            )
+        });
+        let still_current = || {
+            !self.is_removed()
+                && vehicle_move.as_ref().is_none_or(|(pos, world, revision)| {
+                    self.pos.load() == *pos
+                        && Arc::ptr_eq(world, &self.world.load())
+                        && self.vehicle_motion_epoch() == *revision
+                })
+        };
+
+        let vehicle_air_drag = caller.vehicle_bounce_air_drag();
+        if vehicle_air_drag.is_none() {
+            let velocity = self.velocity_after_horizontal_clipping(motion, final_move);
+            self.apply_movement_speed_factor(caller, velocity);
         }
-        self.velocity
-            .store(velocity.multiply(speed_factor, 1.0, speed_factor));
 
         if let Some(living) = caller.get_living_entity() {
             let on_ground = self.on_ground.load(Ordering::SeqCst);
@@ -3447,7 +3586,22 @@ impl Entity {
         }
 
         let (effect_pos, effect_block, effect_state) = self.get_block_with_y_offset(0.2);
-        if motion.y != final_move.y {
+        let boat = caller
+            .cast_any()
+            .downcast_ref::<vehicle::boat::BoatEntity>();
+        if let Some(boat) = boat {
+            boat.update_last_vertical_speed();
+        }
+        if let Some(air_drag) = vehicle_air_drag {
+            self.restitute_vehicle_movement(
+                caller,
+                effect_block,
+                motion,
+                final_move,
+                air_drag,
+                &still_current,
+            );
+        } else if motion.y != final_move.y {
             if motion.y < 0.0 {
                 let world = self.world.load();
                 world
@@ -3461,10 +3615,103 @@ impl Entity {
             }
         }
 
-        if self.is_removed() {
-            return;
+        if still_current() {
+            self.emit_movement(caller, final_move, &effect_pos, effect_state);
         }
-        self.emit_movement(caller, final_move, &effect_pos, effect_state);
+        if still_current() {
+            if vehicle_air_drag.is_some() {
+                self.apply_movement_speed_factor(caller, self.velocity.load());
+            }
+            return true;
+        }
+        if vehicle_move.is_some_and(|(_, _, revision)| self.vehicle_motion_epoch() == revision) {
+            // Raw position changes from a listener do not go through Entity::teleport.
+            self.clear_vehicle_movement();
+        }
+        false
+    }
+
+    fn velocity_after_horizontal_clipping(
+        &self,
+        requested: Vector3<f64>,
+        resolved: Vector3<f64>,
+    ) -> Vector3<f64> {
+        let mut velocity = self.velocity.load();
+        if (requested.x - resolved.x).abs() >= 1.0e-5 {
+            velocity.x = 0.0;
+        }
+        if (requested.z - resolved.z).abs() >= 1.0e-5 {
+            velocity.z = 0.0;
+        }
+        velocity
+    }
+
+    fn apply_movement_speed_factor(&self, caller: &dyn EntityBase, velocity: Vector3<f64>) {
+        let factor = f64::from(caller.get_block_speed_factor());
+        self.velocity.store(velocity.multiply(factor, 1.0, factor));
+    }
+
+    /// Java publishes the resolved velocity and requests tracking after the bounce callbacks.
+    fn restitute_vehicle_movement(
+        &self,
+        caller: &dyn EntityBase,
+        block: &Block,
+        motion: Vector3<f64>,
+        clipped: Vector3<f64>,
+        air_drag: f64,
+        still_current: &impl Fn() -> bool,
+    ) {
+        let mut velocity = self.velocity_after_horizontal_clipping(motion, clipped);
+        let mut bounced = false;
+        if motion.y != clipped.y {
+            let gravity = caller.get_gravity();
+            let restitution = if velocity.y < -gravity
+                && self.vertical_collision_below.load(Relaxed)
+                && !self.is_sneaking()
+                && !block.has_tag(&tag::Block::MINECRAFT_SUPPRESSES_BOUNCE)
+            {
+                f64::from(block.bounce_restitution * 0.8f32)
+            } else {
+                0.0
+            };
+            bounced = restitution > 0.0;
+            velocity.y = if bounced {
+                let fraction = clipped.y / velocity.y;
+                let effective_drag = 1.0 + fraction * (air_drag - 1.0);
+                (fraction * gravity - velocity.y) * effective_drag * restitution
+            } else {
+                0.0
+            };
+        }
+        if bounced {
+            let support = self.get_block_pos_below_that_affects_my_movement();
+            self.world
+                .load()
+                .block_registry
+                .bounce_on(block, caller, &support);
+            if still_current() {
+                self.emit_own_game_event(caller, GameEvent::Bounce);
+            }
+        }
+        if still_current() {
+            self.velocity.store(velocity);
+            if bounced {
+                self.sync_position.store(true, Ordering::SeqCst);
+            }
+        }
+    }
+
+    /// Vanilla consumes the current inside-block movement modifier once per physical move.
+    pub(crate) fn apply_stuck_speed_multiplier(&self, motion: Vector3<f64>) -> Vector3<f64> {
+        if self.no_physics.load(Relaxed) {
+            return motion;
+        }
+        let multiplier = self.movement_multiplier.swap(Vector3::default());
+        if multiplier.length_squared() <= 1.0e-7 {
+            return motion;
+        }
+        self.velocity.store(Vector3::default());
+        motion.multiply(multiplier.x, multiplier.y, multiplier.z)
     }
 
     /// The emission part of vanilla `Entity.move` for movement the client already resolved,
@@ -3664,10 +3911,29 @@ impl Entity {
             caller.get_swim_high_speed_splash_sound()
         };
         if let Some(sound) = sound {
+            let world = self.world.load();
+            let position = self.pos.load();
+            let motion_epoch = self.vehicle_motion_epoch();
             let pitch = (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.4, 1.0);
             caller.play_entity_sound(sound, speed, pitch);
+            if !self.water_contact_is_current(&world, position, motion_epoch) {
+                return;
+            }
         }
         self.emit_own_game_event(caller, GameEvent::Splash);
+    }
+
+    /// A splash callback may supersede the sampled contact by relocating or removing the entity.
+    fn water_contact_is_current(
+        &self,
+        world: &Arc<World>,
+        position: Vector3<f64>,
+        motion_epoch: u64,
+    ) -> bool {
+        !self.is_removed()
+            && self.pos.load() == position
+            && Arc::ptr_eq(world, &self.world.load())
+            && self.vehicle_motion_epoch() == motion_epoch
     }
 
     /// Vanilla `gameEvent(event)`: at the entity, with itself as the source.
@@ -4148,10 +4414,13 @@ impl Entity {
     }
 
     pub fn is_in_water_or_rain(&self) -> bool {
+        self.is_in_water() || self.is_in_rain()
+    }
+
+    fn is_in_rain(&self) -> bool {
         let world = self.world.load();
         let pos = self.block_pos.load();
-        self.is_in_water()
-            || world.is_raining_at(&pos)
+        world.is_raining_at(&pos)
             || world.is_raining_at(&BlockPos::new(
                 pos.0.x,
                 self.bounding_box.load().max.y.floor() as i32,
@@ -4163,13 +4432,25 @@ impl Entity {
     pub fn is_submerged_in_water(&self) -> bool {
         let pos = self.pos.load();
         let eye_y = pos.y + self.get_eye_height();
-        let eye_pos = BlockPos::floored(pos.x, eye_y, pos.z);
+        let fluid_box = self.bounding_box.load().contract_all(0.001);
+        // Include the block below an exact eye boundary, within vanilla's fluid scan box.
+        let min_y = (eye_y - 1.0).ceil().max(fluid_box.min.y.floor()) as i32;
+        let max_y = eye_y.floor().min(fluid_box.max.y.ceil() - 1.0) as i32;
         let world = self.world.load();
-        let (fluid, state) = world.get_fluid_and_fluid_state(&eye_pos);
-        fluid.matches_type(&Fluid::WATER)
-            && eye_y
-                <= f64::from(eye_pos.0.y)
-                    + f64::from(world.get_fluid_height(&eye_pos, fluid, &state))
+        for y in min_y..=max_y {
+            let eye_pos = BlockPos::floored(pos.x, f64::from(y), pos.z);
+            let (fluid, state) = world.get_fluid_and_fluid_state(&eye_pos);
+            if fluid.matches_type(&Fluid::WATER)
+                && f64::from(y) + f64::from(world.get_fluid_height(&eye_pos, fluid, &state))
+                    >= fluid_box.min.y
+                && eye_y
+                    <= f64::from(y)
+                        + f64::from(world.get_fluid_height_for_camera(&eye_pos, fluid, &state))
+            {
+                return true;
+            }
+        }
+        false
     }
 
     #[must_use]
@@ -4522,6 +4803,227 @@ impl Entity {
         }
     }
 
+    fn send_bedrock_flags(
+        &self,
+        world: &Arc<World>,
+        revision: u64,
+        mob_metadata: impl Fn() -> Option<mob::MobMetadata>,
+    ) {
+        let flag_words = || {
+            let [primary, secondary] =
+                mob_metadata().map_or([0; 2], |metadata| metadata.bedrock_flag_words());
+            [
+                self.bedrock_flag_word() | primary,
+                self.bedrock_flags_two.load(Relaxed) | secondary,
+            ]
+        };
+        for _ in 0..2 {
+            if self.is_removed() || self.riding_revision() != revision {
+                return;
+            }
+            let recipients = self.bedrock_metadata_recipients(world);
+            if recipients.is_empty() {
+                return;
+            }
+            let [primary, secondary] = flag_words();
+            let mut actor_data = SyncedActorDataList::new();
+            actor_data.set(entity_data_key::FLAGS, MetadataValue::Int64(primary));
+            actor_data.set(entity_data_key::FLAGS_TWO, MetadataValue::Int64(secondary));
+            let changed = std::cell::Cell::new(false);
+            self.send_guarded_bedrock_actor_data_to(world, &recipients, actor_data, || {
+                let current = flag_words();
+                let vehicle = self
+                    .vehicle
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if self.is_removed() || self.riding_revision() != revision {
+                    return None;
+                }
+                if current != [primary, secondary] {
+                    changed.set(true);
+                    return None;
+                }
+                Some(vehicle)
+            });
+            if !changed.get() {
+                return;
+            }
+        }
+        // A listener can change flags on every send. Retry on the next tracker tick
+        // after the immediate retry, without growing the synchronous callback chain.
+        self.bedrock_flags_dirty.store(true, Ordering::Release);
+    }
+
+    pub(crate) fn flush_bedrock_flags(&self, rider: &dyn EntityBase) {
+        if self.bedrock_flags_dirty.load(Relaxed)
+            && self.bedrock_flags_dirty.swap(false, Ordering::AcqRel)
+        {
+            self.send_bedrock_riding_flags(rider, self.riding_revision());
+        }
+    }
+
+    fn send_bedrock_riding_flags(&self, rider: &dyn EntityBase, revision: u64) {
+        let world = self.world.load_full();
+        self.send_bedrock_flags(&world, revision, || {
+            rider.get_mob().and_then(mob::Mob::mob_metadata)
+        });
+    }
+
+    pub(super) fn send_bedrock_age_metadata(
+        &self,
+        is_baby: bool,
+        mob_metadata: impl Fn() -> Option<mob::MobMetadata>,
+    ) {
+        // Age owns scale here. Other metadata has its own publisher and can change in a callback.
+        let scale = || {
+            mob_metadata()
+                .and_then(|metadata| metadata.bedrock_scale())
+                .unwrap_or_else(|| if self.age.load(Relaxed) < 0 { 0.5 } else { 1.0 })
+        };
+        let sent_scale = scale();
+        let mut data = SyncedActorDataList::new();
+        data.set(entity_data_key::SCALE, MetadataValue::Float(sent_scale));
+        let world = self.world.load_full();
+        self.send_guarded_bedrock_actor_data(&world, data, || {
+            (!self.is_removed()
+                && (self.age.load(Relaxed) < 0) == is_baby
+                && scale().to_bits() == sent_scale.to_bits())
+            .then_some(())
+        });
+        if (self.age.load(Relaxed) < 0) == is_baby {
+            self.send_bedrock_flags(&world, self.riding_revision(), mob_metadata);
+        }
+    }
+
+    fn send_bedrock_pose(&self, world: &Arc<World>, pose: EntityPose) {
+        // Size can change independently of the pose in an outgoing packet observer.
+        self.send_bedrock_dimensions(world, self.entity_dimension.load());
+        let mut data = SyncedActorDataList::new();
+        data.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose as i32));
+        self.send_guarded_bedrock_actor_data(world, data, || {
+            (!self.is_removed() && self.pose.load() == pose).then_some(())
+        });
+    }
+
+    fn send_bedrock_dimensions(&self, world: &Arc<World>, dimensions: EntityDimensions) {
+        let mut data = SyncedActorDataList::new();
+        data.set(
+            entity_data_key::WIDTH,
+            MetadataValue::Float(dimensions.width),
+        );
+        data.set(
+            entity_data_key::HEIGHT,
+            MetadataValue::Float(dimensions.height),
+        );
+        self.send_guarded_bedrock_actor_data(world, data, || {
+            (!self.is_removed() && self.entity_dimension.load() == dimensions).then_some(())
+        });
+    }
+
+    fn send_guarded_bedrock_actor_data<T>(
+        &self,
+        world: &Arc<World>,
+        actor_data: SyncedActorDataList,
+        lock_if_current: impl Fn() -> Option<T>,
+    ) {
+        let recipients = self.bedrock_metadata_recipients(world);
+        self.send_guarded_bedrock_actor_data_to(world, &recipients, actor_data, lock_if_current);
+    }
+
+    fn bedrock_metadata_recipients(&self, world: &Arc<World>) -> Vec<Arc<Player>> {
+        world
+            .entity_tracker
+            .get_tracked_entity(self.entity_id)
+            .map_or_else(
+                || {
+                    let chunk = self.chunk_pos.load();
+                    world
+                        .players
+                        .load()
+                        .iter()
+                        .filter(|player| {
+                            player.client.bedrock().is_some()
+                                && player
+                                    .watched_section
+                                    .load()
+                                    .is_within_distance(chunk.x, chunk.y)
+                        })
+                        .cloned()
+                        .collect()
+                },
+                |tracked| {
+                    let mut recipients = tracked.bedrock_watchers_snapshot();
+                    if self.entity_type == &EntityType::PLAYER
+                        && let Some(player) = world.get_player_by_id(self.entity_id)
+                        && player.client.bedrock().is_some()
+                    {
+                        recipients.push(player);
+                    }
+                    recipients
+                },
+            )
+    }
+
+    fn send_guarded_bedrock_actor_data_to<T>(
+        &self,
+        world: &Arc<World>,
+        recipients: &[Arc<Player>],
+        actor_data: SyncedActorDataList,
+        lock_if_current: impl Fn() -> Option<T>,
+    ) {
+        if recipients.is_empty() {
+            return;
+        }
+        let packet = CSetActorData {
+            target_runtime_id: VarULong(self.entity_id as u64),
+            actor_data,
+            synced_properties: PropertySyncData {
+                int_entries_list: std::collections::HashMap::new(),
+                float_entries_list: std::collections::HashMap::new(),
+            },
+            tick: VarULong(0),
+        };
+        for recipient in recipients {
+            if let Some(client) = recipient.client.bedrock()
+                && let Ok(data) = client.serialize_packet(&packet)
+            {
+                let protocol = client.protocol_version.load(Relaxed);
+                let protocol = if protocol == 0 {
+                    pumpkin_world::CURRENT_BEDROCK_MC_PROTOCOL
+                } else {
+                    protocol
+                };
+                client.try_enqueue_packet_data_if(
+                    data,
+                    CSetActorData::PACKET_ID,
+                    |payload| {
+                        packet.actor_data.0.keys().any(|&key| {
+                            CSetActorData::updates_key(
+                                payload,
+                                packet.target_runtime_id,
+                                protocol,
+                                key,
+                            )
+                            .unwrap_or(false)
+                        })
+                    },
+                    || {
+                        // Observers have returned. Keep the check and queue insertion
+                        // ordered with other metadata publishers for this entity.
+                        let enqueue = self
+                            .bedrock_metadata_enqueue
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let guard = lock_if_current()?;
+                        (Arc::ptr_eq(&self.world.load(), world)
+                            && Arc::ptr_eq(&recipient.world(), world))
+                        .then_some((enqueue, guard))
+                    },
+                );
+            }
+        }
+    }
+
     fn send_java_metadata_packet(&self, world: &World, packet: &CSetEntityMetadata) {
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
             tracked.send_to_tracking_players(packet, world);
@@ -4621,10 +5123,26 @@ impl Entity {
     }
 
     pub fn set_pose(&self, pose: EntityPose) {
+        self.set_pose_if(pose, || true);
+    }
+
+    fn set_pose_if(&self, pose: EntityPose, may_apply: impl FnOnce() -> bool) -> bool {
         if self.pose.load() == pose {
-            return;
+            return may_apply();
         }
 
+        if !self.allow_pose_change(pose) || !may_apply() {
+            return false;
+        }
+
+        let world = self.world.load_full();
+        self.pose.store(pose);
+        self.sync_pose(pose);
+        self.send_bedrock_pose(&world, pose);
+        true
+    }
+
+    fn allow_pose_change(&self, pose: EntityPose) -> bool {
         let mut pose_event =
             crate::plugin::api::events::entity::entity_pose_change::EntityPoseChangeEvent::new(
                 self.entity_id,
@@ -4632,18 +5150,13 @@ impl Entity {
             );
         if let Some(server) = self.world.load().server.upgrade() {
             pose_event = server.plugin_manager.fire_blocking(&server, pose_event);
-            if pose_event.cancelled {
-                return;
-            }
         }
+        !pose_event.cancelled
+    }
 
-        self.pose.store(pose);
-        let pose = pose as i32;
-        let mut bedrock_meta = SyncedActorDataList::new();
-        bedrock_meta.set(entity_data_key::POSE_INDEX, MetadataValue::Int(pose));
-        self.refresh_dimensions_into(&mut bedrock_meta);
-        self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
-        self.send_bedrock_actor_data(&bedrock_meta);
+    fn sync_pose(&self, pose: EntityPose) {
+        self.refresh_dimensions_state();
+        self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose as i32));
     }
 
     /// Vanilla `getDefaultDimensions` changed, e.g. a baby growing up.
@@ -4667,12 +5180,12 @@ impl Entity {
 
     /// Vanilla `refreshDimensions`: size and bounding box for the current pose.
     pub fn refresh_dimensions(&self) {
-        let mut metadata = SyncedActorDataList::new();
-        self.refresh_dimensions_into(&mut metadata);
-        self.send_bedrock_actor_data(&metadata);
+        let world = self.world.load_full();
+        let dimensions = self.refresh_dimensions_state();
+        self.send_bedrock_dimensions(&world, dimensions);
     }
 
-    fn refresh_dimensions_into(&self, metadata: &mut SyncedActorDataList) {
+    fn refresh_dimensions_state(&self) -> EntityDimensions {
         let dimensions = self.get_dimensions(self.pose.load());
         let old = self.entity_dimension.swap(dimensions);
         // Vanilla `reapplyPosition`: the box is rebuilt even at the same size
@@ -4681,14 +5194,6 @@ impl Entity {
             self.pos.load(),
             &dimensions,
         ));
-        metadata.set(
-            entity_data_key::WIDTH,
-            MetadataValue::Float(dimensions.width),
-        );
-        metadata.set(
-            entity_data_key::HEIGHT,
-            MetadataValue::Float(dimensions.height),
-        );
         if !self.first_tick.load(Ordering::Relaxed)
             && !self.no_physics.load(Ordering::Relaxed)
             && dimensions.width <= 4.0
@@ -4698,6 +5203,7 @@ impl Entity {
         {
             self.fudge_position_after_size_change(old);
         }
+        dimensions
     }
 
     /// Vanilla `fudgePositionAfterSizeChange`: a grown entity moves to the closest free spot.
@@ -4858,6 +5364,17 @@ impl Entity {
         pitch: Option<f32>,
         world: &World,
     ) {
+        let mut movement_history = self.vehicle_movements.as_ref().map(|history| {
+            history
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
+        let teleport_epoch = movement_history.as_mut().map(|history| {
+            history.pending.clear();
+            history.teleport_revision = history.teleport_revision.wrapping_add(1);
+            self.last_pos.store(position);
+            history.teleport_revision
+        });
         // Update server-side position and bounding box
         self.set_pos(position);
         if let Some(yaw) = yaw {
@@ -4880,17 +5397,64 @@ impl Entity {
                 .store((pitch * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
         }
         let chunk_pos = self.chunk_pos.load();
-        world.broadcast_to_chunk(
-            chunk_pos,
-            &CEntityPositionSync::new(
-                self.entity_id.into(),
-                position,
-                self.velocity.load(),
-                yaw.unwrap_or(self.yaw.load()),
-                pitch.unwrap_or(self.pitch.load()),
-                self.on_ground.load(Ordering::SeqCst),
-            ),
+        let packet = CEntityPositionSync::new(
+            self.entity_id.into(),
+            position,
+            self.velocity.load(),
+            yaw.unwrap_or(self.yaw.load()),
+            pitch.unwrap_or(self.pitch.load()),
+            self.on_ground.load(Ordering::SeqCst),
         );
+        drop(movement_history);
+        if let Some(teleport_epoch) = teleport_epoch {
+            self.broadcast_vehicle_teleport(world, chunk_pos, &packet, teleport_epoch);
+        } else {
+            world.broadcast_to_chunk(chunk_pos, &packet);
+        }
+    }
+
+    fn broadcast_vehicle_teleport(
+        &self,
+        world: &World,
+        chunk_pos: Vector2<i32>,
+        packet: &CEntityPositionSync,
+        teleport_epoch: u64,
+    ) {
+        let lock_if_current = || {
+            let history = self.lock_vehicle_motion_if_current(teleport_epoch)?;
+            (!self.is_removed()
+                && self.pos.load() == packet.position
+                && std::ptr::eq(self.world.load().as_ref(), world))
+            .then_some(history)
+        };
+        let is_watching = |recipient: &Player| {
+            std::ptr::eq(recipient.world().as_ref(), world)
+                && recipient
+                    .watched_section
+                    .load()
+                    .is_within_distance(chunk_pos.x, chunk_pos.y)
+        };
+        let Ok(data) = JavaClient::serialize_packet_for_version(packet, CURRENT_MC_VERSION) else {
+            return;
+        };
+        for recipient in world.players.load().iter().filter(|p| is_watching(p)) {
+            if lock_if_current().is_none() {
+                break;
+            }
+            let Some(client) = recipient.client.java() else {
+                continue;
+            };
+            // A packet observer can teleport the entity again before this enqueue.
+            client.try_enqueue_packet_data_if(
+                data.clone(),
+                CEntityPositionSync::to_id(client.version.load()),
+                |mut payload| payload.get_var_int().is_ok_and(|id| id.0 == self.entity_id),
+                || {
+                    let history = lock_if_current()?;
+                    is_watching(recipient).then_some(history)
+                },
+            );
+        }
     }
 
     pub fn get_eye_pos(&self) -> Vector3<f64> {
@@ -5337,11 +5901,20 @@ impl Entity {
         true
     }
 
-    pub fn has_leash_data(&self) -> bool {
+    fn has_leash_holder_link(&self) -> bool {
         self.leashed_to
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .is_some()
+    }
+
+    pub fn has_leash_data(&self) -> bool {
+        self.has_leash_holder_link()
+            || self
+                .delayed_leash
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_some()
     }
 
     /// Vanilla `Leashable.leashableLeashedTo`: entities in the 32 block box around this one
@@ -5695,6 +6268,10 @@ impl Entity {
             .and_then(Weak::upgrade)
     }
 
+    pub(crate) fn riding_revision(&self) -> u64 {
+        self.riding_revision.load(Ordering::Acquire)
+    }
+
     /// Vanilla `getRootVehicle`, `None` when not riding.
     pub fn get_root_vehicle(&self) -> Option<Arc<dyn EntityBase>> {
         let mut root = self.get_vehicle()?;
@@ -5726,113 +6303,575 @@ impl Entity {
             .and_then(Weak::upgrade)
     }
 
+    pub fn add_passenger(&self, vehicle: Arc<dyn EntityBase>, passenger: Arc<dyn EntityBase>) {
+        self.add_passenger_with_capacity(vehicle, passenger, usize::MAX);
+    }
+
+    pub(crate) fn add_passenger_with_capacity(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+        capacity: usize,
+    ) -> bool {
+        self.add_passenger_if(vehicle, passenger, capacity, || true)
+    }
+
+    fn restore_player_passenger(&self, vehicle: Arc<dyn EntityBase>, player: Arc<Player>) {
+        self.attach_passenger(
+            vehicle,
+            player,
+            usize::MAX,
+            PassengerMount::Restoration,
+            None,
+            || true,
+        );
+    }
+
+    pub(crate) fn mount_vehicle_by_interaction(
+        &self,
+        player: &Arc<Player>,
+        capacity: usize,
+        vehicle_available: impl Fn() -> bool,
+    ) -> bool {
+        let world = self.world.load_full();
+        let Some(vehicle) = world.get_entity_by_id(self.entity_id) else {
+            return false;
+        };
+        let Some(passenger) = world.get_player_by_id(player.entity_id()) else {
+            return false;
+        };
+        let is_java = player.client.java().is_some();
+        let rider = player.get_entity();
+        let eligible = || {
+            !self.is_removed()
+                && !rider.is_removed()
+                && Arc::ptr_eq(&world, &self.world.load())
+                && Arc::ptr_eq(&world, &rider.world.load())
+                && player.can_interact_with_entity(vehicle.as_ref(), 1.0)
+                && !rider.is_sneaking()
+                && vehicle_available()
+        };
+        if !Arc::ptr_eq(&passenger, player)
+            || !eligible()
+            || (is_java && !player.can_ride(vehicle.as_ref()))
+        {
+            return false;
+        }
+
+        let revision = rider.riding_revision();
+        let position = rider.pos.load();
+        let pose = rider.pose.load();
+        let teleport = player.teleport_id_count.load(Ordering::Acquire);
+        let previous = rider.get_vehicle();
+        let source = previous.as_ref().map(|source| source.get_entity());
+        if let Some(source) = source {
+            if !is_java || std::ptr::eq(source, self) {
+                return false;
+            }
+            {
+                let _commit = world
+                    .riding_link_commits
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !eligible()
+                    || !self.can_attach_rider(&world, vehicle.as_ref(), rider)
+                    || self
+                        .passengers
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .len()
+                        >= capacity
+                {
+                    return false;
+                }
+            }
+            // Later mount vetoes can still abort the switch after the exit callbacks.
+            if !source.allow_dismount(rider.entity_id, PassengerRemoval::Dismount) {
+                return false;
+            }
+        }
+        self.attach_passenger(
+            vehicle.clone(),
+            passenger,
+            capacity,
+            PassengerMount::Gameplay,
+            source.map(|source| (source, revision)),
+            || {
+                eligible()
+                    && rider.pos.load() == position
+                    && rider.pose.load() == pose
+                    && player.teleport_id_count.load(Ordering::Acquire) == teleport
+            },
+        )
+    }
+
+    /// Recheck caller-specific eligibility after the mount and pose callbacks.
+    pub(crate) fn add_passenger_if(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+        capacity: usize,
+        still_eligible: impl FnOnce() -> bool,
+    ) -> bool {
+        self.attach_passenger(
+            vehicle,
+            passenger,
+            capacity,
+            PassengerMount::Gameplay,
+            None,
+            still_eligible,
+        )
+    }
+
     #[expect(
         clippy::needless_pass_by_value,
-        reason = "callers pass owned Arc for vehicle and passenger"
+        reason = "riding entry points pass owned Arc handles"
     )]
-    pub fn add_passenger(&self, vehicle: Arc<dyn EntityBase>, passenger: Arc<dyn EntityBase>) {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "The riding transaction validates and commits both links under the same guards."
+    )]
+    fn attach_passenger(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+        capacity: usize,
+        mount: PassengerMount,
+        switch: Option<(&Self, u64)>,
+        still_eligible: impl FnOnce() -> bool,
+    ) -> bool {
+        let passenger_entity = passenger.get_entity();
+        if self.removal_reason.load().is_some()
+            || passenger_entity.is_removed()
+            || (switch.is_none() && passenger_entity.has_vehicle())
+        {
+            return false;
+        }
+        let riding_revision = switch.map_or_else(
+            || passenger_entity.riding_revision(),
+            |(_, revision)| revision,
+        );
+        if passenger_entity.riding_revision() != riding_revision {
+            return false;
+        }
+        if !self.allow_mount(passenger_entity.entity_id) {
+            return false;
+        }
+        if !self.uses_vehicle_collisions()
+            && passenger.get_mob().is_some()
+            && passenger_entity.has_leash_holder_link()
+            && !passenger_entity.drop_leash()
+        {
+            return false;
+        }
+        let stand = self.uses_vehicle_collisions()
+            && passenger_entity.pose.load() != EntityPose::Standing
+            && passenger_entity.allow_pose_change(EntityPose::Standing);
+
+        let world = self.world.load_full();
+        let riding_links = world
+            .riding_link_commits
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !still_eligible() || !self.can_attach_rider(&world, vehicle.as_ref(), passenger_entity) {
+            return false;
+        }
+        // Only a switch holds two carrier lists, and switches share the world commit lock.
+        let mut source_passengers = switch.map(|(source, _)| {
+            source
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        });
+        let mut passengers = self
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // World removal marks the vehicle before taking its passenger snapshot.
+        if self.removal_reason.load().is_some() || passengers.len() >= capacity {
+            return false;
+        }
+        let mut rider_vehicle = passenger_entity
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if passenger_entity.is_removed()
+            || passenger_entity.riding_revision.load(Relaxed) != riding_revision
+            || match (switch, rider_vehicle.as_ref().and_then(Weak::upgrade)) {
+                (None, None) => false,
+                (Some((source, _)), Some(current)) => {
+                    !std::ptr::eq(source, current.get_entity())
+                        || source.is_removed()
+                        || !Arc::ptr_eq(&world, &source.world.load())
+                }
+                _ => true,
+            }
+        {
+            return false;
+        }
+        let source_update = if let Some(source_passengers) = source_passengers.as_mut() {
+            let Some(index) = source_passengers
+                .iter()
+                .position(|current| Arc::ptr_eq(current, &passenger))
+            else {
+                return false;
+            };
+            let previous_first = source_passengers
+                .first()
+                .map(|first| first.get_entity().entity_id);
+            source_passengers.remove(index);
+            passenger_entity.riding_cooldown.store(60, Relaxed);
+            let ids = source_passengers
+                .iter()
+                .map(|p| VarInt(p.get_entity().entity_id))
+                .collect::<Vec<_>>();
+            Some((ids, previous_first))
+        } else {
+            None
+        };
+        if stand {
+            passenger_entity.pose.store(EntityPose::Standing);
+        }
+        *rider_vehicle = Some(Arc::downgrade(&vehicle));
+        passenger_entity
+            .bedrock_flags
+            .fetch_or(1i64 << entity_data_flag::RIDING, Ordering::Relaxed);
+        // A player takes the first vehicle seat when a non-player occupies it.
+        let displaced_driver = passengers
+            .first()
+            .filter(|first| {
+                self.uses_vehicle_collisions()
+                    && passenger.get_player().is_some()
+                    && first.get_player().is_none()
+            })
+            .map(|first| first.get_entity().entity_id);
+        if displaced_driver.is_some() {
+            passengers.insert(0, passenger.clone());
+        } else {
+            passengers.push(passenger.clone());
+        }
+        let riding_revision = passenger_entity
+            .riding_revision
+            .fetch_add(1, Ordering::Release)
+            .wrapping_add(1);
+        let switch_placement_baseline = switch
+            .and_then(|_| passenger.get_player())
+            .map(Self::java_rider_placement_baseline);
+        drop(rider_vehicle);
+        drop(passengers);
+        drop(source_passengers);
+        drop(riding_links);
+
+        if let (Some((source, _)), Some((ids, previous_first))) = (switch, source_update) {
+            source.finish_passenger_switch_exit(&world, passenger.as_ref(), &ids, previous_first);
+        }
+
+        self.finish_passenger_mount(
+            vehicle.as_ref(),
+            passenger.as_ref(),
+            &world,
+            CommittedPassengerMount {
+                revision: riding_revision,
+                stood: stand,
+                displaced_driver,
+                switch_placement_baseline,
+            },
+            mount,
+        );
+        true
+    }
+
+    /// Complete the mount before publishing its passenger list. Callbacks may replace the link.
+    fn finish_passenger_mount(
+        &self,
+        vehicle: &dyn EntityBase,
+        passenger: &dyn EntityBase,
+        world: &Arc<World>,
+        committed: CommittedPassengerMount,
+        mount: PassengerMount,
+    ) {
+        let CommittedPassengerMount {
+            revision,
+            stood,
+            displaced_driver,
+            switch_placement_baseline,
+        } = committed;
+        let rider = passenger.get_entity();
+        // The pose was committed before releasing the riding locks. Refresh it even
+        // if the mount completion loses ownership of the attachment in the meantime.
+        let synced_pose = stood && rider.pose.load() == EntityPose::Standing;
+        if synced_pose {
+            rider.sync_pose(EntityPose::Standing);
+        }
+        let publish_pose = || {
+            if synced_pose
+                && !rider.is_removed()
+                && Arc::ptr_eq(world, &rider.world.load())
+                && rider.pose.load() == EntityPose::Standing
+            {
+                rider.send_bedrock_pose(world, EntityPose::Standing);
+            }
+        };
+        let still_boarded = || {
+            !self.is_removed()
+                && !rider.is_removed()
+                && rider.riding_revision() == revision
+                && Arc::ptr_eq(world, &self.world.load())
+                && Arc::ptr_eq(world, &rider.world.load())
+        };
+        if !still_boarded() {
+            publish_pose();
+            return;
+        }
+        let vehicle_mount = self.uses_vehicle_collisions();
+        let java_rider = passenger
+            .get_player()
+            .filter(|player| vehicle_mount && player.client.java().is_some());
+        let java_placement = java_rider.map(|player| {
+            let (position, teleport_count) = switch_placement_baseline
+                .unwrap_or_else(|| Self::java_rider_placement_baseline(player));
+            (player, position, teleport_count)
+        });
+        // Java restores a player's saved attachment with seat and link updates, while
+        // suppressing the mount game event and riding advancement triggers.
+        if vehicle_mount && mount == PassengerMount::Gameplay {
+            world.emit_game_event_with_context(
+                GameEvent::EntityMount.name(),
+                self.pos.load(),
+                &crate::world::game_event::GameEventContext {
+                    source_entity: Some(passenger),
+                },
+            );
+            if !self.is_removed() && Arc::ptr_eq(world, &self.world.load()) {
+                self.notify_started_riding(world);
+            }
+        }
+        if vehicle_mount && still_boarded() && passenger.get_mob().is_some() && rider.is_leashed() {
+            rider.drop_leash();
+        }
+        publish_pose();
+
+        if still_boarded()
+            && let Some(mob) = passenger.get_mob()
+        {
+            mob.on_start_riding();
+        }
+        rider.send_bedrock_riding_flags(passenger, revision);
+        if let Some((player, before_mount, teleport_count)) = java_placement {
+            Self::place_java_rider(
+                vehicle,
+                passenger,
+                player,
+                before_mount,
+                teleport_count,
+                &still_boarded,
+            );
+        }
+        if !still_boarded() {
+            return;
+        }
+        let passenger_ids: Vec<_> = self
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .map(|passenger| VarInt(passenger.get_entity().entity_id))
+            .collect();
+        let Some(index) = passenger_ids.iter().position(|id| id.0 == rider.entity_id) else {
+            return;
+        };
+        let be_link =
+            self.bedrock_passenger_link(rider.entity_id, if index == 0 { 1 } else { 2 }, true);
+        let changed_role = displaced_driver.map(|id| self.bedrock_passenger_link(id, 2, false));
+        self.send_passenger_update(
+            world,
+            java_rider,
+            &passenger_ids,
+            &[Some(be_link), changed_role],
+        );
+        if !vehicle_mount && mount == PassengerMount::Gameplay && still_boarded() {
+            self.notify_started_riding(world);
+        }
+    }
+
+    fn java_rider_placement_baseline(player: &Player) -> (Vector3<f64>, i32) {
+        (
+            player.get_entity().pos.load(),
+            player.teleport_id_count.load(Ordering::Acquire),
+        )
+    }
+
+    fn place_java_rider(
+        vehicle: &dyn EntityBase,
+        passenger: &dyn EntityBase,
+        player: &Player,
+        before_mount: Vector3<f64>,
+        teleport_count: i32,
+        still_boarded: &impl Fn() -> bool,
+    ) {
+        let Some(client) = player.client.java() else {
+            return;
+        };
+        let rider = passenger.get_entity();
+        let mut awaiting = player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !still_boarded() || rider.pos.load() != before_mount {
+            return;
+        }
+        let Some(seat) = rider_seat_position(vehicle, passenger) else {
+            return;
+        };
+        let rider_vehicle = rider
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !still_boarded()
+            || player
+                .teleport_id_count
+                .compare_exchange(
+                    teleport_count,
+                    teleport_count.wrapping_add(1),
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                )
+                .is_err()
+        {
+            return;
+        }
+        let id = VarInt(teleport_count.wrapping_add(1));
+        *awaiting = Some((id, seat));
+        rider.set_pos(seat);
+        vehicle.on_rider_positioned(passenger);
+        rider.set_rotation(rider.yaw.load(), rider.pitch.load());
+        rider.velocity.store(Vector3::default());
+        rider.movement.store(Vector3::default());
+        drop(rider_vehicle);
+        drop(awaiting);
+
+        let packet = CPlayerPosition::new(
+            id,
+            seat,
+            Vector3::new(0.0, 0.0, 0.0),
+            0.0,
+            0.0,
+            vec![PositionFlag::YRot, PositionFlag::XRot],
+        );
+        if !client.try_send_riding_position(&packet, player, before_mount, || {
+            still_boarded()
+                && rider.pos.load() == seat
+                && player.teleport_id_count.load(Ordering::Acquire) == id.0
+        }) {
+            let mut awaiting = player
+                .awaiting_teleport
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if awaiting.as_ref().is_some_and(|(pending, _)| *pending == id) {
+                *awaiting = None;
+            }
+        }
+    }
+
+    pub(crate) fn board_vehicle_contact(
+        &self,
+        vehicle: &Arc<dyn EntityBase>,
+        passenger: &Arc<dyn EntityBase>,
+        capacity: usize,
+        still_current: &dyn Fn() -> bool,
+        in_contact: impl FnOnce() -> bool,
+    ) {
+        self.add_passenger_if(vehicle.clone(), passenger.clone(), capacity, || {
+            still_current() && passenger.can_ride(vehicle.as_ref()) && in_contact()
+        });
+    }
+
+    // Called under the world's commit lock. Only additions can introduce a cycle.
+    fn can_attach_rider(&self, world: &Arc<World>, vehicle: &dyn EntityBase, rider: &Self) -> bool {
+        if !std::ptr::eq(vehicle.get_entity(), self)
+            || std::ptr::eq(self, rider)
+            || !Arc::ptr_eq(world, &self.world.load())
+            || !Arc::ptr_eq(world, &rider.world.load())
+        {
+            return false;
+        }
+        let mut ancestor = self.get_vehicle();
+        while let Some(parent) = ancestor {
+            if std::ptr::eq(parent.get_entity(), rider) {
+                return false;
+            }
+            ancestor = parent.get_entity().get_vehicle();
+        }
+        true
+    }
+
+    fn allow_mount(&self, passenger_id: i32) -> bool {
         let mut mount_event =
             crate::plugin::api::events::entity::entity_mount::EntityMountEvent::new(
-                passenger.get_entity().entity_id,
+                passenger_id,
                 self.entity_id,
             );
         let mut vehicle_enter =
             crate::plugin::api::events::vehicle::vehicle_enter::VehicleEnterEvent::new(
                 self.entity_id,
-                passenger.get_entity().entity_id,
+                passenger_id,
             );
         if let Some(server) = self.world.load().server.upgrade() {
             mount_event = server.plugin_manager.fire_blocking(&server, mount_event);
             vehicle_enter = server.plugin_manager.fire_blocking(&server, vehicle_enter);
         }
-        if mount_event.cancelled || vehicle_enter.cancelled {
-            return;
-        }
+        !mount_event.cancelled && !vehicle_enter.cancelled
+    }
 
-        let passenger_entity = passenger.get_entity();
-        if passenger.get_mob().is_some()
-            && passenger_entity.has_leash_data()
-            && !passenger_entity.drop_leash()
-        {
-            return;
-        }
-        *passenger_entity
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&vehicle));
+    fn notify_started_riding(&self, world: &Arc<World>) {
+        use crate::entity::player::advancement::trigger::AdvancementTrigger;
 
-        let mut passengers = self
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        if let Some(player) = passenger.get_player() {
-            let other_passenger_type = passengers
-                .first()
-                .map(|p| format!("minecraft:{}", p.get_entity().entity_type.resource_name));
-            player.trigger_advancement(
-                crate::entity::player::advancement::trigger::AdvancementTrigger::StartedRiding {
-                    vehicle_type: Some(format!("minecraft:{}", self.entity_type.resource_name)),
-                    passenger_type: other_passenger_type,
-                },
-            );
-        } else {
-            for p in passengers.iter() {
-                if let Some(player) = p.get_player() {
-                    player.trigger_advancement(
-                        crate::entity::player::advancement::trigger::AdvancementTrigger::StartedRiding {
+        fn collect_players(
+            vehicle: &Entity,
+            recipients: &mut Vec<(Arc<dyn EntityBase>, AdvancementTrigger)>,
+        ) {
+            let passengers = vehicle
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            for passenger in &passengers {
+                let rider = passenger.get_entity();
+                if passenger.get_player().is_some() {
+                    recipients.push((
+                        passenger.clone(),
+                        AdvancementTrigger::StartedRiding {
                             vehicle_type: Some(format!(
                                 "minecraft:{}",
-                                self.entity_type.resource_name
+                                vehicle.entity_type.resource_name
                             )),
-                            passenger_type: Some(format!(
-                                "minecraft:{}",
-                                passenger_entity.entity_type.resource_name
-                            )),
+                            passenger_type: passengers
+                                .iter()
+                                .find(|other| !Arc::ptr_eq(other, passenger))
+                                .map(|other| {
+                                    format!(
+                                        "minecraft:{}",
+                                        other.get_entity().entity_type.resource_name
+                                    )
+                                }),
                         },
-                    );
+                    ));
                 }
+                collect_players(rider, recipients);
             }
         }
 
-        let passenger_entity_id = passenger_entity.entity_id;
-        passenger_entity
-            .bedrock_flags
-            .fetch_or(1i64 << entity_data_flag::RIDING, Ordering::Relaxed);
-        let mut rider_meta = SyncedActorDataList::new();
-        rider_meta.set(
-            entity_data_key::FLAGS,
-            MetadataValue::Int64(passenger_entity.bedrock_flags.load(Ordering::Relaxed)),
-        );
-        passenger_entity.send_bedrock_actor_data(&rider_meta);
-
-        passengers.push(passenger);
-        let link_type = if passengers.len() == 1 { 1 } else { 2 };
-
-        let passenger_ids: Vec<VarInt> = passengers
-            .iter()
-            .map(|p| VarInt(p.get_entity().entity_id))
-            .collect();
-        drop(passengers);
-
-        let be_link = pumpkin_protocol::bedrock::client::CSetActorLink {
-            link: pumpkin_protocol::bedrock::client::common::ActorLink {
-                ridden_unique_id: VarLong(i64::from(self.entity_id)),
-                rider_unique_id: VarLong(i64::from(passenger_entity_id)),
-                link_type,
-                immediate: true,
-                rider_initiated: true,
-                vehicle_angular_velocity: 0.0,
-            },
-        };
-
-        let world = self.world.load();
-        let chunk_pos = self.chunk_pos.load();
-        world.broadcast_to_chunk_editioned(
-            chunk_pos,
-            &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
-            &be_link,
-        );
+        let mut recipients = Vec::new();
+        collect_players(self, &mut recipients);
+        for (rider, trigger) in recipients {
+            let entity = rider.get_entity();
+            if !entity.is_removed()
+                && Arc::ptr_eq(world, &entity.world.load())
+                && let Some(player) = rider.get_player()
+            {
+                player.trigger_advancement(trigger);
+            }
+        }
     }
 
     #[expect(
@@ -5844,15 +6883,46 @@ impl Entity {
         vehicle: Arc<dyn EntityBase>,
         passenger: Arc<dyn EntityBase>,
     ) {
-        *passenger
-            .get_entity()
+        let world = self.world.load_full();
+        let riding_links = world
+            .riding_link_commits
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let rider = passenger.get_entity();
+        if !self.can_attach_rider(&world, vehicle.as_ref(), rider) {
+            return;
+        }
+        let mut passengers = self
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut rider_vehicle = rider
             .vehicle
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::downgrade(&vehicle));
-        self.passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(passenger);
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.is_removed()
+            || rider.is_removed()
+            || rider_vehicle.as_ref().and_then(Weak::upgrade).is_some()
+        {
+            return;
+        }
+        *rider_vehicle = Some(Arc::downgrade(&vehicle));
+        rider
+            .bedrock_flags
+            .fetch_or(1i64 << entity_data_flag::RIDING, Relaxed);
+        let riding_revision = rider
+            .riding_revision
+            .fetch_add(1, Ordering::Release)
+            .wrapping_add(1);
+        passengers.push(passenger.clone());
+        drop(rider_vehicle);
+        drop(passengers);
+        drop(riding_links);
+        if rider.riding_revision() == riding_revision
+            && let Some(mob) = passenger.get_mob()
+        {
+            mob.on_start_riding();
+        }
     }
 
     fn write_passengers(&self, nbt: &mut NbtCompound) {
@@ -5882,16 +6952,28 @@ impl Entity {
             .passengers
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let previous_first = passengers.first().map(|p| p.get_entity().entity_id);
         if let Some(index) = passengers
             .iter()
             .position(|passenger| passenger.get_entity().entity_id == passenger_id)
         {
             let passenger = passengers.remove(index);
-            *passenger
-                .get_entity()
+            let rider = passenger.get_entity();
+            let mut vehicle = rider
                 .vehicle
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if vehicle
+                .as_ref()
+                .and_then(Weak::upgrade)
+                .is_some_and(|current| std::ptr::eq(current.get_entity(), self))
+            {
+                *vehicle = None;
+                rider
+                    .bedrock_flags
+                    .fetch_and(!(1i64 << entity_data_flag::RIDING), Relaxed);
+                rider.riding_revision.fetch_add(1, Ordering::Release);
+            }
         }
 
         let passenger_ids: Vec<VarInt> = passengers
@@ -5900,22 +6982,211 @@ impl Entity {
             .collect();
         drop(passengers);
 
-        let be_unlink = pumpkin_protocol::bedrock::client::CSetActorLink {
-            link: pumpkin_protocol::bedrock::client::common::ActorLink {
+        let links = self.bedrock_links_after_removal(passenger_id, previous_first, &passenger_ids);
+        self.send_passenger_update(&self.world.load(), None, &passenger_ids, &links);
+    }
+
+    pub(crate) fn bedrock_passenger_link(
+        &self,
+        passenger_id: i32,
+        link_type: u8,
+        rider_initiated: bool,
+    ) -> CSetActorLink {
+        CSetActorLink {
+            link: ActorLink {
                 ridden_unique_id: VarLong(i64::from(self.entity_id)),
                 rider_unique_id: VarLong(i64::from(passenger_id)),
-                link_type: 0,
+                link_type,
                 immediate: true,
-                rider_initiated: false,
+                rider_initiated,
                 vehicle_angular_velocity: 0.0,
             },
-        };
+        }
+    }
 
-        self.world.load().broadcast_to_chunk_editioned(
-            self.chunk_pos.load(),
-            &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
-            &be_unlink,
+    fn bedrock_links_after_removal(
+        &self,
+        passenger_id: i32,
+        previous_first: Option<i32>,
+        ids: &[VarInt],
+    ) -> [Option<CSetActorLink>; 2] {
+        let unlink = self.bedrock_passenger_link(passenger_id, 0, false);
+        let promotion = ids
+            .first()
+            .filter(|_| previous_first == Some(passenger_id))
+            .map(|first| self.bedrock_passenger_link(first.0, 1, false));
+        [Some(unlink), promotion]
+    }
+
+    pub(crate) fn send_passenger_update_to(
+        &self,
+        world: &World,
+        recipient: &Player,
+        ids: &[VarInt],
+        links: &[Option<CSetActorLink>],
+    ) {
+        self.send_passenger_update_to_if(
+            world,
+            recipient,
+            ids,
+            ids,
+            links,
+            |_| {
+                Some((
+                    (),
+                    self.passengers
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                ))
+            },
+            |_| true,
         );
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Both editions share the pairing snapshot and observer guards."
+    )]
+    pub(crate) fn send_passenger_update_to_if<'a, T>(
+        &'a self,
+        world: &World,
+        recipient: &Player,
+        ids: &[VarInt],
+        visible_ids: &[VarInt],
+        links: &[Option<CSetActorLink>],
+        lock_current: impl Fn(
+            Option<i32>,
+        )
+            -> Option<(T, std::sync::MutexGuard<'a, Vec<Arc<dyn EntityBase>>>)>,
+        keep_stale_extra: impl Fn(&[u8]) -> bool,
+    ) {
+        let in_world = || {
+            std::ptr::eq(recipient.world().as_ref(), world)
+                && std::ptr::eq(self.world.load().as_ref(), world)
+        };
+        if let Some(client) = recipient.client.java()
+            && let Ok(data) =
+                client.serialize_packet(&CSetPassengers::new(VarInt(self.entity_id), visible_ids))
+        {
+            let protocol = client.version.load();
+            client.try_enqueue_packet_data_filtering(
+                data,
+                || {
+                    let (session, current) = lock_current(None)?;
+                    (in_world()
+                        && current
+                            .iter()
+                            .map(|p| VarInt(p.get_entity().entity_id))
+                            .eq(ids.iter().copied()))
+                    .then_some((session, current))
+                },
+                |data| {
+                    let mut affected = ids.to_vec();
+                    affected.extend(links.iter().flatten().filter_map(|link| {
+                        (link.link.link_type == 0)
+                            .then(|| i32::try_from(link.link.rider_unique_id.0).ok())
+                            .flatten()
+                            .map(VarInt)
+                    }));
+                    (keep_stale_extra(&data)
+                        && !Self::java_passenger_update_overlaps(
+                            &data,
+                            protocol,
+                            self.entity_id,
+                            &affected,
+                        ))
+                    .then_some(data)
+                },
+            );
+        } else if let Some(client) = recipient.client.bedrock() {
+            for link in links.iter().flatten() {
+                let Ok(data) = client.serialize_packet(link) else {
+                    continue;
+                };
+                let rider = link.link.rider_unique_id.0;
+                client.try_enqueue_packet_data_filtering(
+                    data,
+                    || {
+                        let (session, current) = lock_current(i32::try_from(rider).ok())?;
+                        let role = current
+                            .iter()
+                            .position(|passenger| {
+                                i64::from(passenger.get_entity().entity_id) == rider
+                            })
+                            .map_or(0, |index| if index == 0 { 1 } else { 2 });
+                        (in_world() && role == link.link.link_type).then_some((session, current))
+                    },
+                    |data| {
+                        let mut payload = data.as_ref();
+                        let overlaps = VarUInt::read(&mut payload)
+                            .is_ok_and(|id| id.0 == CSetActorLink::PACKET_ID as u32)
+                            && VarLong::read(&mut payload).is_ok_and(|carrier| {
+                                carrier == link.link.ridden_unique_id
+                                    || VarLong::read(&mut payload)
+                                        .is_ok_and(|other| other.0 == rider)
+                            });
+                        (!overlaps && keep_stale_extra(&data)).then_some(data)
+                    },
+                );
+            }
+        }
+    }
+
+    pub(crate) fn java_passenger_update_overlaps(
+        mut payload: &[u8],
+        protocol: JavaMinecraftVersion,
+        carrier: i32,
+        riders: &[VarInt],
+    ) -> bool {
+        use pumpkin_protocol::{ServerPacket, java::client::play::CSetEntityLink};
+
+        let Ok(packet_id) = payload.get_var_int() else {
+            return false;
+        };
+        if protocol <= JavaMinecraftVersion::V_1_8 && packet_id.0 == CSetEntityLink::to_id(protocol)
+        {
+            // These versions share the attach packet between riding and leashing.
+            return CSetEntityLink::read(&mut payload, &protocol).is_ok_and(|link| {
+                !link.leash
+                    && (link.holding_entity_id == carrier
+                        || riders.contains(&VarInt(link.attached_entity_id)))
+            });
+        }
+        if packet_id.0 != CSetPassengers::to_id(protocol) {
+            return false;
+        }
+        if payload.get_var_int().is_ok_and(|id| id.0 == carrier) {
+            return true;
+        }
+        payload.get_var_int().is_ok_and(|count| {
+            (0..count.0)
+                .map_while(|_| payload.get_var_int().ok())
+                .any(|id| riders.contains(&id))
+        })
+    }
+
+    fn send_passenger_update(
+        &self,
+        world: &World,
+        direct_recipient: Option<&Player>,
+        ids: &[VarInt],
+        links: &[Option<CSetActorLink>],
+    ) {
+        if let Some(player) = direct_recipient {
+            self.send_passenger_update_to(world, player, ids, links);
+        }
+        let chunk = self.chunk_pos.load();
+        for player in world.players.load().iter() {
+            if direct_recipient
+                .is_none_or(|direct| direct.get_entity().entity_id != player.get_entity().entity_id)
+                && player
+                    .watched_section
+                    .load()
+                    .is_within_distance(chunk.x, chunk.y)
+            {
+                self.send_passenger_update_to(world, player, ids, links);
+            }
+        }
     }
 
     pub fn remove_passenger_sync(&self, passenger_id: i32) {
@@ -5923,15 +7194,161 @@ impl Entity {
     }
 
     pub fn remove_passenger(&self, passenger_id: i32) {
-        self.remove_passenger_internal(passenger_id, true);
+        self.remove_passenger_internal(passenger_id, PassengerRemoval::Dismount, None);
     }
 
     pub fn remove_passenger_before_teleport(&self, passenger_id: i32) {
-        self.remove_passenger_internal(passenger_id, false);
+        self.remove_passenger_internal(passenger_id, PassengerRemoval::Teleport, None);
+    }
+
+    pub(crate) fn remove_passenger_after_vehicle_removal(&self, passenger_id: i32) {
+        self.remove_passenger_internal(passenger_id, PassengerRemoval::VehicleRemoved, None);
+    }
+
+    pub(crate) fn eject_vehicle_passengers(&self) -> bool {
+        let world = self.world.load_full();
+        let position = self.pos.load();
+        let epoch = self.vehicle_motion_epoch();
+        let still_current = || {
+            !self.is_removed()
+                && self.pos.load() == position
+                && self.vehicle_motion_epoch() == epoch
+                && Arc::ptr_eq(&world, &self.world.load())
+        };
+        let passengers: Vec<_> = self
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .rev()
+            .map(|passenger| {
+                let rider = passenger.get_entity();
+                (rider.entity_id, rider.riding_revision())
+            })
+            .collect();
+        for (id, revision) in passengers {
+            if !still_current() {
+                return false;
+            }
+            self.remove_passenger_internal(id, PassengerRemoval::Dismount, Some(revision));
+        }
+        still_current()
+    }
+
+    fn legacy_dismount_position(
+        &self,
+        world: &World,
+        passenger_entity: &Self,
+        vehicle_box: BoundingBox,
+    ) -> Vector3<f64> {
+        let offsets = dismount_helper::offsets_for_yaw(self.yaw.load());
+
+        let target_block_y = vehicle_box.max.y.floor() as i32;
+        let below_pos = BlockPos(Vector3::new(
+            self.pos.load().x.floor() as i32,
+            target_block_y - 1,
+            self.pos.load().z.floor() as i32,
+        ));
+
+        let below_state_id = world.get_block_state_id(&below_pos);
+        // Vanilla: isWater checks specifically for water fluid, not any fluid
+        let is_water =
+            Fluid::from_state_id(below_state_id).is_some_and(|f| f.matches_type(&Fluid::WATER));
+
+        let fallback_pos = Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
+
+        if is_water {
+            fallback_pos
+        } else {
+            // Vanilla checks Standing, Crouching, Swimming poses and their respective height checks
+            let poses_and_heights = [
+                (EntityPose::Standing, vec![0, 1, -1]),
+                (EntityPose::Crouching, vec![0, 1, -1]),
+                (EntityPose::Swimming, vec![0, 1]),
+            ];
+
+            let vehicle_block_pos = self.block_pos.load();
+            let mut found = None;
+
+            'search: for (pose, y_offsets) in poses_and_heights {
+                let dims = passenger_entity.get_dimensions(pose);
+
+                for y_offset in y_offsets {
+                    for offset in offsets {
+                        let target_block_x = vehicle_block_pos.0.x + offset.x;
+                        let target_block_y = vehicle_block_pos.0.y + y_offset;
+                        let target_block_z = vehicle_block_pos.0.z + offset.z;
+
+                        let target_pos =
+                            BlockPos(Vector3::new(target_block_x, target_block_y, target_block_z));
+                        let height = world.get_dismount_height(&target_pos);
+
+                        if height.is_finite() && height < 1.0 {
+                            let location = Vector3::new(
+                                f64::from(target_block_x) + 0.5,
+                                f64::from(target_block_y) + height,
+                                f64::from(target_block_z) + 0.5,
+                            );
+
+                            let bbox = BoundingBox::new_from_pos(
+                                location.x, location.y, location.z, &dims,
+                            );
+                            if world.is_space_empty(bbox) {
+                                found = Some((location, pose));
+                                break 'search;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Some((pos, pose)) = found {
+                if pose != EntityPose::Standing {
+                    passenger_entity.set_pose(pose);
+                }
+                pos
+            } else {
+                // Try dismounting directly on top of the vehicle as fallback
+                let mut found_fallback = None;
+                let vehicle_top = vehicle_box.max.y;
+
+                let poses = [
+                    EntityPose::Standing,
+                    EntityPose::Crouching,
+                    EntityPose::Swimming,
+                ];
+
+                for pose in poses {
+                    let dims = passenger_entity.get_dimensions(pose);
+                    let bbox = BoundingBox::new_from_pos(
+                        self.pos.load().x,
+                        vehicle_top,
+                        self.pos.load().z,
+                        &dims,
+                    );
+                    if world.is_space_empty(bbox) {
+                        found_fallback = Some((
+                            Vector3::new(self.pos.load().x, vehicle_top, self.pos.load().z),
+                            pose,
+                        ));
+                        break;
+                    }
+                }
+
+                if let Some((pos, pose)) = found_fallback {
+                    if pose != EntityPose::Standing {
+                        passenger_entity.set_pose(pose);
+                    }
+                    pos
+                } else {
+                    fallback_pos
+                }
+            }
+        }
     }
 
     #[allow(clippy::too_many_lines)]
-    fn remove_passenger_internal(&self, passenger_id: i32, reposition: bool) {
+    fn allow_dismount(&self, passenger_id: i32, reason: PassengerRemoval) -> bool {
         let mut dismount_event =
             crate::plugin::api::events::entity::entity_dismount::EntityDismountEvent::new(
                 passenger_id,
@@ -5946,40 +7363,147 @@ impl Entity {
             dismount_event = server.plugin_manager.fire_blocking(&server, dismount_event);
             vehicle_exit = server.plugin_manager.fire_blocking(&server, vehicle_exit);
         }
-        if dismount_event.cancelled || vehicle_exit.cancelled {
-            return;
-        }
+        reason == PassengerRemoval::VehicleRemoved
+            || !(dismount_event.cancelled || vehicle_exit.cancelled)
+    }
 
-        let (removed_passenger, passenger_ids) = {
+    fn finish_passenger_switch_exit(
+        &self,
+        world: &World,
+        rider: &dyn EntityBase,
+        ids: &[VarInt],
+        previous_first: Option<i32>,
+    ) {
+        let rider_entity = rider.get_entity();
+        if self.uses_vehicle_collisions()
+            && std::ptr::eq(world, rider_entity.world.load().as_ref())
+            && rider_entity
+                .removal_reason
+                .load()
+                .is_none_or(|reason| reason.should_destroy())
+        {
+            world.emit_game_event_with_context(
+                GameEvent::EntityDismount.name(),
+                self.pos.load(),
+                &crate::world::game_event::GameEventContext {
+                    source_entity: Some(rider),
+                },
+            );
+        }
+        // The rider remains mounted throughout the switch; destination mount publishes the riding flags.
+        let links =
+            self.bedrock_links_after_removal(rider.get_entity().entity_id, previous_first, ids);
+        self.send_passenger_update(world, rider.get_player(), ids, &links);
+    }
+
+    #[expect(clippy::too_many_lines)]
+    fn remove_passenger_internal(
+        &self,
+        passenger_id: i32,
+        reason: PassengerRemoval,
+        expected_revision: Option<u64>,
+    ) -> bool {
+        let previous_attachment = self
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .find(|p| p.get_entity().entity_id == passenger_id)
+            .map(|p| {
+                (
+                    p.clone(),
+                    p.get_entity().riding_revision.load(Ordering::Acquire),
+                )
+            });
+        let Some((previous_rider, riding_revision)) = previous_attachment else {
+            return false;
+        };
+        if expected_revision.is_some_and(|expected| expected != riding_revision) {
+            return false;
+        }
+        let previous_entity = previous_rider.get_entity();
+        let previous_world = previous_entity.world.load_full();
+        let previous_position = previous_entity.pos.load();
+        let previous_pose = previous_entity.pose.load();
+        let previous_teleport = previous_rider
+            .get_player()
+            .map(|player| player.teleport_id_count.load(Ordering::Acquire));
+        if !self.allow_dismount(passenger_id, reason) {
+            return false;
+        }
+        let reposition = reason != PassengerRemoval::Teleport;
+
+        let (removed_passenger, passenger_ids, previous_first) = {
             let mut passengers = self
                 .passengers
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let removed_passenger = passengers
+            let previous_first = passengers.first().map(|p| p.get_entity().entity_id);
+            let detached = passengers
                 .iter()
                 .position(|p| p.get_entity().entity_id == passenger_id)
-                .map(|idx| {
-                    let passenger = passengers.remove(idx);
-                    *passenger
-                        .get_entity()
+                .and_then(|idx| {
+                    let passenger = passengers[idx].clone();
+                    let rider = passenger.get_entity();
+                    let mut vehicle = rider
                         .vehicle
                         .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
-                    passenger
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let Some(carrier) = vehicle
+                        .as_ref()
+                        .and_then(Weak::upgrade)
+                        .filter(|current| std::ptr::eq(current.get_entity(), self))
+                    else {
+                        passengers.remove(idx);
+                        return None;
+                    };
+                    if rider.riding_revision.load(Relaxed) != riding_revision
+                        && reason != PassengerRemoval::VehicleRemoved
+                    {
+                        return None;
+                    }
+                    passengers.remove(idx);
+                    *vehicle = None;
+                    // Vanilla prevents immediate re-mounting and clears the rider flag.
+                    rider.riding_cooldown.store(60, Relaxed);
+                    rider
+                        .bedrock_flags
+                        .fetch_and(!(1i64 << entity_data_flag::RIDING), Relaxed);
+                    let revision = rider
+                        .riding_revision
+                        .fetch_add(1, Ordering::Release)
+                        .wrapping_add(1);
+                    drop(vehicle);
+                    Some((passenger, revision, carrier))
                 });
 
             let passenger_ids: Vec<VarInt> = passengers
                 .iter()
                 .map(|p| VarInt(p.get_entity().entity_id))
                 .collect();
-            (removed_passenger, passenger_ids)
+            (detached, passenger_ids, previous_first)
         };
 
-        let chunk_pos = self.chunk_pos.load();
-
-        if let Some(passenger) = removed_passenger {
+        if let Some((passenger, riding_revision, carrier)) = removed_passenger {
             let vehicle_box = self.bounding_box.load();
+            let exit_position = self.pos.load();
             let passenger_entity = passenger.get_entity();
+            let world = self.world.load_full();
+            let rider_position = passenger_entity.pos.load();
+            let rider_pose = passenger_entity.pose.load();
+            let vehicle_exit = self.uses_vehicle_collisions();
+            let guard_placement = vehicle_exit;
+            // Exit listeners can move a rider before the old attachment is unlinked.
+            let reposition = reposition
+                && (!guard_placement
+                    || (rider_position == previous_position
+                        && rider_pose == previous_pose
+                        && Arc::ptr_eq(&previous_world, &passenger_entity.world.load())
+                        && previous_teleport.is_none_or(|id| {
+                            passenger.get_player().is_some_and(|player| {
+                                player.teleport_id_count.load(Ordering::Acquire) == id
+                            })
+                        })));
 
             // Pre-allocate teleport ID and block movement packets BEFORE sending
             // CSetPassengers. This prevents a race condition where the client receives
@@ -5991,8 +7515,7 @@ impl Entity {
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
                     + 1;
                 // Use fallback position as placeholder — updated below with real position
-                let placeholder =
-                    Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
+                let placeholder = Vector3::new(exit_position.x, vehicle_box.max.y, exit_position.z);
                 *player
                     .awaiting_teleport
                     .lock()
@@ -6003,270 +7526,146 @@ impl Entity {
                 None
             };
 
-            // Vanilla: ridingCooldown = 60 (prevents immediate re-mount)
-            passenger_entity.riding_cooldown.store(60, Relaxed);
-            // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
+            if vehicle_exit
+                && Arc::ptr_eq(&world, &passenger_entity.world.load())
+                && passenger_entity
+                    .removal_reason
+                    .load()
+                    .is_none_or(|reason| reason.should_destroy())
+            {
+                world.emit_game_event_with_context(
+                    GameEvent::EntityDismount.name(),
+                    exit_position,
+                    &crate::world::game_event::GameEventContext {
+                        source_entity: Some(passenger.as_ref()),
+                    },
+                );
+            }
 
-            passenger_entity
-                .bedrock_flags
-                .fetch_and(!(1i64 << entity_data_flag::RIDING), Ordering::Relaxed);
-            let mut rider_meta = SyncedActorDataList::new();
-            rider_meta.set(
-                entity_data_key::FLAGS,
-                MetadataValue::Int64(passenger_entity.bedrock_flags.load(Ordering::Relaxed)),
-            );
-            passenger_entity.send_bedrock_actor_data(&rider_meta);
+            passenger_entity.send_bedrock_riding_flags(passenger.as_ref(), riding_revision);
 
             // Send CSetPassengers directly to the dismounting player before broadcasting it.
-            let world = self.world.load();
-            let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
-            let be_unlink = pumpkin_protocol::bedrock::client::CSetActorLink {
-                link: pumpkin_protocol::bedrock::client::common::ActorLink {
-                    ridden_unique_id: VarLong(i64::from(self.entity_id)),
-                    rider_unique_id: VarLong(i64::from(passenger_id)),
-                    link_type: 0,
-                    immediate: true,
-                    rider_initiated: false,
-                    vehicle_angular_velocity: 0.0,
-                },
-            };
-            if let Some(player) = passenger.get_player() {
-                player.try_enqueue_packet_editioned(&passengers_packet, &be_unlink);
-                world.broadcast_to_chunk_except_editioned(
-                    chunk_pos,
-                    &[player.get_entity().entity_uuid],
-                    &passengers_packet,
-                    &be_unlink,
-                );
-            } else {
-                world.broadcast_to_chunk_editioned(chunk_pos, &passengers_packet, &be_unlink);
-            }
+            let links =
+                self.bedrock_links_after_removal(passenger_id, previous_first, &passenger_ids);
+            self.send_passenger_update(&world, passenger.get_player(), &passenger_ids, &links);
 
             if !reposition {
-                return;
+                return false;
             }
 
-            // Calculate dismount directions and offsets (vanilla DismountHelper)
-            let vehicle_yaw = self.yaw.load();
-            // Wrap yaw to 0..360 range
-            let wrapped_yaw = (vehicle_yaw % 360.0 + 360.0) % 360.0;
-            let forward_dir = if !(45.0..315.0).contains(&wrapped_yaw) {
-                BlockDirection::South
-            } else if (45.0..135.0).contains(&wrapped_yaw) {
-                BlockDirection::West
-            } else if (135.0..225.0).contains(&wrapped_yaw) {
-                BlockDirection::North
+            let still_detached = || {
+                !passenger_entity.is_removed()
+                    && passenger_entity.riding_revision.load(Ordering::Acquire) == riding_revision
+                    && Arc::ptr_eq(&world, &passenger_entity.world.load())
+                    && teleport_id.is_none_or(|id| {
+                        passenger.get_player().is_some_and(|player| {
+                            player.teleport_id_count.load(Ordering::Acquire) == id
+                        })
+                    })
+            };
+            let still_owns_placement =
+                || still_detached() && passenger_entity.pos.load() == rider_position;
+            let dismount_pos = if vehicle_exit
+                && (!still_owns_placement() || passenger_entity.pose.load() != rider_pose)
+            {
+                None
+            } else if vehicle_exit {
+                carrier.vehicle_dismount_position(passenger.as_ref(), &still_owns_placement)
             } else {
-                BlockDirection::East
+                Some(self.legacy_dismount_position(&world, passenger_entity, vehicle_box))
             };
 
-            let get_step = |dir: BlockDirection| -> (i32, i32) {
-                match dir {
-                    BlockDirection::North => (0, -1),
-                    BlockDirection::South => (0, 1),
-                    BlockDirection::East => (1, 0),
-                    BlockDirection::West => (-1, 0),
-                    _ => (0, 0),
-                }
-            };
-
-            let get_clockwise = |dir: BlockDirection| -> BlockDirection {
-                match dir {
-                    BlockDirection::North => BlockDirection::East,
-                    BlockDirection::East => BlockDirection::South,
-                    BlockDirection::South => BlockDirection::West,
-                    BlockDirection::West => BlockDirection::North,
-                    other => other,
-                }
-            };
-
-            let get_opposite = |dir: BlockDirection| -> BlockDirection {
-                match dir {
-                    BlockDirection::North => BlockDirection::South,
-                    BlockDirection::South => BlockDirection::North,
-                    BlockDirection::East => BlockDirection::West,
-                    BlockDirection::West => BlockDirection::East,
-                    other => other,
-                }
-            };
-
-            let right_dir = get_clockwise(forward_dir);
-            let left_dir = get_opposite(right_dir);
-            let back_dir = get_opposite(forward_dir);
-
-            let (fx, fz) = get_step(forward_dir);
-            let (rx, rz) = get_step(right_dir);
-            let (lx, lz) = get_step(left_dir);
-            let (bx, bz) = get_step(back_dir);
-
-            let offsets = [
-                (rx, rz),
-                (lx, lz),
-                (bx + rx, bz + rz),
-                (bx + lx, bz + lz),
-                (fx + rx, fz + rz),
-                (fx + lx, fz + lz),
-                (bx, bz),
-                (fx, fz),
-            ];
-
-            let target_block_y = vehicle_box.max.y.floor() as i32;
-            let below_pos = BlockPos(Vector3::new(
-                self.pos.load().x.floor() as i32,
-                target_block_y - 1,
-                self.pos.load().z.floor() as i32,
-            ));
-
-            let below_state_id = world.get_block_state_id(&below_pos);
-            // Vanilla: isWater checks specifically for water fluid, not any fluid
-            let is_water =
-                Fluid::from_state_id(below_state_id).is_some_and(|f| f.matches_type(&Fluid::WATER));
-
-            let fallback_pos =
-                Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
-
-            let dismount_pos = if is_water {
-                fallback_pos
-            } else {
-                // Vanilla checks Standing, Crouching, Swimming poses and their respective height checks
-                let poses_and_heights = [
-                    (EntityPose::Standing, vec![0, 1, -1]),
-                    (EntityPose::Crouching, vec![0, 1, -1]),
-                    (EntityPose::Swimming, vec![0, 1]),
-                ];
-
-                let vehicle_block_pos = self.block_pos.load();
-                let mut found = None;
-
-                'search: for (pose, y_offsets) in poses_and_heights {
-                    let dims = passenger_entity.get_dimensions(pose);
-
-                    for y_offset in y_offsets {
-                        for &(ox, oz) in &offsets {
-                            let target_block_x = vehicle_block_pos.0.x + ox;
-                            let target_block_y = vehicle_block_pos.0.y + y_offset;
-                            let target_block_z = vehicle_block_pos.0.z + oz;
-
-                            let target_pos = BlockPos(Vector3::new(
-                                target_block_x,
-                                target_block_y,
-                                target_block_z,
-                            ));
-                            let height = world.get_dismount_height(&target_pos);
-
-                            if height.is_finite() && height < 1.0 {
-                                let location = Vector3::new(
-                                    f64::from(target_block_x) + 0.5,
-                                    f64::from(target_block_y) + height,
-                                    f64::from(target_block_z) + 0.5,
-                                );
-
-                                let bbox = BoundingBox::new_from_pos(
-                                    location.x, location.y, location.z, &dims,
-                                );
-                                if world.is_space_empty(bbox) {
-                                    found = Some((location, pose));
-                                    break 'search;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if let Some((pos, pose)) = found {
-                    if pose != EntityPose::Standing {
-                        passenger_entity.set_pose(pose);
-                    }
-                    pos
-                } else {
-                    // Try dismounting directly on top of the vehicle as fallback
-                    let mut found_fallback = None;
-                    let vehicle_top = vehicle_box.max.y;
-
-                    let poses = [
-                        EntityPose::Standing,
-                        EntityPose::Crouching,
-                        EntityPose::Swimming,
-                    ];
-
-                    for pose in poses {
-                        let dims = passenger_entity.get_dimensions(pose);
-                        let bbox = BoundingBox::new_from_pos(
-                            self.pos.load().x,
-                            vehicle_top,
-                            self.pos.load().z,
-                            &dims,
-                        );
-                        if world.is_space_empty(bbox) {
-                            found_fallback = Some((
-                                Vector3::new(self.pos.load().x, vehicle_top, self.pos.load().z),
-                                pose,
-                            ));
-                            break;
-                        }
-                    }
-
-                    if let Some((pos, pose)) = found_fallback {
-                        if pose != EntityPose::Standing {
-                            passenger_entity.set_pose(pose);
-                        }
-                        pos
-                    } else {
-                        fallback_pos
-                    }
-                }
-            };
-
-            // Clean up any remaining reference to the dismounted passenger.
-            passenger_entity.set_pos(dismount_pos);
+            let dismount_pos = dismount_pos.filter(|_| !guard_placement || still_owns_placement());
 
             // Phase 2: Teleport to safety (unblocks movement)
             if let Some(player) = passenger.get_player() {
                 if let Some(id) = teleport_id {
-                    player.get_entity().set_pos(dismount_pos);
-                    // Update awaiting_teleport with the real dismount position
-                    *player
+                    let mut awaiting = player
                         .awaiting_teleport
                         .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                        Some((id.into(), dismount_pos));
-                    // Use send_client_packet so the teleport goes through
-                    // the same packet queue as CSetPassengers, preserving send order.
-                    // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
-                    // With rotation relative and yaw/pitch=0, the client preserves its current look.
-                    player.try_send_client_packet(&CPlayerPosition::new(
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    if guard_placement
+                        && awaiting
+                            .as_ref()
+                            .is_none_or(|(pending, _)| *pending != id.into())
+                    {
+                        return false;
+                    }
+                    let Some(dismount_pos) = dismount_pos else {
+                        *awaiting = None;
+                        return false;
+                    };
+                    *awaiting = Some((id.into(), dismount_pos));
+                    drop(awaiting);
+                    passenger_entity.set_pos(dismount_pos);
+                    // The Java vehicle exit keeps the current look and rotates the
+                    // preserved delta with the relative rotation.
+                    let mut relatives = vec![
+                        PositionFlag::DeltaX,
+                        PositionFlag::DeltaY,
+                        PositionFlag::DeltaZ,
+                        PositionFlag::YRot,
+                        PositionFlag::XRot,
+                    ];
+                    if vehicle_exit {
+                        relatives.push(PositionFlag::RotateDelta);
+                    }
+                    let packet = CPlayerPosition::new(
                         id.into(),
                         dismount_pos,
                         Vector3::new(0.0, 0.0, 0.0),
                         0.0,
                         0.0,
-                        vec![
-                            PositionFlag::DeltaX,
-                            PositionFlag::DeltaY,
-                            PositionFlag::DeltaZ,
-                            PositionFlag::YRot,
-                            PositionFlag::XRot,
-                        ],
-                    ));
-                    if let Some(client) = player.client.bedrock() {
-                        player.send_bedrock_teleport(client);
+                        relatives,
+                    );
+                    if guard_placement {
+                        let still_current =
+                            || still_detached() && passenger_entity.pos.load() == dismount_pos;
+                        let queued = match player.client.as_ref() {
+                            ClientPlatform::Java(client) => client.try_send_riding_position(
+                                &packet,
+                                player,
+                                rider_position,
+                                still_current,
+                            ),
+                            ClientPlatform::Bedrock(client) => {
+                                client.try_send_dismount_position(player, id.into(), still_current)
+                            }
+                            ClientPlatform::SimulatedPlayer(_) => false,
+                        };
+                        if !queued {
+                            let mut awaiting = player
+                                .awaiting_teleport
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner);
+                            if awaiting
+                                .as_ref()
+                                .is_some_and(|(pending, _)| *pending == id.into())
+                            {
+                                *awaiting = None;
+                            }
+                        }
+                    } else {
+                        player.try_send_client_packet(&packet);
+                        if let Some(client) = player.client.bedrock() {
+                            player.send_bedrock_teleport(client);
+                        }
                     }
                 }
 
                 // Vanilla: setSneaking(false) after dismount via sneak input
-                if passenger_entity.sneaking.load(Relaxed) {
+                if (!vehicle_exit || still_detached()) && passenger_entity.sneaking.load(Relaxed) {
                     passenger_entity.set_sneaking(false);
                 }
-            } else {
+            } else if let Some(dismount_pos) = dismount_pos {
                 passenger_entity.set_pos(dismount_pos);
             }
+            still_detached()
+                && dismount_pos.is_some_and(|position| passenger_entity.pos.load() == position)
         } else {
             // No passenger was removed, still need to broadcast the passenger list
-            let world = self.world.load();
-            world.broadcast_to_chunk(
-                chunk_pos,
-                &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
-            );
+            self.send_passenger_update(&self.world.load(), None, &passenger_ids, &[]);
+            false
         }
     }
 
@@ -6631,8 +8030,14 @@ impl Entity {
             .store(was_in_powder_snow, Ordering::Relaxed);
         self.is_in_powder_snow.store(false, Ordering::Relaxed);
 
-        self.tick_portal(caller);
-        self.update_fluid_state(caller);
+        if self.entity_type.boat.is_some() && caller.vehicle_contact_tick_reach().is_some() {
+            // The boat's two block-effect passes apply fluid contact through the shared collector.
+            // Advancing a portal also requires moving the vehicle and its riders between worlds.
+            self.update_fluid_interaction(caller);
+        } else {
+            self.tick_portal(caller);
+            self.update_fluid_state(caller);
+        }
         self.check_out_of_world(caller);
         let fire_ticks = self.fire_ticks.load(Ordering::Relaxed);
 
@@ -6781,6 +8186,118 @@ fn interact_with_shears(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn committed_mount_pose_is_refreshed_after_disconnect()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::ai::test_support::world;
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let position = Vector3::new(8.5, 64.0, 8.5);
+        let boat = Arc::new(Entity::new(world.clone(), position, &EntityType::OAK_BOAT));
+        let rider = Arc::new(Entity::new(world.clone(), position, &EntityType::PLAYER));
+        rider.set_pose(EntityPose::Crouching);
+        let bounds = || {
+            let bbox = rider.bounding_box.load();
+            (bbox.min, bbox.max)
+        };
+        let crouching_box = bounds();
+
+        // Model a disconnect after the mount commits its pose and riding links
+        // but before it refreshes metadata and publishes the passenger update.
+        boat.add_passenger_silently(boat.clone(), rider.clone());
+        let revision = rider.riding_revision();
+        rider.pose.store(EntityPose::Standing);
+        boat.remove_passenger_on_disconnect(rider.entity_id);
+        assert!(!rider.has_vehicle());
+        assert_ne!(revision, rider.riding_revision());
+        assert_eq!(bounds(), crouching_box);
+
+        boat.finish_passenger_mount(
+            boat.as_ref(),
+            rider.as_ref(),
+            &world,
+            CommittedPassengerMount {
+                revision,
+                stood: true,
+                displaced_driver: None,
+                switch_placement_baseline: None,
+            },
+            PassengerMount::Gameplay,
+        );
+        let standing = rider.get_dimensions(EntityPose::Standing);
+        let standing_box = Entity::make_bounding_box(&EntityType::PLAYER, position, &standing);
+        assert_ne!(bounds(), crouching_box);
+        assert_eq!(bounds(), (standing_box.min, standing_box.max));
+        assert!(!rider.set_synced_data(
+            tracked_data::entity::DATA_POSE,
+            VarInt(EntityPose::Standing as i32),
+        ));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn vehicle_projection_clips_against_pushable_entities_outside_its_mount_tree()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::entity::{
+            ai::test_support::world, passive::pig::PigEntity, vehicle::minecart::MinecartEntity,
+        };
+
+        let folder = tempfile::tempdir()?;
+        let world = world(&folder);
+        let chunk = Vector2::new(0, 0);
+        world
+            .level
+            .loaded_chunks
+            .insert(chunk, pumpkin_world::chunk::ChunkData::empty_sync(0, 0));
+        Arc::make_mut(
+            &mut world
+                .active_chunks
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+        .insert(chunk);
+        let start = Vector3::new(6.5, 64.0, 8.5);
+        let cart = Arc::new(MinecartEntity::new(Entity::new(
+            world.clone(),
+            start,
+            &EntityType::HOPPER_MINECART,
+        )));
+        let pig = PigEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(8.5, 64.0, 8.5),
+            &EntityType::PIG,
+        ));
+        world.add_entity_silent(cart.clone());
+        world.add_entity_silent(pig.clone());
+        assert!(pig.is_pushable());
+        assert!(!pig.is_collidable(None));
+
+        let carrier = cart.get_entity();
+        let movement = Vector3::new(2.0, 0.0, 0.0);
+        let contact_x =
+            pig.get_entity().bounding_box.load().min.x - carrier.bounding_box.load().max.x;
+        let projected = carrier.project_movement(movement, cart.as_ref());
+        assert!((projected.movement.x - contact_x).abs() < 1.0E-7);
+        assert!(projected.horizontal);
+        assert_eq!(projected.supporting, None);
+        assert_eq!(carrier.pos.load(), start);
+        assert!(!carrier.horizontal_collision.load(Relaxed));
+
+        cart.move_entity(cart.as_ref(), movement);
+        assert!((carrier.pos.load().x - start.x - contact_x).abs() < 1.0E-7);
+        assert!(carrier.horizontal_collision.load(Relaxed));
+
+        carrier.set_pos(start);
+        carrier.add_passenger(cart.clone(), pig);
+        let projected = carrier.project_movement(movement, cart.as_ref());
+        assert_eq!(projected.movement, movement);
+        assert!(!projected.horizontal);
+        world.level.shutdown().await;
+        Ok(())
+    }
 
     #[tokio::test]
     async fn concurrent_leash_shearing_drops_one_lead_per_connection()

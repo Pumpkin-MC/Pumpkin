@@ -46,14 +46,23 @@ impl PacketWrite for NetworkItemDescriptor {
 
 impl PacketRead for NetworkItemDescriptor {
     fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
+        Self::read_with_network_id(buf).map(|(descriptor, _)| descriptor)
+    }
+}
+
+impl NetworkItemDescriptor {
+    pub(crate) fn read_with_network_id<R: Read>(
+        buf: &mut R,
+    ) -> Result<(Self, Option<NonZero<i32>>), Error> {
         let id = VarInt(i32::from(i16::read(buf)?));
         let stack_size = u16::read(buf)?;
         let aux_value = VarUInt::read(buf)?;
 
-        let has_net_id = bool::read(buf)?;
-        if has_net_id {
-            let _net_id = VarInt::read(buf)?;
-        }
+        let net_id = if bool::read(buf)? {
+            NonZero::new(VarInt::read(buf)?.0)
+        } else {
+            None
+        };
 
         let block_runtime_id = VarInt(VarUInt::read(buf)?.0 as i32);
 
@@ -70,16 +79,19 @@ impl PacketRead for NetworkItemDescriptor {
         let (nbt_data, place_on_blocks, destroy_blocks, shield_blocking_tick) =
             read_user_data(user_data, id.0 == i32::from(BedrockItem::SHIELD.id))?;
 
-        Ok(Self {
-            id,
-            stack_size,
-            aux_value,
-            block_runtime_id,
-            nbt_data,
-            place_on_blocks,
-            destroy_blocks,
-            shield_blocking_tick,
-        })
+        Ok((
+            Self {
+                id,
+                stack_size,
+                aux_value,
+                block_runtime_id,
+                nbt_data,
+                place_on_blocks,
+                destroy_blocks,
+                shield_blocking_tick,
+            },
+            net_id,
+        ))
     }
 }
 

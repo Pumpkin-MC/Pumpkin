@@ -745,6 +745,7 @@ impl AgeableMob for SulfurCubeEntity {
     }
 
     fn age_boundary_reached(&self) {
+        self.age_boundary_reached_super();
         if !AgeableMob::is_baby(self) {
             self.set_size(MAX_SIZE, true);
         }

@@ -103,6 +103,37 @@ fn lower_fill_level(world: &Arc<World>, pos: &BlockPos, block: &Block, current_l
     world.emit_game_event(GameEvent::BlockChange.name(), pos.to_centered_f64());
 }
 
+pub(crate) fn consume_extinguishing_layer(
+    world: &Arc<World>,
+    pos: &BlockPos,
+    state: BlockStateId,
+    entity: &dyn EntityBase,
+    still_current: impl FnOnce() -> bool,
+) {
+    let base = entity.get_entity();
+    if base.fire_ticks.load(Ordering::Relaxed) <= 0 {
+        return;
+    }
+    let level = WaterCauldronLikeProperties::from_state_id(state).level;
+    let entity_arc = world.get_entity_by_id(base.entity_id).or_else(|| {
+        entity
+            .get_player()
+            .and_then(|p| world.get_player_by_id(p.entity_id()))
+            .map(|p| p as Arc<dyn EntityBase>)
+    });
+    if fire_cauldron_change(
+        world,
+        *pos,
+        i32::from(level),
+        i32::from(level.saturating_sub(1)),
+        CauldronChangeReason::Extinguish,
+        entity_arc,
+    ) && still_current()
+    {
+        lower_fill_level(world, pos, &Block::WATER_CAULDRON, level);
+    }
+}
+
 fn content_collision_box(block_id: BlockId, state_id: BlockStateId) -> BoundingBox {
     let max_y = match block_id {
         BlockId::WATER_CAULDRON | BlockId::POWDER_SNOW_CAULDRON => {
@@ -623,37 +654,16 @@ impl BlockBehaviour for CauldronBlock {
 
         match args.block.id {
             BlockId::WATER_CAULDRON | BlockId::POWDER_SNOW_CAULDRON => {
-                if base_entity.fire_ticks.load(Ordering::Relaxed) > 0 {
-                    let may_interact = args.entity.get_player().is_some()
-                        || args.world.level_info.load().game_rules.mob_griefing;
-                    if may_interact {
-                        let level = WaterCauldronLikeProperties::from_state_id(args.state.id).level;
-                        let entity_arc = args
-                            .world
-                            .get_entity_by_id(base_entity.entity_id)
-                            .or_else(|| {
-                                args.entity
-                                    .get_player()
-                                    .and_then(|p| args.world.get_player_by_id(p.entity_id()))
-                                    .map(|p| p as Arc<dyn EntityBase>)
-                            });
-                        if fire_cauldron_change(
-                            args.world,
-                            *args.position,
-                            i32::from(level),
-                            i32::from(level.saturating_sub(1)),
-                            CauldronChangeReason::Extinguish,
-                            entity_arc,
-                        ) {
-                            // Powder snow cauldrons melt into a lowered water cauldron when extinguishing fire.
-                            lower_fill_level(
-                                args.world,
-                                args.position,
-                                &Block::WATER_CAULDRON,
-                                level,
-                            );
-                        }
-                    }
+                if args.entity.get_player().is_some()
+                    || args.world.level_info.load().game_rules.mob_griefing
+                {
+                    consume_extinguishing_layer(
+                        args.world,
+                        args.position,
+                        args.state.id,
+                        args.entity,
+                        || true,
+                    );
                 }
                 base_entity.extinguish();
             }

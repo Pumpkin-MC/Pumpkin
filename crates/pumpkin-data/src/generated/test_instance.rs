@@ -45,6 +45,12 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:block_tuning_and_invert" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/block_tuning_and_invert.json"
         )),
+        "pumpkin:boats_pick_up_nearby_mobs" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/boats_pick_up_nearby_mobs.json"
+        )),
+        "pumpkin:boats_reject_submerged_mob_pickup" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/boats_reject_submerged_mob_pickup.json"
+        )),
         "pumpkin:brewing_returns_glass_bottle_from_dragon_breath" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/brewing_returns_glass_bottle_from_dragon_breath.json"
         )),
@@ -522,6 +528,9 @@ pub fn get_test_instance_json(path: &str) -> Option<&'static str> {
         "pumpkin:referenced_environment" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/referenced_environment.json"
         )),
+        "pumpkin:riding_shulker_keeps_attach_face" => Some(include_str!(
+            "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/riding_shulker_keeps_attach_face.json"
+        )),
         "pumpkin:scaffolding_distance_and_collapse" => Some(include_str!(
             "../../../../assets/tests/datapacks/pumpkin-unit-test/data/pumpkin/test_instance/scaffolding_distance_and_collapse.json"
         )),
@@ -698,6 +707,8 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:birch_and_jungle_doors_redstone",
         "pumpkin:blast_furnace_smelts_raw_iron",
         "pumpkin:block_tuning_and_invert",
+        "pumpkin:boats_pick_up_nearby_mobs",
+        "pumpkin:boats_reject_submerged_mob_pickup",
         "pumpkin:brewing_returns_glass_bottle_from_dragon_breath",
         "pumpkin:bubble_column_upward_and_downward",
         "pumpkin:button_breaks_when_support_removed",
@@ -857,6 +868,7 @@ pub const fn all_test_instance_names() -> &'static [&'static str] {
         "pumpkin:redstone_wire_strong_power_through_stone",
         "pumpkin:redstone_wire_t_junction",
         "pumpkin:referenced_environment",
+        "pumpkin:riding_shulker_keeps_attach_face",
         "pumpkin:scaffolding_distance_and_collapse",
         "pumpkin:shearing_tool_loot_and_item_events",
         "pumpkin:shulker_box_open_blocked",

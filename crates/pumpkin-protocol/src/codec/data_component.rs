@@ -1,6 +1,6 @@
 #![allow(clippy::wildcard_imports)]
 
-use std::borrow::Cow;
+use std::{borrow::Cow, cell::Cell};
 
 use crate::codec::var_int::VarInt;
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
@@ -13,7 +13,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::trim_material::TrimMaterial;
 use pumpkin_data::trim_pattern::TrimPattern;
-use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
+use pumpkin_nbt::{compound::NbtCompound, serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::version::JavaMinecraftVersion;
 
 const MAX_STATUS_EFFECTS: usize = 128;
@@ -931,17 +931,33 @@ impl DataComponentCodec<Self> for RepairableImpl {
     }
 }
 
+pub(crate) fn write_swing_animation(
+    seq: &mut impl NetworkWriteExt,
+    animation: SwingAnimationType,
+    duration: i32,
+) -> Result<(), WritingError> {
+    // These are Java wire IDs. The numeric NBT form keeps its existing mapping.
+    let animation_id = match animation {
+        SwingAnimationType::None => 0,
+        SwingAnimationType::Whack => 1,
+        SwingAnimationType::Stab => 2,
+    };
+    seq.write_var_int(&VarInt(animation_id))?;
+    seq.write_var_int(&VarInt(duration))
+}
+
 impl DataComponentCodec<Self> for SwingAnimationImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt::from(self.animation_type.to_id()))?;
-        seq.write_var_int(&VarInt::from(self.duration))
+        write_swing_animation(seq, self.animation_type, self.duration)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let type_id = seq.get_var_int()?.0;
-        let animation_type = SwingAnimationType::from_id(type_id).ok_or_else(|| {
-            ReadingError::Message(format!("Invalid SwingAnimationType id {type_id}"))
-        })?;
+        // Java's ID mapper uses the zero entry for unrecognized IDs.
+        let animation_type = match seq.get_var_int()?.0 {
+            1 => SwingAnimationType::Whack,
+            2 => SwingAnimationType::Stab,
+            _ => SwingAnimationType::None,
+        };
         let duration = seq.get_var_int()?.0;
         Ok(Self {
             animation_type,
@@ -1675,11 +1691,335 @@ impl DataComponentCodec<Self> for DamageTypeImpl {
     }
 }
 
+fn write_adventure_state(
+    state: &NbtTag,
+    seq: &mut impl NetworkWriteExt,
+) -> Result<(), WritingError> {
+    let compound = state
+        .extract_compound()
+        .ok_or_else(|| WritingError::Message("Expected an Adventure state compound".into()))?;
+    let mut properties: Vec<_> = compound.child_tags.iter().collect();
+    properties.sort_unstable_by_key(|(name, _)| *name);
+    seq.write_list(&properties, |seq, (name, matcher)| {
+        seq.write_string(name)?;
+        match matcher {
+            NbtTag::String(value) => {
+                seq.write_bool(true)?;
+                seq.write_string(value)
+            }
+            NbtTag::Compound(bounds) => {
+                seq.write_bool(false)?;
+                for bound in ["min", "max"] {
+                    seq.write_option(&bounds.get(bound), |seq, tag| {
+                        let value = tag.extract_string().ok_or_else(|| {
+                            WritingError::Message(format!(
+                                "Expected a string for Adventure state {bound}"
+                            ))
+                        })?;
+                        seq.write_string(value)
+                    })?;
+                }
+                Ok(())
+            }
+            _ => Err(WritingError::Message(format!(
+                "Invalid Adventure state matcher for {name}"
+            ))),
+        }
+    })
+}
+
+fn read_adventure_state(seq: &mut impl NetworkReadExt) -> Result<NbtCompound, ReadingError> {
+    let count = read_count(seq, MAX_INITIAL_COLLECTION_SIZE)?;
+    let mut state = NbtCompound::new();
+    for _ in 0..count {
+        let name = seq.get_str()?;
+        let matcher = if seq.get_bool()? {
+            NbtTag::String(seq.get_str()?)
+        } else {
+            let mut bounds = NbtCompound::new();
+            for bound in ["min", "max"] {
+                if let Some(value) = seq.get_option(NetworkReadExt::get_str)? {
+                    bounds.put(bound, NbtTag::String(value));
+                }
+            }
+            NbtTag::Compound(bounds)
+        };
+        if state.has(&name) {
+            return Err(ReadingError::Message(format!(
+                "Duplicate property {name} in Adventure state matcher"
+            )));
+        }
+        state.child_tags.insert(name, matcher);
+    }
+    Ok(state)
+}
+
+// Native 26.3 built-in DATA_COMPONENT_PREDICATE_TYPE registration order.
+// This registry is separate from DATA_COMPONENT_TYPE and has no Pumpkin data table.
+const ADVENTURE_PREDICATE_TYPES: [&str; 15] = [
+    "damage",
+    "enchantments",
+    "stored_enchantments",
+    "potion_contents",
+    "custom_data",
+    "container",
+    "bundle_contents",
+    "firework_explosion",
+    "fireworks",
+    "writable_book_content",
+    "written_book_content",
+    "attribute_modifiers",
+    "trim",
+    "jukebox_playable",
+    "villager/variant",
+];
+const MAX_ADVENTURE_PARTIAL_MATCHERS: usize = 64;
+const MAX_ADVENTURE_PREDICATE_DEPTH: u8 = 32;
+
+thread_local! {
+    static ADVENTURE_PREDICATE_DEPTH: Cell<u8> = const { Cell::new(0) };
+}
+
+// Exact matches can nest through can_place_on, can_break or item stack components.
+struct AdventurePredicateDepth;
+
+impl AdventurePredicateDepth {
+    fn enter() -> Option<Self> {
+        ADVENTURE_PREDICATE_DEPTH.with(|depth| {
+            let current = depth.get();
+            if current >= MAX_ADVENTURE_PREDICATE_DEPTH {
+                return None;
+            }
+            depth.set(current + 1);
+            Some(Self)
+        })
+    }
+}
+
+impl Drop for AdventurePredicateDepth {
+    fn drop(&mut self) {
+        ADVENTURE_PREDICATE_DEPTH.with(|depth| depth.set(depth.get() - 1));
+    }
+}
+
+fn adventure_matchers<'a>(
+    predicate: &'a NbtCompound,
+    field: &str,
+) -> Result<Vec<(&'a str, &'a NbtTag)>, WritingError> {
+    let Some(tag) = predicate.get(field) else {
+        return Ok(Vec::new());
+    };
+    let compound = tag
+        .extract_compound()
+        .ok_or_else(|| WritingError::Message(format!("Expected an Adventure {field} compound")))?;
+    let mut entries: Vec<_> = compound
+        .child_tags
+        .iter()
+        .map(|(name, value)| (name.as_ref(), value))
+        .collect();
+    entries.sort_unstable_by_key(|(name, _)| *name);
+    Ok(entries)
+}
+
+fn adventure_predicate_type(name: &str) -> Option<usize> {
+    let name = name.strip_prefix("minecraft:").unwrap_or(name);
+    ADVENTURE_PREDICATE_TYPES
+        .iter()
+        .position(|&kind| kind == name)
+}
+
+fn write_adventure_matchers(
+    predicate: &NbtCompound,
+    seq: &mut impl NetworkWriteExt,
+) -> Result<(), WritingError> {
+    let exact = adventure_matchers(predicate, "components")?;
+    seq.write_list(&exact, |seq, (name, data)| {
+        let component = DataComponent::try_from_name(name).ok_or_else(|| {
+            WritingError::Message(format!("Unknown Adventure exact component {name}"))
+        })?;
+        let value = read_data(component, data).ok_or_else(|| {
+            WritingError::Message(format!("Invalid Adventure exact component {name}"))
+        })?;
+        seq.write_var_int(&VarInt(i32::from(component.to_id())))?;
+        serialize(component, value.as_ref(), seq)
+    })?;
+
+    let partial = adventure_matchers(predicate, "predicates")?;
+    if partial.len() > MAX_ADVENTURE_PARTIAL_MATCHERS {
+        return Err(WritingError::Message(
+            "Too many Adventure partial matchers".into(),
+        ));
+    }
+    let mut ids = std::collections::HashSet::new();
+    seq.write_var_int(&VarInt(partial.len() as i32))?;
+    for (name, data) in &partial {
+        // Java's persistent codec resolves a concrete predicate name before a component name.
+        if let Some(kind) = adventure_predicate_type(name) {
+            if !ids.insert((true, kind as i32)) {
+                return Err(WritingError::Message(format!(
+                    "Duplicate Adventure partial matcher {name}"
+                )));
+            }
+            seq.write_bool(true)?;
+            seq.write_var_int(&VarInt(kind as i32))?;
+        } else {
+            let component = DataComponent::try_from_name(name).ok_or_else(|| {
+                WritingError::Message(format!("Unknown Adventure partial matcher {name}"))
+            })?;
+            if !matches!(data, NbtTag::Compound(compound) if compound.is_empty()) {
+                return Err(WritingError::Message(format!(
+                    "Expected an empty compound for Adventure component presence matcher {name}"
+                )));
+            }
+            if !ids.insert((false, i32::from(component.to_id()))) {
+                return Err(WritingError::Message(format!(
+                    "Duplicate Adventure partial matcher {name}"
+                )));
+            }
+            seq.write_bool(false)?;
+            seq.write_var_int(&VarInt(i32::from(component.to_id())))?;
+        }
+        if matches!(data, NbtTag::End) {
+            return Err(WritingError::Message(format!(
+                "Missing Adventure partial matcher payload for {name}"
+            )));
+        }
+        seq.write_nbt_with_version(Some(data), &JavaMinecraftVersion::V_26_3)?;
+    }
+    Ok(())
+}
+
+fn read_adventure_component_type(
+    seq: &mut impl NetworkReadExt,
+) -> Result<DataComponent, ReadingError> {
+    let raw_id = seq.get_var_int()?.0;
+    u8::try_from(raw_id)
+        .ok()
+        .and_then(DataComponent::try_from_id)
+        .ok_or_else(|| ReadingError::Message(format!("Invalid Adventure component ID {raw_id}")))
+}
+
+fn exact_adventure_component_survives_storage(
+    component: DataComponent,
+    original: &dyn DataComponentImpl,
+    tag: &NbtTag,
+) -> bool {
+    if matches!(tag, NbtTag::End) {
+        return false;
+    }
+    let Some(restored) = read_data(component, tag) else {
+        return false;
+    };
+    // Java enchantments are maps. Pumpkin's vectors may change order when read
+    // back from NBT, so compare the distinct saved entries with the originals.
+    let (expected, stored) = match component {
+        DataComponent::Container => {
+            let original = &get::<ContainerImpl>(original).items;
+            let restored = &get::<ContainerImpl>(restored.as_ref()).items;
+            return original.len() == restored.len()
+                && original.iter().zip(restored).all(
+                    |((slot, stack), (restored_slot, restored_stack))| {
+                        slot == restored_slot && stack.are_equal(restored_stack)
+                    },
+                );
+        }
+        DataComponent::Enchantments => (
+            &get::<EnchantmentsImpl>(original).enchantment,
+            &get::<EnchantmentsImpl>(restored.as_ref()).enchantment,
+        ),
+        DataComponent::StoredEnchantments => (
+            &get::<StoredEnchantmentsImpl>(original).enchantment,
+            &get::<StoredEnchantmentsImpl>(restored.as_ref()).enchantment,
+        ),
+        _ => return original.equal(restored.as_ref()),
+    };
+    expected.len() == stored.len() && stored.iter().all(|entry| expected.contains(entry))
+}
+
+fn read_adventure_exact_matchers(
+    seq: &mut impl NetworkReadExt,
+) -> Result<NbtCompound, ReadingError> {
+    let exact_len = read_count(seq, MAX_INITIAL_COLLECTION_SIZE)?;
+    let mut exact = NbtCompound::new();
+    for _ in 0..exact_len {
+        let component = read_adventure_component_type(seq)?;
+        let name = component.to_name();
+        if exact.has(name) {
+            return Err(ReadingError::Message(format!(
+                "Duplicate Adventure exact component {name}"
+            )));
+        }
+        let value = deserialize(component, seq)?;
+        let tag = value.write_data();
+        // Use the same NBT representation as a saved item, without silently discarding
+        // fields from components whose persistent codecs are unavailable or lossy.
+        if !exact_adventure_component_survives_storage(component, value.as_ref(), &tag) {
+            return Err(ReadingError::Message(format!(
+                "Adventure exact component {name} cannot be preserved as NBT"
+            )));
+        }
+        exact.put(name, tag);
+    }
+    Ok(exact)
+}
+
+fn read_adventure_partial_matchers(
+    seq: &mut impl NetworkReadExt,
+) -> Result<NbtCompound, ReadingError> {
+    let partial_len = read_count(seq, MAX_ADVENTURE_PARTIAL_MATCHERS)?;
+    let mut partial = NbtCompound::new();
+    for _ in 0..partial_len {
+        let typed = seq.get_bool()?;
+        let name = if typed {
+            let raw_id = seq.get_var_int()?.0;
+            let kind = usize::try_from(raw_id)
+                .ok()
+                .and_then(|id| ADVENTURE_PREDICATE_TYPES.get(id))
+                .ok_or_else(|| {
+                    ReadingError::Message(format!("Invalid Adventure predicate ID {raw_id}"))
+                })?;
+            format!("minecraft:{kind}")
+        } else {
+            let name = read_adventure_component_type(seq)?.to_name();
+            if adventure_predicate_type(name).is_some() {
+                return Err(ReadingError::Message(format!(
+                    "Adventure presence matcher {name} conflicts with a named predicate"
+                )));
+            }
+            name.to_owned()
+        };
+        if partial.has(&name) {
+            return Err(ReadingError::Message(format!(
+                "Duplicate Adventure partial matcher {name}"
+            )));
+        }
+        // Both Java matcher types use fromCodecWithRegistries, an unnamed NBT
+        // value following the type discriminator and the appropriate registry ID.
+        let tag = seq
+            .get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?
+            .ok_or_else(|| {
+                ReadingError::Message(format!(
+                    "Missing Adventure partial matcher payload for {name}"
+                ))
+            })?;
+        if !typed && !matches!(&tag, NbtTag::Compound(compound) if compound.is_empty()) {
+            return Err(ReadingError::Message(format!(
+                "Invalid Adventure component presence matcher payload for {name}"
+            )));
+        }
+        partial.put(&name, tag);
+    }
+    Ok(partial)
+}
+
 fn serialize_adventure_predicate(
     predicate: &NbtTag,
     seq: &mut impl NetworkWriteExt,
 ) -> Result<(), WritingError> {
-    let list: Vec<&pumpkin_nbt::compound::NbtCompound> = match predicate {
+    let _depth = AdventurePredicateDepth::enter().ok_or_else(|| {
+        WritingError::Message("Adventure component matchers are nested too deeply".into())
+    })?;
+    let list: Vec<&NbtCompound> = match predicate {
         NbtTag::Compound(c) => c.get_list("predicates").map_or_else(
             || vec![c],
             |preds| preds.iter().filter_map(NbtTag::extract_compound).collect(),
@@ -1687,9 +2027,8 @@ fn serialize_adventure_predicate(
         NbtTag::List(preds) => preds.iter().filter_map(NbtTag::extract_compound).collect(),
         _ => Vec::new(),
     };
-    seq.write_var_int(&VarInt::from(list.len() as i32))?;
-    for c in list {
-        if let Some(blocks_tag) = c.get("blocks")
+    seq.write_list(&list, |seq, predicate| {
+        if let Some(blocks_tag) = predicate.get("blocks")
             && let Some(idset) = IDSet::<pumpkin_data::Block>::read(blocks_tag)
         {
             seq.write_bool(true)?;
@@ -1697,56 +2036,53 @@ fn serialize_adventure_predicate(
         } else {
             seq.write_bool(false)?;
         }
-        seq.write_bool(false)?;
-        seq.write_bool(false)?;
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_var_int(&VarInt(0))?;
-    }
-    Ok(())
+        seq.write_option(&predicate.get("state"), |seq, value| {
+            write_adventure_state(value, seq)
+        })?;
+        seq.write_option(&predicate.get("nbt"), |seq, tag| {
+            if tag.extract_compound().is_none() {
+                return Err(WritingError::Message(
+                    "Expected an Adventure block entity NBT compound".into(),
+                ));
+            }
+            seq.write_nbt_with_version(Some(*tag), &JavaMinecraftVersion::V_26_3)
+        })?;
+        write_adventure_matchers(predicate, seq)
+    })
 }
 
 fn deserialize_adventure_predicate(seq: &mut impl NetworkReadExt) -> Result<NbtTag, ReadingError> {
-    let count = seq.get_var_int()?.0.max(0) as usize;
+    let _depth = AdventurePredicateDepth::enter().ok_or_else(|| {
+        ReadingError::TooLarge("Adventure component matchers are nested too deeply".into())
+    })?;
+    let count = read_count(seq, MAX_INITIAL_COLLECTION_SIZE)?;
     let mut preds = Vec::with_capacity(count.min(64));
     for _ in 0..count {
-        let mut comp = pumpkin_nbt::compound::NbtCompound::new();
-        let has_blocks = seq.get_bool()?;
-        if has_blocks {
+        let mut comp = NbtCompound::new();
+        if seq.get_bool()? {
             let idset = deserialize_idset::<pumpkin_data::Block>(seq)?;
             idset.write(&mut comp, "blocks");
         }
-        let has_props = seq.get_bool()?;
-        if has_props {
-            let props_len = seq.get_var_int()?.0;
-            for _ in 0..props_len {
-                let _ = seq.get_str()?;
-                let is_exact = seq.get_bool()?;
-                if is_exact {
-                    let _ = seq.get_str()?;
-                } else {
-                    if seq.get_bool()? {
-                        let _ = seq.get_str()?;
-                    }
-                    if seq.get_bool()? {
-                        let _ = seq.get_str()?;
-                    }
-                }
-            }
+        if seq.get_bool()? {
+            comp.put_compound("state", read_adventure_state(seq)?);
         }
-        let has_nbt = seq.get_bool()?;
-        if has_nbt {
-            let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?;
+        if seq.get_bool()? {
+            let Some(NbtTag::Compound(nbt)) =
+                seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?
+            else {
+                return Err(ReadingError::Message(
+                    "Expected an Adventure block entity NBT compound".into(),
+                ));
+            };
+            comp.put_compound("nbt", nbt);
         }
-        let exact_len = seq.get_var_int()?.0;
-        for _ in 0..exact_len {
-            let comp_id = seq.get_var_int()?.0 as u8;
-            if let Some(comp) = DataComponent::try_from_id(comp_id) {
-                let _ = deserialize(comp, seq)?;
-            }
+        let exact = read_adventure_exact_matchers(seq)?;
+        if !exact.is_empty() {
+            comp.put_compound("components", exact);
         }
-        let partial_len = seq.get_var_int()?.0;
-        for _ in 0..partial_len {
-            let _ = seq.get_var_int()?;
+        let partial = read_adventure_partial_matchers(seq)?;
+        if !partial.is_empty() {
+            comp.put_compound("predicates", partial);
         }
         preds.push(NbtTag::Compound(comp));
     }
@@ -3137,10 +3473,21 @@ impl DataComponentCodec<Self> for PotDecorationsImpl {
 
 impl DataComponentCodec<Self> for ContainerImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt::from(self.items.len() as i32))?;
-        for (_slot, stack) in &self.items {
-            seq.write_bool(true)?;
-            serialize_item_stack_template(stack, seq)?;
+        let mut slots = [None; 256];
+        let mut len = 0;
+        for (slot, stack) in &self.items {
+            let slot = usize::from(*slot);
+            if slots[slot].replace(stack).is_some() {
+                return Err(WritingError::Message("Duplicate container slot".into()));
+            }
+            len = len.max(slot + 1);
+        }
+        seq.write_var_int(&VarInt::from(len as i32))?;
+        for stack in &slots[..len] {
+            seq.write_bool(stack.is_some())?;
+            if let Some(stack) = stack {
+                serialize_item_stack_template(stack, seq)?;
+            }
         }
         Ok(())
     }
@@ -3282,20 +3629,14 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
 
 impl DataComponentCodec<Self> for InteractAnimationImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt::from(self.animation_type.to_id()))?;
-        seq.write_var_int(&VarInt::from(self.duration))
+        write_swing_animation(seq, self.animation_type, self.duration)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let anim_id = seq.get_var_int()?.0;
-        let animation_type = pumpkin_data::data_component_impl::SwingAnimationType::from_id(
-            anim_id,
-        )
-        .ok_or_else(|| ReadingError::Message(format!("Invalid SwingAnimationType id {anim_id}")))?;
-        let duration = seq.get_var_int()?.0;
+        let animation = SwingAnimationImpl::deserialize(seq)?;
         Ok(Self {
-            animation_type,
-            duration,
+            animation_type: animation.animation_type,
+            duration: animation.duration,
         })
     }
 }
@@ -3650,6 +3991,25 @@ impl DataComponentCodec<Self> for WaxedImpl {
 mod tests {
     use super::*;
 
+    #[test]
+    fn exact_container_preserves_sparse_slot_indices() -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_data::{item::Item, item_stack::ItemStack};
+
+        let container = ContainerImpl {
+            items: vec![(2, ItemStack::new(1, &Item::STICK))],
+        };
+        let mut encoded = Vec::new();
+        container.serialize(&mut encoded)?;
+        assert_eq!(encoded.get(..4), Some([3, 0, 0, 1].as_slice()));
+        let mut input = encoded.as_slice();
+        let decoded = ContainerImpl::deserialize(&mut input)?;
+        assert!(input.is_empty());
+        assert_eq!(decoded.items.len(), 1);
+        assert_eq!(decoded.items[0].0, 2);
+        assert_eq!(decoded.items[0].1.get_item(), &Item::STICK);
+        Ok(())
+    }
+
     fn textured_profile() -> ProfileImpl {
         ProfileImpl {
             name: Some("Notch".to_string()),
@@ -3880,6 +4240,185 @@ mod tests {
             PotDecorationsImpl::deserialize(&mut empty_bytes.as_slice()).unwrap(),
             PotDecorationsImpl::EMPTY
         );
+    }
+
+    const VANILLA_CART_WITH_ADVENTURE_RANGE_AND_NBT: &[u8] =
+        b"\x01\xc6\x07\x02\x00\x0e\x01\x01\x02\x88\x01\x01\x01\x05shape\
+            \x00\x01\x0bnorth_south\x01\x0fascending_south\x01\x0a\x08\x00\x04Lock\x00\x03key\
+            \x00\x00\x00\x29\x00\x00";
+
+    #[test]
+    fn java_adventure_and_swing_components_match_official_cart_slots() {
+        use crate::{
+            ClientPacket, codec::item_stack_seralizer::ItemStackSerializer,
+            java::client::play::CInteractionSwing,
+        };
+
+        // Bare item stacks captured in the official 26.3 container_set_slot packets.
+        let powered = b"\x01\xc6\x07\x02\x00\x0e\x01\x01\x02\x88\x01\x01\x01\x07powered\
+            \x01\x04true\x00\x00\x00\x29\x02\x09";
+        let max_only = b"\x01\xc6\x07\x02\x00\x0e\x01\x00\x01\x01\x07powered\x00\x00\x01\x04true\
+            \x00\x00\x00\x29\x01\x09";
+
+        let cases = [
+            (powered.as_slice(), SwingAnimationType::Stab, 9),
+            (
+                VANILLA_CART_WITH_ADVENTURE_RANGE_AND_NBT,
+                SwingAnimationType::None,
+                0,
+            ),
+            (max_only.as_slice(), SwingAnimationType::Whack, 9),
+        ];
+        for (wire, animation_type, duration) in cases {
+            let mut input = wire;
+            let stack = ItemStackSerializer::read(&mut input).unwrap().to_stack();
+            assert!(input.is_empty());
+            assert_eq!(stack.get_item(), &pumpkin_data::item::Item::MINECART);
+            let animation = *stack.get_data_component::<InteractAnimationImpl>().unwrap();
+            assert_eq!(
+                animation,
+                InteractAnimationImpl {
+                    animation_type,
+                    duration,
+                }
+            );
+
+            let mut tracker_packet = Vec::new();
+            CInteractionSwing {
+                entity_id: VarInt(1),
+                off_hand: false,
+                animation,
+            }
+            .write_packet_data(&mut tracker_packet, &JavaMinecraftVersion::V_26_3)
+            .unwrap();
+            assert_eq!(&tracker_packet[2..], &wire[wire.len() - 2..]);
+
+            let mut held_slot = Vec::new();
+            ItemStackSerializer::from(stack)
+                .write(&mut held_slot)
+                .unwrap();
+            assert_eq!(held_slot, wire);
+        }
+    }
+
+    #[test]
+    fn java_adventure_matchers_preserve_vanilla_cart_slot_and_following_component() {
+        use crate::codec::item_stack_seralizer::ItemStackSerializer;
+
+        // Bare stacks captured in three official 26.3 container_set_slot packets.
+        let exact = b"\x01\xc6\x07\x02\x00\x0e\x01\x01\x02\x88\x01\x01\x01\x07powered\
+            \x01\x04true\x00\x01\x00\x0a\x03\x00\x06Marker\x00\x00\x00\x11\x00\x00\x29\x02\x09";
+        let typed = b"\x01\xc6\x07\x02\x00\x0e\x01\x01\x02\x88\x01\x01\x01\x07powered\
+            \x01\x04true\x00\x00\x01\x01\x04\x08\x00\x0b{Marker:18}\x29\x01\x05";
+        let presence = b"\x01\xc6\x07\x02\x00\x0e\x01\x01\x02\x88\x01\x01\x01\x07powered\
+            \x01\x04true\x00\x00\x01\x00\x04\x0a\x00\x29\x00\x07";
+
+        let mut marker = NbtCompound::new();
+        marker.put("Marker", NbtTag::Int(17));
+        let cases = [
+            (
+                exact.as_slice(),
+                "components",
+                "minecraft:custom_data",
+                NbtTag::Compound(marker),
+                SwingAnimationType::Stab,
+                9,
+            ),
+            (
+                typed.as_slice(),
+                "predicates",
+                "minecraft:custom_data",
+                NbtTag::String("{Marker:18}".into()),
+                SwingAnimationType::Whack,
+                5,
+            ),
+            (
+                presence.as_slice(),
+                "predicates",
+                "minecraft:unbreakable",
+                NbtTag::Compound(NbtCompound::new()),
+                SwingAnimationType::None,
+                7,
+            ),
+        ];
+        for (wire, field, name, matcher, animation_type, duration) in cases {
+            let mut input = wire;
+            let stack = ItemStackSerializer::read(&mut input).unwrap().to_stack();
+            assert!(input.is_empty());
+            assert_eq!(stack.get_item(), &pumpkin_data::item::Item::MINECART);
+
+            let predicate = stack.get_data_component::<CanPlaceOnImpl>().unwrap();
+            let entry = predicate.predicate.extract_list().unwrap()[0]
+                .extract_compound()
+                .unwrap();
+            assert_eq!(entry.get_compound(field).unwrap().get(name), Some(&matcher));
+            assert_eq!(
+                stack.get_data_component::<InteractAnimationImpl>(),
+                Some(&InteractAnimationImpl {
+                    animation_type,
+                    duration,
+                })
+            );
+
+            let mut encoded = Vec::new();
+            ItemStackSerializer::from(stack)
+                .write(&mut encoded)
+                .unwrap();
+            assert_eq!(encoded, wire);
+        }
+    }
+
+    #[test]
+    fn java_adventure_matchers_bound_recursive_exact_components() {
+        let mut wire = Vec::new();
+        for _ in 0..MAX_ADVENTURE_PREDICATE_DEPTH {
+            // One block predicate, only an exact minecraft:can_place_on component.
+            wire.extend_from_slice(&[1, 0, 0, 0, 1, DataComponent::CanPlaceOn.to_id()]);
+        }
+        wire.extend_from_slice(&[1, 0, 0, 0, 0, 0]);
+        wire.extend(std::iter::repeat_n(
+            0,
+            usize::from(MAX_ADVENTURE_PREDICATE_DEPTH),
+        ));
+        assert!(matches!(
+            CanPlaceOnImpl::deserialize(&mut wire.as_slice()),
+            Err(ReadingError::TooLarge(_))
+        ));
+
+        let simple = CanPlaceOnImpl::deserialize(&mut [1, 0, 0, 0, 0, 0].as_slice());
+        assert!(simple.is_ok());
+    }
+
+    #[test]
+    fn java_creative_slot_retains_adventure_range_and_block_entity_nbt() {
+        use crate::{ServerPacket, java::server::play::SSetCreativeSlot};
+
+        // Creative slot updates add a length before each component payload.
+        let wire = VANILLA_CART_WITH_ADVENTURE_RANGE_AND_NBT;
+        let mut packet_bytes = b"\x00\x24\x01\xc6\x07\x01\x00\x0e\x3d".to_vec();
+        packet_bytes.extend_from_slice(&wire[6..wire.len() - 3]);
+        let mut bytes = packet_bytes.as_slice();
+        let packet = SSetCreativeSlot::read(&mut bytes, &JavaMinecraftVersion::V_26_3).unwrap();
+        assert!(bytes.is_empty());
+        let stack = packet.clicked_item.to_stack();
+        let predicate = stack.get_data_component::<CanPlaceOnImpl>().unwrap();
+        let entry = predicate.predicate.extract_list().unwrap()[0]
+            .extract_compound()
+            .unwrap();
+        let shape = entry
+            .get_compound("state")
+            .unwrap()
+            .get_compound("shape")
+            .unwrap();
+        assert_eq!(shape.get_string("min"), Some("north_south"));
+        assert_eq!(shape.get_string("max"), Some("ascending_south"));
+        assert_eq!(
+            entry.get_compound("nbt").unwrap().get_string("Lock"),
+            Some("key")
+        );
+        assert!(!predicate.matches_block_state_without_entity(
+            pumpkin_data::Block::POWERED_RAIL.default_state.id
+        ));
     }
 
     #[test]

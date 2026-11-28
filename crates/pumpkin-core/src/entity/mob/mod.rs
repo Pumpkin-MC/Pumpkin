@@ -1487,7 +1487,7 @@ impl MobEntity {
                 .is_empty()
             || entity.has_vehicle()
             || entity.has_passengers()
-            || entity.is_leashed()
+            || entity.has_leash_data()
         {
             return None;
         }
@@ -1566,6 +1566,14 @@ impl MobEntity {
 }
 
 pub trait Mob: EntityBase + Send + Sync {
+    /// Species-specific restrictions in addition to the common riding checks.
+    fn mob_can_ride(&self, _vehicle: &dyn EntityBase) -> bool {
+        true
+    }
+
+    /// Applies species-specific riding state, including attempts rejected by vanilla checks.
+    fn on_start_riding(&self) {}
+
     fn is_sensitive_to_water(&self) -> bool {
         false
     }

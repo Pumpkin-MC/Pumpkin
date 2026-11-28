@@ -57,6 +57,24 @@ pub struct MobMetadata {
 
 impl MobMetadata {
     #[must_use]
+    pub(crate) fn bedrock_scale(&self) -> Option<f32> {
+        match self.bedrock_data.0.get(&entity_data_key::SCALE) {
+            Some(MetadataValue::Float(scale)) => Some(*scale),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn bedrock_flag_words(&self) -> [i64; 2] {
+        [entity_data_key::FLAGS, entity_data_key::FLAGS_TWO].map(|key| {
+            match self.bedrock_data.0.get(&key) {
+                Some(MetadataValue::Int64(word)) => *word,
+                _ => 0,
+            }
+        })
+    }
+
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }

@@ -258,6 +258,20 @@ impl ShulkerEntity {
                     f64::from(candidate.0.z) + 0.5,
                 );
 
+                if let Some(carrier) = entity.get_vehicle() {
+                    let old_pos = entity.pos.load();
+                    carrier
+                        .get_entity()
+                        .remove_passenger_before_teleport(entity.entity_id);
+                    if entity.has_vehicle()
+                        || entity.is_removed()
+                        || entity.pos.load() != old_pos
+                        || !std::ptr::eq(world.as_ref(), entity.world.load().as_ref())
+                    {
+                        return false;
+                    }
+                }
+
                 self.set_attach_face(dir);
                 entity.set_pos(new_pos);
 
@@ -305,6 +319,10 @@ impl ShulkerEntity {
 }
 
 impl Mob for ShulkerEntity {
+    fn on_start_riding(&self) {
+        self.set_attach_face(BlockDirection::Down);
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_byte("AttachFace", self.attach_face.load(Ordering::Relaxed) as i8);
         nbt.put_byte("PeekAmount", self.peek_amount.load(Ordering::Relaxed) as i8);
@@ -344,7 +362,7 @@ impl Mob for ShulkerEntity {
 
         let pos = entity.block_pos.load();
         let face = self.get_attach_face();
-        if !self.can_stay_at(&pos, face) {
+        if !entity.has_vehicle() && !self.can_stay_at(&pos, face) {
             self.find_new_attachment();
         }
     }
