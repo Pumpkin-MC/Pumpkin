@@ -73,11 +73,12 @@ impl BreedGoal {
         })
     }
 
-    /// `brain` is the breeding mob's brain while its own behavior runs this.
+    /// Calls `on_no_offspring` after approved breeding when the animal produces no baby.
+    /// The caller provides its own handling for the animal's no-offspring state.
     pub(crate) fn breed(
         mob: &dyn Mob,
         mate: &dyn EntityBase,
-        brain: Option<&mut crate::entity::ai::brain::BrainState>,
+        on_no_offspring: impl FnOnce(&dyn Animal),
     ) {
         let mob_entity = mob.get_mob_entity();
         let entity = mob.get_entity();
@@ -156,7 +157,7 @@ impl BreedGoal {
         if let Some(baby) = baby {
             world_full.spawn_entity(baby);
         } else if let Some(animal) = animal {
-            animal.on_bred_without_offspring(brain);
+            on_no_offspring(animal);
         }
 
         if animal.is_none_or(Animal::shows_breeding_hearts) {
@@ -273,7 +274,9 @@ impl Goal for BreedGoal {
         self.timer += 1;
 
         if self.timer >= self.get_tick_count(60) && dist_sq < 9.0 {
-            Self::breed(mob, mate.as_ref(), None);
+            Self::breed(mob, mate.as_ref(), |animal| {
+                animal.on_bred_without_offspring(None);
+            });
         }
     }
 

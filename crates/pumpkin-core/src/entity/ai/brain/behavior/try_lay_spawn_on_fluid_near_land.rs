@@ -39,25 +39,30 @@ pub fn create(spawn_block: &'static Block) -> OneShot {
                 {
                     let spawn_pos = side.up();
                     if tick.world.get_block_state(&spawn_pos).is_air() {
-                        tick.world.set_block_state(
-                            &spawn_pos,
-                            spawn_block.default_state.id,
-                            BlockFlags::NOTIFY_ALL,
-                        );
-                        let source: &dyn EntityBase = tick.mob;
-                        tick.world.emit_game_event_with_context(
-                            pumpkin_data::game_event::GameEvent::BlockPlace.name(),
-                            spawn_pos.to_f64(),
-                            &GameEventContext {
-                                source_entity: Some(source),
+                        let world = tick.world.clone();
+                        tick.defer_with_update(
+                            move |mob| {
+                                world.set_block_state(
+                                    &spawn_pos,
+                                    spawn_block.default_state.id,
+                                    BlockFlags::NOTIFY_ALL,
+                                );
+                                let source: &dyn EntityBase = mob;
+                                world.emit_game_event_with_context(
+                                    pumpkin_data::game_event::GameEvent::BlockPlace.name(),
+                                    spawn_pos.to_f64(),
+                                    &GameEventContext {
+                                        source_entity: Some(source),
+                                    },
+                                );
+                                world.play_sound(
+                                    Sound::EntityFrogLaySpawn,
+                                    SoundCategory::Blocks,
+                                    &mob.get_entity().pos.load(),
+                                );
                             },
+                            |tick, ()| tick.state.erase(types::IS_PREGNANT.id()),
                         );
-                        tick.world.play_sound(
-                            Sound::EntityFrogLaySpawn,
-                            SoundCategory::Blocks,
-                            &entity.pos.load(),
-                        );
-                        tick.state.erase(types::IS_PREGNANT.id());
                         return true;
                     }
                 }

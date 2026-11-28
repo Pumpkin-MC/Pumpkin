@@ -152,8 +152,14 @@ impl Behavior for CamelPanic {
     }
 
     fn start(&mut self, tick: &mut BrainTick<'_>) {
-        if let Some(camel) = camel(tick) {
-            camel.stand_up_instantly();
+        if camel(tick).is_some() {
+            tick.defer(|mob| {
+                if let Some(camel) = mob.cast_any().downcast_ref::<CamelEntity>()
+                    && camel.mob_entity.living_entity.is_alive()
+                {
+                    camel.stand_up_instantly();
+                }
+            });
         }
         self.0.start(tick);
     }
@@ -199,11 +205,20 @@ impl Behavior for RandomSitting {
         let Some(camel) = camel(tick) else {
             return;
         };
-        if camel.is_camel_sitting() {
-            camel.stand_up();
+        let transition: fn(&CamelEntity) = if camel.is_camel_sitting() {
+            CamelEntity::stand_up
         } else if !tick.state.has_memory_value(types::IS_PANICKING.id()) {
-            camel.sit_down();
-        }
+            CamelEntity::sit_down
+        } else {
+            return;
+        };
+        tick.defer(move |mob| {
+            if let Some(camel) = mob.cast_any().downcast_ref::<CamelEntity>()
+                && camel.mob_entity.living_entity.is_alive()
+            {
+                transition(camel);
+            }
+        });
     }
 
     fn debug_name(&self) -> &'static str {
