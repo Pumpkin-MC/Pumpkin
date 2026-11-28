@@ -24,8 +24,11 @@ mod active_chunks;
 pub mod brightness;
 pub mod chunker;
 mod entity_index;
+pub mod entity_list;
 pub(crate) use entity_index::EntityIndex;
 pub mod cat_spawner;
+#[cfg(test)]
+mod entity_churn_bench;
 pub mod entity_islands;
 pub mod explosion;
 pub mod game_event;
@@ -40,6 +43,7 @@ pub mod raid;
 pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
+
 pub mod village_siege;
 pub mod wandering_trader_spawner;
 
@@ -246,7 +250,7 @@ pub struct World {
     pub players: ArcSwap<Vec<Arc<Player>>>,
     /// A map of active entities within the world, keyed by their unique UUID.
     /// This does not include players.
-    pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
+    pub entities: entity_list::EntityList,
     pub(crate) entity_index: Arc<EntityIndex>,
     island_schedule: std::sync::Mutex<entity_islands::Schedule>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
@@ -434,7 +438,7 @@ impl World {
             level,
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
-            entities: ArcSwap::new(Arc::new(Vec::new())),
+            entities: entity_list::EntityList::new(),
             entity_index: Arc::default(),
             island_schedule: std::sync::Mutex::default(),
             scoreboard: std::sync::Mutex::new(Scoreboard::default()),
@@ -2016,8 +2020,8 @@ impl World {
             .navigation_change_sequence
             .fetch_add(1, Ordering::AcqRel)
             + 1;
-        let entities = self.entities.load_full();
-        for entity in entities.iter() {
+        // Only mobs navigate: walk the index's mob list, not every entity.
+        for entity in self.entity_index.mobs(&self.entities) {
             if let Some(mob) = entity.get_mob() {
                 mob.get_mob_entity()
                     .on_navigation_block_changed(*position, self.uuid, sequence);
@@ -4992,7 +4996,7 @@ impl World {
 
     /// Gets an entity by an entity id
     pub fn get_entity_by_id(&self, id: i32) -> Option<Arc<dyn EntityBase>> {
-        if let Some(entity) = self.entity_index.by_id(&self.entities.load_full(), id) {
+        if let Some(entity) = self.entity_index.by_id(&self.entities, id) {
             entity_islands::check_reached(id);
             return Some(entity);
         }
@@ -5019,7 +5023,7 @@ impl World {
     // Gets all entities at a Box
     pub fn get_all_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
         self.entity_index
-            .query(self.entities.load_full(), *aabb)
+            .query(&self.entities, *aabb)
             .chain(
                 self.entity_index
                     .query_players(self.players.load_full(), *aabb)
@@ -5032,7 +5036,7 @@ impl World {
     // Gets all non Player entities at a Box
     pub fn get_entities_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
         self.entity_index
-            .query(self.entities.load_full(), *aabb)
+            .query(&self.entities, *aabb)
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
             .collect()
     }
@@ -5044,7 +5048,7 @@ impl World {
         matches: impl Fn(&'static EntityType) -> bool,
     ) -> Vec<Arc<dyn EntityBase>> {
         self.entity_index
-            .query_types(self.entities.load_full(), *aabb, matches)
+            .query_types(&self.entities, *aabb, matches)
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
             .collect()
     }
@@ -5089,7 +5093,7 @@ impl World {
     /// An `Option<Arc<dyn EntityBase>>` containing the player if found, or `None` if not.
     pub fn get_entity_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<dyn EntityBase>> {
         self.entity_index
-            .by_uuid(&self.entities.load_full(), id)
+            .by_uuid(&self.entities, id)
             .inspect(|entity| entity_islands::check_reached(entity.get_entity().entity_id))
     }
 
@@ -5260,10 +5264,7 @@ impl World {
                 }
             }
         }
-        for entity in self
-            .entity_index
-            .query(self.entities.load_full(), bounding_box)
-        {
+        for entity in self.entity_index.query(&self.entities, bounding_box) {
             if predicate(entity.as_ref()) {
                 entity_islands::check_reached(entity.get_entity().entity_id);
                 list.push(entity);
@@ -5545,13 +5546,14 @@ impl World {
         self.entity_tracker.add_entity(&entity, self);
         self.spawn_state.load().add_entity(self, entity.as_ref());
 
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.push(entity.clone());
-            new_entities
-        });
+        self.push_entity(&entity);
         self.record_tick_spawn(entity.get_entity().entity_id);
         self.add_pending_riders(&entity);
+    }
+
+    /// Appends `entity` to the entity list and to the entity index.
+    fn push_entity(&self, entity: &Arc<dyn EntityBase>) {
+        self.entities.push(entity.clone(), &self.entity_index);
     }
 
     /// Records the sequential order of an entity spawned while an entity ticks.
@@ -5686,10 +5688,9 @@ impl World {
         // This can happen when chunk entity data is loaded while the entity
         // already exists in the world (e.g. another player is still tracking it).
         let already_exists = self
-            .entities
-            .load()
-            .iter()
-            .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
+            .entity_index
+            .by_uuid(&self.entities, base_entity.entity_uuid)
+            .is_some();
         if already_exists {
             return;
         }
@@ -5700,11 +5701,7 @@ impl World {
         self.spawn_state.load().add_entity(self, entity.as_ref());
         self.entity_tracker.add_entity(&entity, self);
 
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.push(entity.clone());
-            new_entities
-        });
+        self.push_entity(&entity);
         self.record_tick_spawn(entity.get_entity().entity_id);
         self.add_pending_riders(&entity);
     }
@@ -5739,11 +5736,8 @@ impl World {
 
         self.spawn_state.load().remove_entity(self, entity);
         self.entity_tracker.remove_entity(entity, self);
-        self.entities.rcu(|current_entities| {
-            let mut new_entities = (**current_entities).clone();
-            new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
-            new_entities
-        });
+        self.entities
+            .remove(base_entity.entity_uuid, &self.entity_index);
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity().finish_removal(mob);
         }
@@ -7766,7 +7760,7 @@ impl World {
 
         let mut hits = Vec::new();
 
-        for entity in self.entity_index.query(self.entities.load_full(), ray_box) {
+        for entity in self.entity_index.query(&self.entities, ray_box) {
             let bb = entity.get_entity().bounding_box.load();
             if let Some((t, _, hit_pos)) =
                 Self::intersects_aabb_with_hit(start, end, bb.min, bb.max)

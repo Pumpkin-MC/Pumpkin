@@ -3,7 +3,6 @@ use crate::entity::EntityBase;
 use crate::entity::mob::spawn::finalize_spawn;
 use crate::entity::r#type::{check_spawn_rules, from_type};
 use crate::world::World;
-use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use pumpkin_data::biome::Spawner;
 use pumpkin_data::chunk::Biome;
@@ -430,11 +429,7 @@ impl SpawnState {
         self.mob_category_counts.remove(entity_type.category);
     }
 
-    pub fn new(
-        chunk_count: i32,
-        entities: &ArcSwap<Vec<Arc<dyn EntityBase>>>,
-        world: &World,
-    ) -> Self {
+    pub fn new(chunk_count: i32, entities: &super::entity_list::EntityList, world: &World) -> Self {
         let potential = PotentialCalculator::default();
         let local_mob_cap = LocalMobCapCalculator::for_world(world);
         let counter = MobCounts::default();
@@ -1193,7 +1188,8 @@ mod tests {
             &world,
             Uuid::new_v4(),
         );
-        let entities = ArcSwap::from_pointee(vec![entity]);
+        let entities = crate::world::entity_list::EntityList::new();
+        entities.store(Arc::new(vec![entity]));
 
         let state = SpawnState::new(289, &entities, &world);
 
