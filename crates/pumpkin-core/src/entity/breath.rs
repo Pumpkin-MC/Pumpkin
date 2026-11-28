@@ -28,6 +28,11 @@ impl Default for BreathManager {
 
 impl BreathManager {
     pub fn tick(&self, player: &Player) {
+        // Preserve the air restored on death while the player waits to respawn underwater.
+        if player.living_entity.health.load() <= 0.0 {
+            return;
+        }
+
         let mode = player.gamemode.load();
 
         if matches!(mode, GameMode::Creative | GameMode::Spectator) {
@@ -67,7 +72,7 @@ impl BreathManager {
                         new_air,
                     );
                     event = server.plugin_manager.fire_blocking(&server, event);
-                    if event.cancelled {
+                    if event.cancelled || player.living_entity.health.load() <= 0.0 {
                         return;
                     }
                     new_air = event.amount.clamp(0, MAX_AIR);
@@ -96,7 +101,7 @@ impl BreathManager {
                         new_air,
                     );
                     event = server.plugin_manager.fire_blocking(&server, event);
-                    if event.cancelled {
+                    if event.cancelled || player.living_entity.health.load() <= 0.0 {
                         return;
                     }
                     new_air = event.amount.clamp(0, MAX_AIR);
