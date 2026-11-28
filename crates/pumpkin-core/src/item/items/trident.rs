@@ -54,27 +54,8 @@ impl TridentItem {
         }
     }
 
-    fn throw_trident(
-        player: &Player,
-        mut stack: ItemStack,
-        slot_index: usize,
-        is_creative: bool,
-        sound: Sound,
-    ) {
+    fn throw_trident(player: &Player, thrown_stack: &ItemStack, is_creative: bool, sound: Sound) {
         let world = player.world();
-        let thrown_stack = stack.copy_with_count(1);
-        if !is_creative {
-            stack.decrement(1);
-            let remaining_stack = if stack.is_empty() {
-                ItemStack::EMPTY.clone()
-            } else {
-                stack
-            };
-            player
-                .inventory()
-                .set_slot(slot_index, remaining_stack.clone());
-            player.sync_hand_slot(slot_index, remaining_stack);
-        }
 
         let (yaw, pitch) = player.rotation();
         let entity = Entity::new(world.clone(), player.position(), &EntityType::TRIDENT);
@@ -96,7 +77,7 @@ impl TridentItem {
         let trident_pos = trident.get_entity().pos.load();
         let trident_arc = Arc::new(trident);
         world.spawn_entity(trident_arc.clone());
-        trident_arc.apply_on_projectile_spawned(&thrown_stack);
+        trident_arc.apply_on_projectile_spawned(thrown_stack);
 
         world.play_sound_raw(sound as u16, SoundCategory::Players, &trident_pos, 1.0, 1.0);
     }
@@ -105,16 +86,9 @@ impl TridentItem {
         player: &Player,
         stack: ItemStack,
         slot: EquipmentSlot,
-        slot_index: usize,
-        damage_result: DamageResult,
         riptide_strength: f32,
         sound: Sound,
     ) {
-        if damage_result != DamageResult::Untouched {
-            player.inventory().set_slot(slot_index, stack.clone());
-            player.sync_hand_slot(slot_index, stack.clone());
-        }
-
         let (yaw, pitch) = player.rotation();
         let y_rot = yaw.to_radians();
         let x_rot = pitch.to_radians();
@@ -173,7 +147,7 @@ impl ItemBehaviour for TridentItem {
             .set_active_hand(hand, stack, Self::USE_DURATION);
     }
 
-    fn on_stopped_using(&self, _stack: &ItemStack, player: &Player) {
+    fn on_stopped_using(&self, expected: &ItemStack, player: &Player) {
         let remaining_time = player.living_entity.item_use_time.load(Ordering::Relaxed);
         let time_held = Self::USE_DURATION - remaining_time;
         if time_held < Self::THROW_THRESHOLD_TIME {
@@ -196,9 +170,12 @@ impl ItemBehaviour for TridentItem {
             )
         };
 
-        let mut stack = inventory.get_stack_in_hand(hand);
-        if stack.is_empty() || stack.item.id != Item::TRIDENT.id {
-            player.living_entity.clear_active_hand();
+        let mut stack = inventory.get_slot(slot_index);
+        if stack.is_empty()
+            || stack.item.id != Item::TRIDENT.id
+            || stack.uid != expected.uid
+            || !stack.are_equal(expected)
+        {
             return;
         }
 
@@ -206,12 +183,10 @@ impl ItemBehaviour for TridentItem {
         if riptide_strength > 0.0
             && (!player.get_entity().is_in_water_or_rain() || player.get_entity().has_vehicle())
         {
-            player.living_entity.clear_active_hand();
             return;
         }
 
         if stack.next_damage_will_break() {
-            player.living_entity.clear_active_hand();
             return;
         }
 
@@ -220,39 +195,53 @@ impl ItemBehaviour for TridentItem {
             && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
             && let Some(server) = world.server.upgrade()
         {
-            let mut event =
-                crate::plugin::api::events::player::player_riptide::PlayerRiptideEvent {
-                    player: player_arc,
-                    item_name: "trident".to_string(),
-                    cancelled: false,
-                };
-            event = server.plugin_manager.fire_blocking(&server, event);
-            if event.cancelled {
-                player.living_entity.clear_active_hand();
+            let event = crate::plugin::api::events::player::player_riptide::PlayerRiptideEvent {
+                player: player_arc,
+                item_name: "trident".to_string(),
+                cancelled: false,
+            };
+            let event = server.plugin_manager.fire_blocking(&server, event);
+            let current = inventory.get_slot(slot_index);
+            if event.cancelled || current.uid != expected.uid || !current.are_equal(expected) {
                 return;
             }
         }
 
         let sound = Self::trident_sound(&stack);
-        player.increment_stat(StatisticCategory::Used, i32::from(Item::TRIDENT.id), 1);
         let is_creative = player.gamemode.load() == GameMode::Creative;
-        let damage_result = player.hurt_item_stack_without_breaking(&mut stack, 1);
+        let damage_result = player.apply_item_damage(&mut stack, 1, false);
+
+        let update = if riptide_strength == 0.0 && !is_creative {
+            let mut remaining = stack.clone();
+            remaining.decrement(1);
+            if remaining.is_empty() {
+                remaining.clear();
+            }
+            Some(remaining)
+        } else if damage_result != DamageResult::Untouched {
+            Some(stack.clone())
+        } else {
+            None
+        };
+        if let Some(update) = update {
+            if !inventory.replace_slot_if_same(slot_index, expected, update) {
+                return;
+            }
+            player.notify_committed_item_damage(stack.item, damage_result);
+            player.sync_hand_slot(slot_index, inventory.get_slot(slot_index));
+        } else {
+            let current = inventory.get_slot(slot_index);
+            if current.uid != expected.uid || !current.are_equal(expected) {
+                return;
+            }
+        }
+        player.increment_stat(StatisticCategory::Used, i32::from(Item::TRIDENT.id), 1);
 
         if riptide_strength == 0.0 {
-            Self::throw_trident(player, stack, slot_index, is_creative, sound);
+            Self::throw_trident(player, &stack.copy_with_count(1), is_creative, sound);
         } else {
-            Self::activate_riptide(
-                player,
-                stack,
-                slot,
-                slot_index,
-                damage_result,
-                riptide_strength,
-                sound,
-            );
+            Self::activate_riptide(player, stack, slot, riptide_strength, sound);
         }
-
-        player.living_entity.clear_active_hand();
     }
 
     fn can_mine(&self, player: &Player) -> bool {

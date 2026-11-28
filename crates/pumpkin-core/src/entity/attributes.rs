@@ -240,6 +240,16 @@ pub fn send_attribute_updates_for_living(
     living: &crate::entity::living::LivingEntity,
     attributes: Vec<Attributes>,
 ) {
+    send_attribute_updates(living, attributes, false);
+}
+
+pub(crate) fn send_guarded_attribute_updates(living: &LivingEntity, attributes: &[Attributes]) {
+    for attribute in attributes {
+        send_attribute_updates(living, vec![attribute.clone()], true);
+    }
+}
+
+fn send_attribute_updates(living: &LivingEntity, attributes: Vec<Attributes>, guard_current: bool) {
     use pumpkin_protocol::bedrock::client::update_attributes::{
         AttributeData as BeAttribute, CUpdateAttributes as BePacket,
     };
@@ -252,6 +262,11 @@ pub fn send_attribute_updates_for_living(
     let mut je_properties: Vec<JeProperty> = Vec::with_capacity(attributes.len());
     let mut be_attributes: Vec<BeAttribute> = Vec::with_capacity(attributes.len());
 
+    let guarded_attribute = if guard_current {
+        attributes.first().cloned()
+    } else {
+        None
+    };
     for attribute in attributes {
         let base_value = living.get_attribute_base(&attribute);
         let effective_value = living.get_attribute_value(&attribute);
@@ -313,6 +328,10 @@ pub fn send_attribute_updates_for_living(
         be_attributes.push(be_attribute);
     }
 
+    if let Some(attribute) = guarded_attribute {
+        send_current_shield_attribute(living, &attribute, je_properties, be_attributes);
+        return;
+    }
     let world = living.entity.world.load();
     match (!je_properties.is_empty(), !be_attributes.is_empty()) {
         (false, false) => {}
@@ -339,6 +358,151 @@ pub fn send_attribute_updates_for_living(
             };
             world.broadcast_editioned(&je_packet, &be_packet);
         }
+    }
+}
+
+fn send_current_shield_attribute(
+    living: &LivingEntity,
+    attribute: &Attributes,
+    java: Vec<pumpkin_protocol::java::client::play::Property>,
+    bedrock: Vec<pumpkin_protocol::bedrock::client::update_attributes::AttributeData>,
+) {
+    use pumpkin_protocol::{
+        bedrock::client::update_attributes::CUpdateAttributes as BedrockAttributes,
+        java::client::play::CUpdateAttributes as JavaAttributes,
+    };
+    let entity = &living.entity;
+    let world = entity.world.load_full();
+    let java = JavaAttributes::new(entity.entity_id.into(), java);
+    let bedrock = BedrockAttributes {
+        target_runtime_id: (entity.entity_id as u64).into(),
+        attribute_list: bedrock,
+        tick: 0u64.into(),
+    };
+    for player in world.players.load().iter() {
+        let same_world = || {
+            !entity.is_removed()
+                && std::sync::Arc::ptr_eq(&entity.world.load(), &world)
+                && std::sync::Arc::ptr_eq(&player.world(), &world)
+        };
+        if let Some(client) = player.client.java()
+            && let Some(property) = java.properties.first()
+            && let Ok(data) = client.serialize_packet(&java)
+        {
+            let version = client.version.load();
+            client.try_enqueue_packet_data_filtering(
+                data,
+                || {
+                    let current = living
+                        .attributes
+                        .read()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let matches = current.get(&attribute.id).is_some_and(|value| {
+                        value.base_value.to_bits() == property.value.to_bits()
+                            && value.modifiers.len() == property.modifiers.len()
+                            && value.modifiers.iter().zip(&property.modifiers).all(
+                                |(actual, sent)| {
+                                    actual.id == sent.id
+                                        && actual.amount.to_bits() == sent.amount.to_bits()
+                                        && actual.operation as i8 == sent.operation
+                                },
+                            )
+                    });
+                    (matches && same_world()).then_some(current)
+                },
+                |data| filter_java_shield_extra(data, version, java.entity_id, property.id),
+            );
+        } else if let Some(client) = player.client.bedrock()
+            && let Some(property) = bedrock.attribute_list.first()
+            && let Ok(data) = client.serialize_packet(&bedrock)
+        {
+            client.try_enqueue_packet_data_filtering(
+                data,
+                || {
+                    let current = living
+                        .attributes
+                        .read()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let matches = current.get(&attribute.id).is_some_and(|value| {
+                        (value.base_value as f32).to_bits() == property.default_value.to_bits()
+                            && (value.sanitized_value(attribute) as f32).to_bits()
+                                == property.current_value.to_bits()
+                    });
+                    (matches && same_world()).then_some(current)
+                },
+                |data| {
+                    filter_bedrock_shield_extra(
+                        client,
+                        data,
+                        bedrock.target_runtime_id,
+                        &property.name,
+                    )
+                },
+            );
+        }
+    }
+}
+
+fn filter_java_shield_extra(
+    data: bytes::Bytes,
+    version: pumpkin_util::version::JavaMinecraftVersion,
+    entity_id: pumpkin_protocol::codec::var_int::VarInt,
+    attribute_id: pumpkin_protocol::codec::var_int::VarInt,
+) -> Option<bytes::Bytes> {
+    use pumpkin_protocol::{
+        ServerPacket, java::client::play::CUpdateAttributes as JavaAttributes,
+        packet::MultiVersionJavaPacket, ser::NetworkReadExt,
+    };
+    let mut payload = data.as_ref();
+    if !payload
+        .get_var_int()
+        .is_ok_and(|id| id.0 == JavaAttributes::to_id(version))
+    {
+        return Some(data);
+    }
+    let Ok(mut packet) = JavaAttributes::read(&mut payload, &version) else {
+        return Some(data);
+    };
+    if packet.entity_id != entity_id {
+        return Some(data);
+    }
+    let original = packet.properties.len();
+    packet.properties.retain(|entry| entry.id != attribute_id);
+    match packet.properties.len() {
+        0 => None,
+        count if count == original => Some(data),
+        _ => crate::net::java::JavaClient::serialize_packet_for_version(&packet, version).ok(),
+    }
+}
+
+fn filter_bedrock_shield_extra(
+    client: &crate::net::bedrock::BedrockClient,
+    data: bytes::Bytes,
+    entity_id: pumpkin_protocol::codec::var_ulong::VarULong,
+    attribute_name: &str,
+) -> Option<bytes::Bytes> {
+    use pumpkin_protocol::{
+        bedrock::client::update_attributes::CUpdateAttributes as BedrockAttributes,
+        codec::var_uint::VarUInt, packet::Packet, serial::PacketRead,
+    };
+    let mut payload = data.as_ref();
+    if !VarUInt::read(&mut payload).is_ok_and(|id| id.0 == BedrockAttributes::PACKET_ID as u32) {
+        return Some(data);
+    }
+    let Ok(mut packet) = BedrockAttributes::read(&mut payload) else {
+        return Some(data);
+    };
+    if packet.target_runtime_id != entity_id {
+        return Some(data);
+    }
+    let original = packet.attribute_list.len();
+    packet
+        .attribute_list
+        .retain(|entry| entry.name != attribute_name);
+    match packet.attribute_list.len() {
+        0 => None,
+        count if count == original => Some(data),
+        _ => client.serialize_packet(&packet).ok(),
     }
 }
 

@@ -21,6 +21,8 @@ pub struct DecoratedPotBlockEntity {
     pub loot_table_seed: AtomicI64,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
+    // Transitions under the item lock before replacement scatters the contents.
+    retiring: AtomicBool,
 }
 
 // TODO vanilla `getTheItem`/`setTheItem`/`splitTheItem` unpack the loot table on every slot access.
@@ -59,6 +61,7 @@ impl BlockEntity for DecoratedPotBlockEntity {
             loot_table_seed: AtomicI64::new(loot_table_seed),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
+            retiring: AtomicBool::new(false),
         }
     }
 
@@ -179,6 +182,7 @@ impl BlockEntity for DecoratedPotBlockEntity {
     }
 
     fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
+        self.retire();
         Self::unpack_loot_table(&self, world);
         let inventory: Arc<dyn Inventory> = self;
         world.scatter_inventory(position, &inventory);
@@ -222,6 +226,7 @@ impl DecoratedPotBlockEntity {
             loot_table_seed: AtomicI64::new(0),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
+            retiring: AtomicBool::new(false),
         }
     }
 
@@ -294,50 +299,80 @@ impl DecoratedPotBlockEntity {
 
     /// Inserts up to `count` items from `stack`, returning `Some((new_count, max_stack_size))` on success.
     pub fn try_insert_item(&self, stack: &mut ItemStack, count: u8) -> Option<(u8, u8)> {
-        if stack.is_empty() || count == 0 {
-            return None;
-        }
-        let mut item_guard = self
+        self.try_insert_item_with_commit(stack, count, || true)
+    }
+
+    fn retire(&self) {
+        let _item = self
             .item
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(existing) = item_guard.as_mut() {
-            if existing.is_empty() {
-                let max_stack = stack.get_max_stack_size();
-                let insert_count = count.min(stack.item_count).min(max_stack);
-                let mut inserted = stack.clone();
-                inserted.item_count = insert_count;
-                *item_guard = Some(inserted);
-                stack.item_count -= insert_count;
-                drop(item_guard);
-                self.mark_dirty();
-                return Some((insert_count, max_stack));
-            }
-            if existing.are_items_and_components_equal(stack) {
-                let max_stack = existing.get_max_stack_size();
-                let space = max_stack.saturating_sub(existing.item_count);
-                let add = count.min(space).min(stack.item_count);
-                if add > 0 {
-                    existing.item_count += add;
-                    stack.item_count -= add;
-                    let new_count = existing.item_count;
-                    drop(item_guard);
-                    self.mark_dirty();
-                    return Some((new_count, max_stack));
-                }
-            }
-            None
-        } else {
-            let max_stack = stack.get_max_stack_size();
-            let insert_count = count.min(stack.item_count).min(max_stack);
-            let mut inserted = stack.clone();
-            inserted.item_count = insert_count;
-            *item_guard = Some(inserted);
-            stack.item_count -= insert_count;
-            drop(item_guard);
-            self.mark_dirty();
-            Some((insert_count, max_stack))
+        self.retiring.store(true, Ordering::Relaxed);
+    }
+
+    /// Commits a physical source slot only while this pot still accepts transfers.
+    pub(crate) fn try_insert_item_from_slot(
+        &self,
+        world: &World,
+        stack: &mut ItemStack,
+        count: u8,
+        commit_source: impl FnOnce() -> bool,
+    ) -> Option<(u8, u8)> {
+        // Keep the mapping stable through the slot commit. A pot can still be mapped
+        // while replacement scatters its contents, so also check retirement under its lock.
+        let entities = world.block_entities.get(&self.position.chunk_position())?;
+        let current = entities
+            .get(&self.position)?
+            .as_any()
+            .downcast_ref::<Self>()?;
+        if !std::ptr::eq(current, self) {
+            return None;
         }
+        self.try_insert_item_with_commit(stack, count, || {
+            !self.retiring.load(Ordering::Relaxed) && commit_source()
+        })
+    }
+
+    /// Commits the source after checking capacity and before inserting under the pot lock.
+    fn try_insert_item_with_commit(
+        &self,
+        stack: &mut ItemStack,
+        count: u8,
+        commit_source: impl FnOnce() -> bool,
+    ) -> Option<(u8, u8)> {
+        if stack.is_empty() || count == 0 {
+            return None;
+        }
+        let mut item = self
+            .item
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let existing = item.as_mut().filter(|item| !item.is_empty());
+        let (filled, capacity) = if let Some(existing) = &existing {
+            if !existing.are_items_and_components_equal(stack) {
+                return None;
+            }
+            (existing.item_count, existing.get_max_stack_size())
+        } else {
+            (0, stack.get_max_stack_size())
+        };
+        let add = count
+            .min(stack.item_count)
+            .min(capacity.saturating_sub(filled));
+        if add == 0 || !commit_source() {
+            return None;
+        }
+        if let Some(existing) = existing {
+            existing.item_count += add;
+        } else {
+            let mut inserted = stack.clone();
+            inserted.item_count = add;
+            *item = Some(inserted);
+        }
+        stack.item_count -= add;
+        drop(item);
+        self.mark_dirty();
+        Some((filled + add, capacity))
     }
 
     pub fn get_comparator_output(&self) -> u8 {

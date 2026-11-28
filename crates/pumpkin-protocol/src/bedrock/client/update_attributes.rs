@@ -2,10 +2,13 @@
 
 use pumpkin_macros::packet;
 
-use crate::{codec::var_ulong::VarULong, serial::PacketWrite};
+use crate::{
+    codec::var_ulong::VarULong,
+    serial::{PacketRead, PacketWrite},
+};
 
 /// Sent by the server to update an entity's attribute values (e.g. health, absorption, movement speed, hunger).
-#[derive(PacketWrite)]
+#[derive(PacketRead, PacketWrite)]
 #[packet(29)]
 pub struct CUpdateAttributes {
     /// Runtime entity ID of the target actor.
@@ -17,7 +20,7 @@ pub struct CUpdateAttributes {
 }
 
 /// Detailed specification of an entity attribute and its active modifiers.
-#[derive(PacketWrite)]
+#[derive(PacketRead, PacketWrite)]
 pub struct AttributeData {
     /// Minimum value the attribute can reach.
     pub min_value: f32,
@@ -38,7 +41,7 @@ pub struct AttributeData {
 }
 
 /// An attribute modifier that adjusts an attribute by addition or multiplication.
-#[derive(PacketWrite)]
+#[derive(PacketRead, PacketWrite)]
 pub struct AttributeModifier {
     /// Unique identifier for the modifier.
     pub id: String,

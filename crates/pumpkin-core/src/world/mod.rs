@@ -8651,6 +8651,9 @@ fn block_entity_nbt(block_entity: &dyn BlockEntity) -> NbtCompound {
 }
 
 #[cfg(test)]
+mod item_inventory_tests;
+
+#[cfg(test)]
 mod tests {
     use pumpkin_data::{
         Block,

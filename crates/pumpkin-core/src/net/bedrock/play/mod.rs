@@ -1,3 +1,4 @@
+use pumpkin_inventory::sync_handler::ScreenUpdateContext;
 use std::{
     num::NonZero,
     sync::{Arc, atomic::Ordering},
@@ -138,12 +139,27 @@ const fn map_bedrock_slot_to_screen_handler(window_id: i32, slot: u32) -> Option
     }
 }
 
-/// Bedrock container id, name and slot of a Java player-screen slot, the inverse of
-/// [`map_bedrock_slot_to_screen_handler`]. Like Geyser's `PlayerInventoryTranslator`.
+/// Bedrock container ID, name and slot used to publish a Java player-screen slot.
 pub(crate) const fn bedrock_inventory_slot(
     player_screen_slot: i16,
 ) -> Option<(u32, ContainerName, u32)> {
+    use pumpkin_protocol::bedrock::server::inventory_transaction::WINDOW_ID_UI;
+
+    // Mojang's player UI container reserves 28–31 for the personal crafting
+    // inputs and 50 for the created result.
+    const PERSONAL_CRAFTING_INPUT_START: u32 = 28;
+    const CRAFTED_RESULT_SLOT: u32 = 50;
     match player_screen_slot {
+        0 => Some((
+            WINDOW_ID_UI as u32,
+            ContainerName::CraftingOutputPreview,
+            CRAFTED_RESULT_SLOT,
+        )),
+        1..=4 => Some((
+            WINDOW_ID_UI as u32,
+            ContainerName::CraftingInput,
+            PERSONAL_CRAFTING_INPUT_START + (player_screen_slot - 1) as u32,
+        )),
         5..=8 => Some((
             WINDOW_ID_ARMOUR as u32,
             ContainerName::Armor,
@@ -186,11 +202,27 @@ pub(crate) const fn bedrock_player_inventory_slot(
     }
 }
 
-/// Sends one slot of the Bedrock player's own containers
-pub(crate) fn send_bedrock_inventory_slot(
+pub(crate) fn send_bedrock_inventory_slot_if(
     bedrock: &BedrockClient,
     (container_id, container_name, slot): (u32, ContainerName, u32),
     stack: &ItemStack,
+    is_current: Option<ScreenUpdateContext<'_>>,
+) {
+    send_bedrock_inventory_slot_validated(
+        bedrock,
+        (container_id, container_name, slot),
+        stack,
+        is_current,
+        || Some(()),
+    );
+}
+
+pub(crate) fn send_bedrock_inventory_slot_validated<T>(
+    bedrock: &BedrockClient,
+    (container_id, container_name, slot): (u32, ContainerName, u32),
+    stack: &ItemStack,
+    is_current: Option<ScreenUpdateContext<'_>>,
+    validate: impl FnOnce() -> Option<T>,
 ) {
     use pumpkin_protocol::bedrock::client::{
         inventory_content::CInventoryContent, inventory_slot::CInventorySlot,
@@ -198,28 +230,36 @@ pub(crate) fn send_bedrock_inventory_slot(
 
     // Like Geyser, the offhand is always sent as a whole one-item container
     if container_name == ContainerName::Offhand {
-        bedrock.try_enqueue_client_packet(&CInventoryContent {
-            container_id: VarUInt(container_id),
-            slots: vec![NetworkItemStackDescriptor::from(stack)],
-            full_container_name: FullContainerName {
-                container_name,
-                dynamic_id: None,
+        bedrock.try_enqueue_inventory_update_validated(
+            &CInventoryContent {
+                container_id: VarUInt(container_id),
+                slots: vec![NetworkItemStackDescriptor::from(stack)],
+                full_container_name: FullContainerName {
+                    container_name,
+                    dynamic_id: None,
+                },
+                storage_item: NetworkItemStackDescriptor::default(),
             },
-            storage_item: NetworkItemStackDescriptor::default(),
-        });
+            is_current,
+            validate,
+        );
         return;
     }
 
-    bedrock.try_enqueue_client_packet(&CInventorySlot {
-        container_id: VarUInt(container_id),
-        slot: VarUInt(slot),
-        full_container_name: Some(FullContainerName {
-            container_name,
-            dynamic_id: None,
-        }),
-        storage_item: None,
-        item: NetworkItemStackDescriptor::from(stack),
-    });
+    bedrock.try_enqueue_inventory_update_validated(
+        &CInventorySlot {
+            container_id: VarUInt(container_id),
+            slot: VarUInt(slot),
+            full_container_name: Some(FullContainerName {
+                container_name,
+                dynamic_id: None,
+            }),
+            storage_item: None,
+            item: NetworkItemStackDescriptor::from(stack),
+        },
+        is_current,
+        validate,
+    );
 }
 
 pub mod actor_event;
@@ -256,18 +296,16 @@ mod tests {
     };
 
     #[test]
-    fn player_screen_slots_round_trip_through_bedrock() {
-        for slot in 0..=45 {
-            let Some((container_id, _, bedrock_slot)) = bedrock_inventory_slot(slot) else {
-                // The crafting grid has no Bedrock inventory slot
-                assert!(slot < 5);
-                continue;
-            };
+    fn player_screen_slots_round_trip_through_bedrock() -> Result<(), &'static str> {
+        for slot in 5..=45 {
+            let (container_id, _, bedrock_slot) =
+                bedrock_inventory_slot(slot).ok_or("player inventory slot has no wire address")?;
             assert_eq!(
                 map_bedrock_slot_to_screen_handler(container_id as i32, bedrock_slot),
                 Some(slot as usize)
             );
         }
+        Ok(())
     }
 
     #[test]

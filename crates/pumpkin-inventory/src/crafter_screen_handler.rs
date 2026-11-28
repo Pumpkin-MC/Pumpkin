@@ -172,17 +172,6 @@ impl ScreenHandlerListener for CrafterScreenListener {
             self.refresh_recipe_result();
         }
     }
-
-    fn on_property_update(
-        &self,
-        screen_handler: &ScreenHandlerBehaviour,
-        property: u8,
-        value: i32,
-    ) {
-        if let Some(sync_handler) = screen_handler.sync_handler.as_ref() {
-            sync_handler.update_property(screen_handler, i32::from(property), value);
-        }
-    }
 }
 
 /// Server-side `CrafterMenu` implementation.
