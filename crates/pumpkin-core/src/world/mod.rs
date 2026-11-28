@@ -2649,6 +2649,16 @@ impl World {
                         collisions.push(shape);
                     }
                 }
+            } else if block == &Block::LAVA || block == &Block::WATER {
+                if let Some(shape) =
+                    Self::liquid_collision_shape_for_entity(entity, self, &pos, state.id)
+                {
+                    let shape = shape.at_pos(pos);
+                    if shape.intersects(&bounding_box) {
+                        collided = true;
+                        collisions.push(shape);
+                    }
+                }
             } else {
                 for shape in state.get_block_collision_shapes_at(&pos) {
                     let shape = shape.at_pos(pos);
@@ -2665,6 +2675,24 @@ impl World {
         }
 
         (collisions, positions)
+    }
+
+    fn liquid_collision_shape_for_entity(
+        entity: &dyn EntityBase,
+        world: &Self,
+        position: &BlockPos,
+        state_id: BlockStateId,
+    ) -> Option<BoundingBox> {
+        if pumpkin_data::block_properties::WaterLikeProperties::from_state_id(state_id).level != 0 {
+            return None;
+        }
+        let mob = entity.get_mob()?;
+        let shape = mob.liquid_collision_shape()?;
+        let fluid = pumpkin_data::fluid::Fluid::from_state_id(state_id)?;
+        (entity.get_entity().is_above_shape(&shape, position)
+            && mob.can_stand_on_fluid(fluid)
+            && !world.get_fluid(&position.up()).matches_type(fluid))
+        .then_some(shape)
     }
 
     /// Vanilla `findFreePosition`: the point in `allowed_centers` closest to `preferred_center`
@@ -7218,6 +7246,11 @@ impl World {
                 self.set_block_state(block_pos, new_state_id, flags);
             }
         }
+    }
+
+    pub fn is_spawning_monsters(&self) -> bool {
+        let level_data = self.level_info.load();
+        level_data.game_rules.spawn_mobs && level_data.game_rules.spawn_monsters
     }
 
     /// Returns whether monsters can be spawned in the world

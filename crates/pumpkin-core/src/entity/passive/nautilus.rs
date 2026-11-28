@@ -465,7 +465,7 @@ pub(super) fn interact_abstract_nautilus<M: Animal>(
             if let Some(vehicle) = world.get_entity_by_id(entity.entity_id)
                 && let Some(passenger) = world.get_player_by_id(player.entity_id())
             {
-                entity.add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
+                entity.try_add_passenger(vehicle, passenger as Arc<dyn EntityBase>);
                 return true;
             }
         }

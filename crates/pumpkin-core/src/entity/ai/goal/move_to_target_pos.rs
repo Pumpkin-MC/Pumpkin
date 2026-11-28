@@ -102,7 +102,10 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
 
     #[must_use]
     pub fn get_target_pos(&self) -> BlockPos {
-        self.target_pos.up()
+        self.move_to_target_pos.get().map_or_else(
+            || self.target_pos.up(),
+            |m| m.get_move_to_target(self.target_pos),
+        )
     }
 
     #[must_use]
@@ -130,6 +133,10 @@ impl<M: MoveToTargetPos> MoveToTargetPosGoal<M> {
 // Contains overridable functions
 pub trait MoveToTargetPos: Send + Sync {
     fn is_target_pos(&self, world: &World, block_pos: BlockPos) -> bool;
+
+    fn get_move_to_target(&self, target_pos: BlockPos) -> BlockPos {
+        target_pos.up()
+    }
 
     fn get_desired_distance_to_target(&self) -> f64 {
         1.0

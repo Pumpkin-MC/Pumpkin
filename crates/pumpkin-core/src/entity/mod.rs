@@ -251,6 +251,14 @@ pub const fn entity_type_to_bedrock_identifier(entity_type: &EntityType) -> &'st
 }
 
 pub trait EntityBase: Send + Sync + std::any::Any {
+    fn can_add_passenger(&self, _passenger: &dyn EntityBase) -> bool {
+        !self.get_entity().has_passengers()
+    }
+
+    fn dismount_location_for_passenger(&self, _passenger: &dyn EntityBase) -> Option<Vector3<f64>> {
+        None
+    }
+
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.get_entity().write_nbt(nbt);
         if let Some(living) = self.get_living_entity() {
@@ -4160,16 +4168,26 @@ impl Entity {
     }
 
     #[must_use]
-    pub fn is_submerged_in_water(&self) -> bool {
+    pub fn is_submerged_in(&self, fluid_to_match: &Fluid) -> bool {
         let pos = self.pos.load();
         let eye_y = pos.y + self.get_eye_height();
         let eye_pos = BlockPos::floored(pos.x, eye_y, pos.z);
         let world = self.world.load();
         let (fluid, state) = world.get_fluid_and_fluid_state(&eye_pos);
-        fluid.matches_type(&Fluid::WATER)
+        fluid.matches_type(fluid_to_match)
             && eye_y
                 <= f64::from(eye_pos.0.y)
                     + f64::from(world.get_fluid_height(&eye_pos, fluid, &state))
+    }
+
+    #[must_use]
+    pub fn is_above_shape(&self, shape: &BoundingBox, pos: &BlockPos) -> bool {
+        self.bounding_box.load().min.y > f64::from(pos.0.y) + shape.max.y - f64::from(1.0e-5f32)
+    }
+
+    #[must_use]
+    pub fn is_submerged_in_water(&self) -> bool {
+        self.is_submerged_in(&Fluid::WATER)
     }
 
     #[must_use]
@@ -4242,7 +4260,9 @@ impl Entity {
 
     #[must_use]
     pub fn is_on_fire(&self) -> bool {
-        self.fire_ticks.load(Ordering::Relaxed) > 0 || self.has_visual_fire.load(Ordering::Relaxed)
+        !self.is_fire_immune()
+            && (self.fire_ticks.load(Ordering::Relaxed) > 0
+                || self.has_visual_fire.load(Ordering::Relaxed))
     }
 
     pub fn get_horizontal_facing(&self) -> HorizontalFacing {
@@ -5726,6 +5746,18 @@ impl Entity {
             .and_then(Weak::upgrade)
     }
 
+    pub fn try_add_passenger(
+        &self,
+        vehicle: Arc<dyn EntityBase>,
+        passenger: Arc<dyn EntityBase>,
+    ) -> bool {
+        if !vehicle.can_add_passenger(passenger.as_ref()) {
+            return false;
+        }
+        self.add_passenger(vehicle, passenger);
+        true
+    }
+
     #[expect(
         clippy::needless_pass_by_value,
         reason = "callers pass owned Arc for vehicle and passenger"
@@ -6125,7 +6157,11 @@ impl Entity {
             let fallback_pos =
                 Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
 
-            let dismount_pos = if is_water {
+            let dismount_pos = if let Some(vehicle_base) = world.get_entity_by_id(self.entity_id)
+                && let Some(pos) = vehicle_base.dismount_location_for_passenger(passenger.as_ref())
+            {
+                pos
+            } else if is_water {
                 fallback_pos
             } else {
                 // Vanilla checks Standing, Crouching, Swimming poses and their respective height checks
