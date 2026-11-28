@@ -1234,7 +1234,7 @@ impl World {
                     .iter()
                     .map(pumpkin_util::text::TextComponentBase::to_bedrock_string)
                     .collect();
-                SText::translation(key.to_string(), parameters)
+                SText::translation(message.0.to_bedrock_translation_message(key), parameters)
             }
             _ => SText::system_message(
                 message

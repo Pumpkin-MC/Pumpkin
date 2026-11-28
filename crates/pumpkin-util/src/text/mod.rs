@@ -1073,11 +1073,14 @@ impl TextComponentBase {
         text
     }
 
+    /// Bedrock `§` codes for this component's own color and decorations, without its content.
+    ///
+    /// Translation packets need these in front of `%key`, the client resolves the key and
+    /// keeps the codes, which is how vanilla colors messages like `§e%multiplayer.player.joined`.
     #[must_use]
-    pub fn to_bedrock_legacy(&self, locale: Locale) -> String {
+    pub fn to_bedrock_style_codes(&self) -> String {
         let mut text = String::new();
 
-        // 1. Inject Bedrock formatting codes
         if let Some(color) = &self.style.color {
             match color {
                 Color::Named(named) => {
@@ -1100,13 +1103,32 @@ impl TextComponentBase {
         if self.style.italic == Some(true) {
             text.push_str("§o");
         }
-        if self.style.underlined == Some(true) {
-            text.push_str("§n");
-        }
         if self.style.obfuscated == Some(true) {
             text.push_str("§k");
         }
-        // Note: Bedrock does not support strikethrough natively without resource packs.
+        // hmm, no underline or strikethrough here: Bedrock reads §n and §m as the copper
+        // and redstone colors, so emitting them would recolor the whole message.
+
+        text
+    }
+
+    /// The `message` of a Bedrock translation text packet for `key`, carrying this
+    /// component's style. Unstyled messages stay the bare key.
+    #[must_use]
+    pub fn to_bedrock_translation_message(&self, key: &str) -> String {
+        let codes = self.to_bedrock_style_codes();
+        if codes.is_empty() {
+            key.to_string()
+        } else {
+            // ok so the key has to become a %token once something precedes it
+            format!("{codes}%{key}")
+        }
+    }
+
+    #[must_use]
+    pub fn to_bedrock_legacy(&self, locale: Locale) -> String {
+        // 1. Inject Bedrock formatting codes
+        let mut text = self.to_bedrock_style_codes();
 
         // 2. Resolve Content
         match &*self.content {

@@ -6423,7 +6423,7 @@ impl Player {
                     .iter()
                     .map(pumpkin_util::text::TextComponentBase::to_bedrock_string)
                     .collect();
-                SText::translation(key.to_string(), parameters)
+                SText::translation(text.0.to_bedrock_translation_message(key), parameters)
             }
             _ => SText::system_message(text.0.to_bedrock_legacy(locale)),
         };
