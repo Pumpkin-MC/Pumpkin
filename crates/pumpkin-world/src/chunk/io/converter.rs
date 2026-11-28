@@ -453,6 +453,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::too_many_lines, reason = "one Anvil -> Pump -> Anvil scenario")]
     fn transcodes_chunk_data_between_nbt_and_pump_binary() {
         use crate::{
             chunk::{
@@ -498,6 +499,14 @@ mod tests {
             preserved_tags: Mutex::new(NbtCompound::default()),
         };
         chunk.set_custom_data("test_ns", "flag", NbtTag::Int(99));
+        // A root tag the server does not model must ride through both conversions.
+        let mut structures = NbtCompound::new();
+        structures.put_int("marker", 7);
+        chunk
+            .preserved_tags
+            .lock()
+            .unwrap()
+            .put("structures", NbtTag::Compound(structures.clone()));
 
         let mca_path = region_dir.join(AnvilRegion::file_name(region_coords));
         let anvil_cfg = AnvilChunkConfig::default();
@@ -531,6 +540,10 @@ mod tests {
             parsed_pump.get_custom_data("test_ns", "flag"),
             Some(NbtTag::Int(99))
         );
+        assert_eq!(
+            parsed_pump.preserved_tags.lock().unwrap().get("structures"),
+            Some(&NbtTag::Compound(structures.clone()))
+        );
         drop(pump);
 
         // Convert Pump (.pump with PCHK binary) -> Anvil (.mca with Java NBT)
@@ -551,6 +564,14 @@ mod tests {
         assert_eq!(
             parsed_anvil.get_custom_data("test_ns", "flag"),
             Some(NbtTag::Int(99))
+        );
+        assert_eq!(
+            parsed_anvil
+                .preserved_tags
+                .lock()
+                .unwrap()
+                .get("structures"),
+            Some(&NbtTag::Compound(structures))
         );
     }
 }

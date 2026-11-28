@@ -201,6 +201,8 @@ impl BedrockClient {
             drop(awaiting);
             // Bedrock sends no `PlayerLoaded` after a respawn, reaching the spawn stands in
             player.set_client_loaded(true);
+            // Vanilla `handleAcceptTeleportPacket` -> `getChunkSource().move(player)`
+            chunker::update_position(player);
         } else if self
             .teleport_unconfirmed_inputs
             .fetch_add(1, Ordering::Relaxed)
