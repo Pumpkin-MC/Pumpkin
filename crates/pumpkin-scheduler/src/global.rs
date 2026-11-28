@@ -1,8 +1,6 @@
 use std::{
-    any::Any,
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     future::Future,
-    panic::AssertUnwindSafe,
     pin::Pin,
     sync::{Arc, Mutex, MutexGuard, Weak},
     task::{Context, Poll},
@@ -10,23 +8,29 @@ use std::{
 };
 
 use futures::{
-    FutureExt,
     channel::oneshot,
     task::{ArcWake, AtomicWaker, waker_ref},
 };
 
 use crate::{
-    ExecutionDomain, SchedulerConfig, SchedulerError, SchedulerService, SchedulerSnapshot,
-    SchedulerState, SchedulerTaskId, TaskContext, TaskExecutor, TaskHandle, TaskRequest,
+    CancellationHandle, ExecutionDomain, SchedulerConfig, SchedulerError, SchedulerService,
+    SchedulerSnapshot, SchedulerState, SchedulerTaskId, TaskContext, TaskExecutor, TaskHandle,
+    TaskRequest,
+    completion::{self, Outcome, ScheduledTask},
 };
 
-type Completion = Box<dyn FnOnce() + Send>;
-type Work = Pin<Box<dyn Future<Output = Completion> + Send>>;
+type Work = Box<dyn ScheduledTask>;
 
 struct Entry {
     work: Option<Work>,
     signal: Arc<TaskSignal>,
     queued: bool,
+    cancellation: CancellationHandle,
+    // Reparent surviving children to the nearest active ancestor for cancellation
+    // This avoids retaining completed tasks
+    // TaskContext retains the original parent ID
+    parent: Option<SchedulerTaskId>,
+    children: HashSet<SchedulerTaskId>,
 }
 
 struct TaskQueue {
@@ -36,9 +40,55 @@ struct TaskQueue {
     next_id: u64,
     state: SchedulerState,
     slow_turns: u64,
+    completed: u64,
+    cancelled: u64,
+    failed: u64,
 }
 
-struct Shared {
+impl TaskQueue {
+    fn enqueue(&mut self, id: SchedulerTaskId) -> bool {
+        if let Some(entry) = self.tasks.get_mut(&id)
+            && !entry.queued
+        {
+            entry.queued = true;
+            self.ready.push_back(id);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn remove(&mut self, id: SchedulerTaskId) -> Option<Entry> {
+        let entry = self.tasks.remove(&id)?;
+        if entry.queued {
+            self.ready.retain(|queued| *queued != id);
+        }
+        if self.running == Some(id) {
+            self.running = None;
+        }
+        if let Some(parent) = entry.parent.and_then(|id| self.tasks.get_mut(&id)) {
+            parent.children.remove(&id);
+            parent.children.extend(entry.children.iter().copied());
+        }
+        for child in &entry.children {
+            if let Some(child) = self.tasks.get_mut(child) {
+                child.parent = entry.parent;
+            }
+        }
+        Some(entry)
+    }
+
+    const fn record(&mut self, outcome: &Outcome) {
+        let counter = match outcome {
+            Outcome::Completed => &mut self.completed,
+            Outcome::Cancelled => &mut self.cancelled,
+            Outcome::Failed => &mut self.failed,
+        };
+        *counter = counter.saturating_add(1);
+    }
+}
+
+pub struct Shared {
     queue: Mutex<TaskQueue>,
     wake: AtomicWaker,
     owner: Arc<()>,
@@ -50,6 +100,60 @@ impl Shared {
         self.queue
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    pub(crate) fn cancel(&self, id: SchedulerTaskId) -> bool {
+        {
+            let mut queue = self.lock();
+            if queue.state != SchedulerState::Accepting {
+                return false;
+            }
+            let Some(entry) = queue.tasks.get(&id) else {
+                return false;
+            };
+            if entry.cancellation.is_requested() {
+                return false;
+            }
+
+            // Reparenting preserves cancellation reachability through completed ancestors
+            let mut descendants = vec![id];
+            while let Some(candidate) = descendants.pop() {
+                if let Some(entry) = queue.tasks.get(&candidate) {
+                    entry.cancellation.request();
+                    descendants.extend(entry.children.iter().copied());
+                }
+                queue.enqueue(candidate);
+            }
+        }
+        self.wake.wake();
+        true
+    }
+
+    /// Removes a task once, then runs cleanup and delivers its result outside the queue lock.
+    fn finish(&self, id: SchedulerTaskId, work: Option<Work>, error: Option<SchedulerError>) {
+        let (entry, error) = {
+            let mut queue = self.lock();
+            let Some(entry) = queue.remove(id) else {
+                return;
+            };
+            let error = if entry.cancellation.is_requested() {
+                Some(SchedulerError::Cancelled { task: id })
+            } else {
+                error
+            };
+            (entry, error)
+        };
+        if let Some(work) = work.or(entry.work) {
+            // Destructors and result wakeups can re-enter the scheduler
+            // Release the queue lock before running either operation
+            let completion = work.finish(error);
+            self.lock().record(&completion.outcome);
+            completion.deliver();
+        } else {
+            // Driver unwinding may have already dropped the active task
+            // Channel closure reports the stopped driver to the result receiver
+            self.lock().record(&Outcome::Failed);
+        }
     }
 }
 
@@ -63,46 +167,47 @@ impl ArcWake for TaskSignal {
         let Some(shared) = signal.shared.upgrade() else {
             return;
         };
-        let queued = {
-            let mut queue = shared.lock();
-            if let Some(entry) = queue.tasks.get_mut(&signal.id)
-                && !entry.queued
-            {
-                entry.queued = true;
-                queue.ready.push_back(signal.id);
-                true
-            } else {
-                false
-            }
-        };
+        let queued = shared.lock().enqueue(signal.id);
         if queued {
             shared.wake.wake();
         }
     }
 }
 
-/// Global domain scheduler with bounded admission, driven by one injected executor task
+/// Runs Global tasks through a single driver with bounded admission.
 ///
-/// Admission and wakeups append to a FIFO queue. Each turn polls one future
-/// once; a pending task releases the domain until it is woken. Duplicate wakes
-/// coalesce, including wakes during a poll. Nested calls use the same queue and
-/// capacity as roots, so an awaiting parent does not prevent its child running
+/// Submissions and wakeups join a FIFO ready queue. Each turn polls one future
+/// once, and duplicate wakeups are coalesced. Suspended tasks keep their admission
+/// slots but let other ready work run, including children they are awaiting.
 ///
-/// Returning `Pending` permits interleaving, including unrelated chains. Callers must
-/// revalidate state after suspension and must not hold domain locks or borrows
-/// across it. CPU-heavy work belongs on the application's CPU executor. Turn
-/// budgets yield between polls and diagnose slow polls, but cannot preempt one
+/// Polls run one at a time; whole operations can interleave across suspension.
+/// Release locks needed by dependent work before awaiting and revalidate shared
+/// state on resumption. The driver yields after its configured turn budget, but
+/// cannot interrupt a poll. Blocking or CPU-heavy work needs a separate executor.
 ///
-/// Capacity includes ready, running, and pending work. A full queue rejects
-/// immediately, including child requests; callers must handle that error.
-/// The injected executor owns the driver's lifetime. Dropping it fails pending
-/// handles and closes admission; graceful draining is not provided here
+/// Roots and children share the same task limit. Cancellation retains a slot
+/// until the driver processes it. Completion removes the task from admission
+/// before dropping its future and publishing its result, so another submission
+/// may acquire that slot while cleanup is still running.
+///
+/// The application's executor owns the driver. Dropping it stops admission and
+/// settles outstanding tasks. There is no graceful-drain operation. Cancellation
+/// and driver shutdown do not undo side effects or stop work on other executors.
 #[derive(Clone)]
 pub struct GlobalScheduler {
     shared: Arc<Shared>,
 }
 
 impl GlobalScheduler {
+    /// Starts the scheduler's driver on the supplied executor.
+    ///
+    /// The executor must retain and poll the driver for as long as work should
+    /// be accepted. Cloning the returned scheduler does not create another driver.
+    ///
+    /// # Errors
+    ///
+    /// Returns the executor's error if spawning fails, or
+    /// [`SchedulerError::Stopped`] if the executor immediately drops the driver.
     pub fn start(
         config: SchedulerConfig,
         executor: &dyn TaskExecutor,
@@ -115,6 +220,9 @@ impl GlobalScheduler {
                 next_id: 1,
                 state: SchedulerState::Accepting,
                 slow_turns: 0,
+                completed: 0,
+                cancelled: 0,
+                failed: 0,
             }),
             wake: AtomicWaker::new(),
             owner: Arc::new(()),
@@ -129,6 +237,23 @@ impl GlobalScheduler {
         Ok(Self { shared })
     }
 
+    /// Queues owned work and returns a handle to its eventual result.
+    ///
+    /// Submission does not invoke the work factory or wait for capacity. Once
+    /// accepted, the task occupies a slot until the driver removes it for
+    /// completion. Dropping the returned handle leaves the task running.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SchedulerError::UnsupportedDomain`] for a non-Global request,
+    /// [`SchedulerError::Stopped`] after driver shutdown,
+    /// [`SchedulerError::QueueFull`] when all slots are occupied, or
+    /// [`SchedulerError::TaskIdsExhausted`] when no further IDs can be assigned.
+    ///
+    /// Child requests also fail with [`SchedulerError::ForeignContext`] for a
+    /// parent from another scheduler, [`SchedulerError::InactiveParent`] for a
+    /// completed parent, or [`SchedulerError::Cancelled`] for a cancelled parent.
+    /// Failures after admission are delivered through the task handle instead.
     pub fn submit<T: Send + 'static>(
         &self,
         request: TaskRequest<T>,
@@ -145,16 +270,17 @@ impl GlobalScheduler {
         let context = {
             let mut queue = self.shared.lock();
             if queue.state != SchedulerState::Accepting {
-                return Err(SchedulerError::Stopped); // Check if scheduler is accepting work
+                return Err(SchedulerError::Stopped);
             }
             if let Some(parent) = &parent {
                 if !Arc::ptr_eq(&parent.owner, &self.shared.owner) {
-                    // Check if the task runs in the same domain as the parent
                     return Err(SchedulerError::ForeignContext);
                 }
-                if !queue.tasks.contains_key(&parent.id) {
-                    // Ensure active parent, or it cannot schedule
+                let Some(entry) = queue.tasks.get(&parent.id) else {
                     return Err(SchedulerError::InactiveParent { task: parent.id });
+                };
+                if entry.cancellation.is_requested() {
+                    return Err(SchedulerError::Cancelled { task: parent.id });
                 }
             }
             if queue.tasks.len() == self.shared.config.maximum_tasks().get() {
@@ -170,34 +296,26 @@ impl GlobalScheduler {
                 chain: parent.as_ref().map_or(id, TaskContext::chain),
                 parent: parent.as_ref().map(TaskContext::id),
                 owner: Arc::clone(&self.shared.owner),
+                cancellation: CancellationHandle::new(&self.shared, id),
             };
-            let task_context = context.clone();
-            let future = Box::pin(async move {
-                // Include the factory in the unwind boundary, not just its future
-                let output = AssertUnwindSafe(async move { work(task_context).await })
-                    .catch_unwind()
-                    .await
-                    .unwrap_or_else(|payload| {
-                        Err(SchedulerError::TaskPanicked {
-                            task: id,
-                            message: panic_message(payload.as_ref()),
-                        })
-                    });
-                Box::new(move || {
-                    let _ = result.send(output);
-                }) as Completion
-            });
+            let work = completion::task(context.clone(), work, result);
             queue.tasks.insert(
                 id,
                 Entry {
-                    work: Some(future),
+                    work: Some(work),
                     signal: Arc::new(TaskSignal {
                         shared: Arc::downgrade(&self.shared),
                         id,
                     }),
                     queued: true,
+                    cancellation: context.cancellation_handle(),
+                    parent: context.parent(),
+                    children: HashSet::new(),
                 },
             );
+            if let Some(parent) = context.parent().and_then(|id| queue.tasks.get_mut(&id)) {
+                parent.children.insert(id);
+            }
             queue.ready.push_back(id);
             context
         };
@@ -231,6 +349,9 @@ impl SchedulerService for GlobalScheduler {
             running,
             pending: queue.tasks.len() - ready - running,
             slow_turns: queue.slow_turns,
+            completed: queue.completed,
+            cancelled: queue.cancelled,
+            failed: queue.failed,
         }
     }
 
@@ -241,6 +362,42 @@ impl SchedulerService for GlobalScheduler {
 
 struct Driver {
     shared: Arc<Shared>,
+}
+
+impl Driver {
+    fn run_turn(
+        &self,
+        id: SchedulerTaskId,
+        mut work: Work,
+        signal: &Arc<TaskSignal>,
+        cancellation: &CancellationHandle,
+    ) {
+        if cancellation.is_requested() {
+            self.shared
+                .finish(id, Some(work), Some(SchedulerError::Cancelled { task: id }));
+            return;
+        }
+        let wake = waker_ref(signal);
+        let mut task_cx = Context::from_waker(&wake);
+        let started = Instant::now();
+        let result = work.poll(&mut task_cx);
+        let elapsed = started.elapsed();
+        if elapsed >= self.shared.config.slow_turn_threshold() {
+            let mut queue = self.shared.lock();
+            queue.slow_turns = queue.slow_turns.saturating_add(1);
+            drop(queue);
+            tracing::warn!(task_id = id.get(), ?elapsed, "global domain task was slow:");
+        }
+        if result.is_ready() {
+            self.shared.finish(id, Some(work), None);
+        } else {
+            let mut queue = self.shared.lock();
+            queue.running = None;
+            if let Some(entry) = queue.tasks.get_mut(&id) {
+                entry.work = Some(work);
+            }
+        }
+    }
 }
 
 impl Future for Driver {
@@ -256,41 +413,15 @@ impl Future for Driver {
                     entry.queued = false;
                     let work = entry.work.take()?;
                     let signal = Arc::clone(&entry.signal);
+                    let cancellation = entry.cancellation.clone();
                     queue.running = Some(id);
-                    Some((id, work, signal))
+                    Some((id, work, signal, cancellation))
                 })
             };
-            let Some((id, mut work, signal)) = next else {
+            let Some((id, work, signal, cancellation)) = next else {
                 return Poll::Pending;
             };
-            let wake = waker_ref(&signal);
-            let mut task_cx = Context::from_waker(&wake);
-            let started = Instant::now();
-            let result = work.as_mut().poll(&mut task_cx);
-            let elapsed = started.elapsed();
-            let slow = elapsed >= self.shared.config.slow_turn_threshold();
-            {
-                let mut queue = self.shared.lock();
-                queue.running = None;
-                if slow {
-                    queue.slow_turns = queue.slow_turns.saturating_add(1);
-                }
-                if result.is_ready() {
-                    if queue.tasks.remove(&id).is_some_and(|entry| entry.queued) {
-                        // A future may wake itself and then complete on the same poll
-                        queue.ready.retain(|queued| *queued != id);
-                    }
-                } else if let Some(entry) = queue.tasks.get_mut(&id) {
-                    entry.work = Some(work);
-                }
-            }
-            if slow {
-                tracing::warn!(task_id = id.get(), ?elapsed, "global domain task was slow:");
-            }
-            if let Poll::Ready(complete) = result {
-                // Release admission before a waiter observes completion
-                complete();
-            }
+            self.run_turn(id, work, &signal, &cancellation);
         }
         if !self.shared.lock().ready.is_empty() {
             cx.waker().wake_by_ref();
@@ -301,26 +432,13 @@ impl Future for Driver {
 
 impl Drop for Driver {
     fn drop(&mut self) {
-        let tasks = {
+        let ids: Vec<_> = {
             let mut queue = self.shared.lock();
             queue.state = SchedulerState::Stopped;
-            queue.ready.clear();
-            queue.running = None;
-            std::mem::take(&mut queue.tasks)
+            queue.tasks.keys().copied().collect()
         };
-        // Future destructors and result wakeups must run without the queue lock
-        drop(tasks);
+        for id in ids {
+            self.shared.finish(id, None, Some(SchedulerError::Stopped));
+        }
     }
-}
-
-fn panic_message(payload: &(dyn Any + Send)) -> String {
-    payload
-        .downcast_ref::<String>()
-        .cloned()
-        .unwrap_or_else(|| {
-            payload.downcast_ref::<&str>().map_or_else(
-                || "non-string panic payload".to_owned(),
-                |message| (*message).to_owned(),
-            )
-        })
 }

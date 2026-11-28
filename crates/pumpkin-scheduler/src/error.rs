@@ -2,8 +2,12 @@ use thiserror::Error;
 
 use crate::{ExecutionDomain, SchedulerTaskId};
 
+/// An admission failure or the terminal error returned by an accepted task.
 #[derive(Debug, Error)]
 pub enum SchedulerError {
+    /// The named task was cancelled, or a child was submitted to a cancelled parent.
+    #[error("scheduler task {task:?} was cancelled")]
+    Cancelled { task: SchedulerTaskId },
     #[error("scheduler capacity for {domain:?} is full")]
     QueueFull { domain: ExecutionDomain },
     #[error("scheduler does not support domain {domain:?}")]

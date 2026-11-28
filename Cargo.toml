@@ -19,6 +19,7 @@ members = [
     "crates/pumpkin-plugin-runtime",
     "crates/pumpkin-plugin-utils",
     "crates/pumpkin-protocol",
+    "crates/pumpkin-scheduler",
     "crates/pumpkin-util",
     "crates/pumpkin-wasm-host",
     "crates/pumpkin-wasm-host-common",
