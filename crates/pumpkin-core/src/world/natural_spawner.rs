@@ -649,14 +649,19 @@ pub fn spawn_mobs_for_chunk_generation(
                         entity
                             .get_entity()
                             .set_rotation(rand::random::<f32>() * 360.0, 0.0);
-                        group_data = finalize_spawn(
-                            &entity,
-                            world,
-                            crate::entity::mob::spawn::EntitySpawnReason::ChunkGeneration,
-                            group_data,
-                        );
-                        world.spawn_entity_non_save(entity);
-                        success = true;
+                        if entity
+                            .get_mob()
+                            .is_none_or(|mob| mob.check_spawn_obstruction(world))
+                        {
+                            group_data = finalize_spawn(
+                                &entity,
+                                world,
+                                crate::entity::mob::spawn::EntitySpawnReason::ChunkGeneration,
+                                group_data,
+                            );
+                            world.spawn_entity_non_save(entity);
+                            success = true;
+                        }
                     }
                 }
 
