@@ -244,14 +244,10 @@ pub async fn serve_java_connection(server: Arc<Server>, mut pending: PendingConn
                 JavaClient::from_pending(pending, profile.clone(), config.clone());
             java_client.start_outgoing_packet_task();
 
-            if let Some((player, world)) = server.add_player(
-                Arc::new(ClientPlatform::Java(java_client)),
-                profile,
-                Some(config),
-            ) {
-                if let ClientPlatform::Java(client) = player.client.as_ref() {
-                    client.set_player(player.clone());
-                }
+            let client = Arc::new(ClientPlatform::Java(java_client));
+            if let Some((player, world)) =
+                Box::pin(server.add_player(client.clone(), profile, Some(config))).await
+            {
                 world
                     .spawn_java_player(&server.basic_config, &player, &server)
                     .await;
@@ -259,7 +255,6 @@ pub async fn serve_java_connection(server: Arc<Server>, mut pending: PendingConn
                 if let ClientPlatform::Java(client) = player.client.as_ref() {
                     client.progress_player_packets(&player, &server).await;
 
-                    // Close when done
                     client.close();
                     client.await_tasks().await;
                 }
@@ -271,6 +266,9 @@ pub async fn serve_java_connection(server: Arc<Server>, mut pending: PendingConn
                 if let Err(e) = server.advancement_manager.save_player(&player).await {
                     error!("Failed to save player advancement on disconnect: {e}");
                 }
+            } else if let ClientPlatform::Java(client) = client.as_ref() {
+                client.close();
+                client.await_tasks().await;
             }
         }
     }
@@ -748,11 +746,13 @@ impl PumpkinServer {
                     client.await_tasks().await;
                 }
                 PacketHandlerResult::ReadyToPlay(profile, config) => {
-                    if let Some((player, _world)) = server.add_player(
+                    if let Some((player, _world)) = Box::pin(server.add_player(
                         Arc::new(ClientPlatform::Bedrock(client.clone())),
                         profile,
                         Some(config),
-                    ) {
+                    ))
+                    .await
+                    {
                         client.progress_player_packets(&player).await;
                         client.close().await;
                         client.await_tasks().await;
@@ -762,6 +762,9 @@ impl PumpkinServer {
                         {
                             error!("Failed to save player data on disconnect: {error}");
                         }
+                    } else {
+                        client.close().await;
+                        client.await_tasks().await;
                     }
                 }
             }

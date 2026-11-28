@@ -327,6 +327,7 @@ use crate::plugin::player::player_transfer::PlayerTransferEvent;
 use crate::plugin::server::packet::PacketSentEvent;
 use crate::plugin::world::chunk_send::ChunkSend;
 use crate::server::Server;
+use crate::server::login_admission::{LoginAdmission, PendingLoginAdmission};
 use crate::world::{BlockBreakingProgress, World};
 use bytes::Bytes;
 
@@ -600,6 +601,7 @@ pub struct Player {
     pub gameprofile: GameProfile,
     /// The client connection associated with the player.
     pub client: Arc<ClientPlatform>,
+    pub(crate) login_admission: LoginAdmission,
     /// The player's inventory.
     pub inventory: Arc<PlayerInventory>,
     /// The player's `EnderChest` inventory.
@@ -833,6 +835,12 @@ impl Player {
     pub const FULL_SLEEP_TICKS: u8 = 100;
     pub const SLEEP_TIMER_RESET_TICKS: u8 = 110;
 
+    /// Defers this player’s admission once while their login event is being dispatched.
+    #[must_use]
+    pub fn defer_login_admission(&self) -> Option<PendingLoginAdmission> {
+        self.login_admission.defer()
+    }
+
     pub async fn fetch_skin(
         properties: &[Property],
     ) -> Option<pumpkin_protocol::bedrock::client::Skin> {
@@ -1028,6 +1036,7 @@ impl Player {
             chat_spam_tick_count: AtomicU32::new(0),
             // Item usage tracking
             using_item: AtomicBool::new(false),
+            login_admission: LoginAdmission::default(),
             item_use_start_time: AtomicI32::new(0),
             using_hand: AtomicCell::new(None),
             // Minecraft has no way to change the default permission level of new players.

@@ -4,7 +4,7 @@ pub(crate) mod recipe;
 use crossbeam::atomic::AtomicCell;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    io::{Cursor, Error, Write},
+    io::{Cursor, Error, ErrorKind, Write},
     net::SocketAddr,
     sync::{
         Arc,
@@ -494,7 +494,9 @@ impl BedrockClient {
         let mut batch = Vec::with_capacity(packet.len() + 1);
         batch.push(BEDROCK_GAME_PACKET);
         batch.extend_from_slice(&packet);
-        if let Err(error) = self.process_batch(server, batch).await {
+        if let Err(error) = self.process_batch(server, batch).await
+            && !self.is_closed()
+        {
             error!(
                 "Failed to handle NetherNet payload for {}: {error}",
                 self.address
@@ -1423,11 +1425,12 @@ impl BedrockClient {
                         if self.is_closed() || !self.is_registered_in_parent() {
                             None
                         } else {
-                            server.add_player(
+                            Box::pin(server.add_player(
                                 Arc::new(ClientPlatform::Bedrock(self.clone())),
                                 profile,
                                 Some(config),
-                            )
+                            ))
+                            .await
                         }
                     }
                     Err(err) => {
@@ -1485,10 +1488,18 @@ impl BedrockClient {
     }
 
     async fn handle_game_packet(&self, packet: RawPacket) -> Result<(), Error> {
-        if let Err(err) = self.incoming_game_packet_send.send(packet).await {
-            debug!("Failed to send game packet to session task: {err}");
+        tokio::select! {
+            biased;
+            () = self.close_token.cancelled() => {
+                Err(Error::new(ErrorKind::Interrupted, "Bedrock client closed"))
+            }
+            result = self.incoming_game_packet_send.send(packet) => {
+                if let Err(err) = result {
+                    debug!("Failed to send game packet to session task: {err}");
+                }
+                Ok(())
+            }
         }
-        Ok(())
     }
 
     async fn translate_incoming_login(

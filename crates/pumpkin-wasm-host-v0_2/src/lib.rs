@@ -37,6 +37,7 @@ pub mod item_stack;
 pub mod java_dialogs;
 pub mod living_entity;
 pub mod logging;
+mod login_admission;
 pub mod mob;
 pub mod permission;
 pub mod player;

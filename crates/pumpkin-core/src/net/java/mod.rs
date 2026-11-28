@@ -228,6 +228,38 @@ impl JavaClient {
         self.player.store(Arc::new(Some(player)));
     }
 
+    pub(crate) async fn wait_for_login_admission<T>(
+        &self,
+        wait: impl Future<Output = T>,
+    ) -> Option<T> {
+        const MAX_PENDING_LOGIN_BYTES: usize = 64 * 1024;
+
+        let mut reader = self
+            .network_reader
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()?;
+        let verdict = tokio::select! {
+            biased;
+            () = self.await_close_interrupt() => None,
+            result = reader.prefetch_until_disconnect(MAX_PENDING_LOGIN_BYTES) => {
+                if let Err(error) = result {
+                    debug!(client_id = self.id, %error, "Connection failed while waiting for admission");
+                }
+                self.close();
+                None
+            }
+            verdict = wait => Some(verdict),
+        };
+        if verdict.is_some() {
+            *self
+                .network_reader
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(reader);
+        }
+        verdict
+    }
+
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
         let Some(mut network_reader) = self
             .network_reader

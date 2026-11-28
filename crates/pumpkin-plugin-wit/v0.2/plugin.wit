@@ -52,6 +52,8 @@ world plugin {
     import attributes;
     /// Provides player management.
     import player;
+    /// Provides deferred decisions for player login events.
+    import login-admission;
     /// Provides advancement definitions and progress types.
     import advancement;
     /// Provides custom recipe registration and management.
