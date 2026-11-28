@@ -145,8 +145,9 @@ impl SuggestionProvider for WasmCommandSuggestionProvider {
             *plugin.func_handle_command_suggestion().func()
         };
 
+        // The console asks for suggestions from its own thread, outside Tokio
         tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
+            self.server.runtime.block_on(async {
                 match self
                     .plugin
                     .store
