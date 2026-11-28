@@ -169,7 +169,7 @@ impl Mob for WardenEntity {
         let entity = &self.mob_entity.living_entity.entity;
         let bounding_box = entity.bounding_box.load();
         !world.contains_any_liquid(bounding_box)
-            && world.get_entities_at_box(&bounding_box).is_empty()
+            && world.is_unobstructed(entity)
             && world.is_space_empty(bounding_box)
     }
 }

@@ -27,6 +27,7 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
+use crate::world::World;
 
 pub struct NautilusEntity {
     pub mob_entity: MobEntity,
@@ -207,6 +208,10 @@ impl crate::entity::ageable::AgeableMob for NautilusEntity {
 }
 
 impl Mob for NautilusEntity {
+    fn check_spawn_obstruction(&self, world: &World) -> bool {
+        world.is_unobstructed(self.get_entity())
+    }
+
     fn as_ageable(&self) -> Option<&dyn crate::entity::ageable::AgeableMob> {
         Some(self)
     }
