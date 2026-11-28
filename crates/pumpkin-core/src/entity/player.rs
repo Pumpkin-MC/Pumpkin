@@ -688,6 +688,8 @@ pub struct Player {
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
     pub bedrock_spawned: AtomicBool,
+    /// Whether the Bedrock action-bar attack-cooldown indicator (see `tick`) is shown.
+    pub bedrock_cooldown_bar: AtomicBool,
     /// Whether the player is frozen in place (movement locked for dialogues/cutscenes).
     pub is_movement_locked: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
@@ -1024,6 +1026,7 @@ impl Player {
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(initially_loaded),
             bedrock_spawned: AtomicBool::new(false),
+            bedrock_cooldown_bar: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(if initially_loaded { 0 } else { 60 }),
             chat_spam_tick_count: AtomicU32::new(0),
             // Item usage tracking
@@ -1670,30 +1673,13 @@ impl Player {
             self.living_entity
                 .get_attribute_value(&Attributes::ATTACK_DAMAGE)
         };
-        let base_attack_speed = 4.0;
 
         let mut damage_multiplier = 1.0;
-        let mut add_speed = 0.0;
         let mut extra_ench_damage = 0.0;
         let mut knockback_level = 0u32;
 
         {
             let stack = &item_stack;
-            if stack.is_empty() {
-                // Vanilla fist: base_attack_speed = -2.4
-                add_speed = -2.4;
-            } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
-                // Only attack speed is read from the item here.
-                // Attack damage is already  part of `base_damage` via the held item's live
-                // ATTACK_DAMAGE modifier, re-adding it here would double it.
-                for item_mod in modifiers.attribute_modifiers.iter() {
-                    if item_mod.operation == Operation::AddValue
-                        && item_mod.id == "minecraft:base_attack_speed"
-                    {
-                        add_speed = item_mod.amount;
-                    }
-                }
-            }
             if let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
                     enchantment.modify_damage_against(
@@ -1708,9 +1694,18 @@ impl Player {
             }
         }
 
-        let attack_speed = base_attack_speed + add_speed;
-
         let is_bedrock = matches!(self.client.as_ref(), ClientPlatform::Bedrock(_));
+
+        // 1.8 combat: Java clients get no cooldown penalty, so raise the effective
+        // attack speed instead of special-casing the damage: every attack is
+        // already at full cooldown progress.
+        let attack_speed = self.held_item_attack_speed();
+        let attack_speed = if config.combat_1_8 && !is_bedrock {
+            attack_speed.max(combat::COMBAT_1_8_MIN_ATTACK_SPEED)
+        } else {
+            attack_speed
+        };
+
         if !is_bedrock
             && let Some(min_charge) = item_stack
                 .get_data_component::<pumpkin_data::data_component_impl::MinimumAttackChargeImpl>(
@@ -1726,11 +1721,20 @@ impl Player {
                 return;
             }
         }
-        let attack_cooldown_progress = if is_bedrock {
+
+        // Bedrock clients have no attack cooldown of their own. With 1.8 combat they
+        // keep native spam-click; with 1.9+ combat the server tracks the cooldown
+        // for them here and applies the damage scaling below.
+        let attack_cooldown_progress = if is_bedrock && config.combat_1_8 {
             1.0
         } else {
             self.get_attack_cooldown_progress(f64::from(server.basic_config.tps), 0.5, attack_speed)
         };
+        // The action-bar cooldown indicator for Bedrock clients (see `tick`) only
+        // exists in 1.9+ mode and only while the cooldown is recharging.
+        if !config.combat_1_8 && is_bedrock && attack_cooldown_progress < 1.0 {
+            self.bedrock_cooldown_bar.store(true, Ordering::Relaxed);
+        }
         self.last_attacked_ticks.store(0, Ordering::Relaxed);
 
         if self.deflect_projectile(victim.as_ref()) {
@@ -1762,7 +1766,7 @@ impl Player {
         damage = damage.max(0.0);
 
         let pos = victim_entity.pos.load();
-        let attack_type = AttackType::new(self, attack_cooldown_progress as f32);
+        let attack_type = AttackType::new(self, attack_cooldown_progress as f32, config.combat_1_8);
 
         let is_mace_smash = item_stack.item.id == pumpkin_data::item::Item::MACE.id
             && can_smash_attack(&self.living_entity);
@@ -3557,6 +3561,28 @@ impl Player {
         }
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
+        // Bedrock clients have no attack-cooldown bar of their own. While the
+        // server-tracked 1.9+ cooldown set in `attack` is recharging, mirror its
+        // progress as an action bar overlay.
+        if self.bedrock_cooldown_bar.load(Ordering::Relaxed)
+            && !server.advanced_config.pvp.combat_1_8
+            && matches!(self.client.as_ref(), ClientPlatform::Bedrock(_))
+        {
+            let progress = self.get_attack_cooldown_progress(
+                f64::from(server.basic_config.tps),
+                0.5,
+                self.held_item_attack_speed(),
+            );
+            if progress < 1.0 {
+                let text = combat::attack_cooldown_bar_text(progress);
+                self.show_title(&TextComponent::text(text), &TitleMode::ActionBar);
+            } else {
+                self.bedrock_cooldown_bar.store(false, Ordering::Relaxed);
+                // An empty overlay hides the indicator again.
+                self.show_title(&TextComponent::empty(), &TitleMode::ActionBar);
+            }
+        }
+
         self.living_entity.tick(self, server);
 
         self.breath_manager.tick(self);
@@ -4033,6 +4059,32 @@ impl Player {
         if self.living_entity.health.load() <= 0.0 {
             self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn);
         }
+    }
+
+    /// The attack speed used for the attack cooldown: the vanilla fist base
+    /// (4.0) plus the held item's `base_attack_speed` attribute modifiers.
+    pub(crate) fn held_item_attack_speed(&self) -> f64 {
+        let base_attack_speed = 4.0;
+        let stack = self.inventory().held_item();
+
+        let mut add_speed = 0.0;
+        if stack.is_empty() {
+            // Vanilla fist: base_attack_speed = -2.4
+            add_speed = -2.4;
+        } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
+            // Only attack speed is read from the item here; attack damage is already
+            // part of the held item's live ATTACK_DAMAGE modifier, re-adding it here
+            // would double it.
+            for item_mod in modifiers.attribute_modifiers.iter() {
+                if item_mod.operation == Operation::AddValue
+                    && item_mod.id == "minecraft:base_attack_speed"
+                {
+                    add_speed = item_mod.amount;
+                }
+            }
+        }
+
+        base_attack_speed + add_speed
     }
 
     pub fn get_attack_cooldown_progress(&self, tps: f64, base_time: f64, attack_speed: f64) -> f64 {

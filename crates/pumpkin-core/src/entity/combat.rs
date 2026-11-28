@@ -29,8 +29,14 @@ pub enum AttackType {
     Weak,
 }
 
+/// Attack speed floor used for Java clients when 1.8 combat is enabled. At 40
+/// speed the cooldown progress is already 1.0 half a tick after any attack
+/// (`(0 + 0.5) / (20 / 40) == 1`), so no hit is ever damage-penalized.
+pub const COMBAT_1_8_MIN_ATTACK_SPEED: f64 = 40.0;
+
 impl AttackType {
-    pub fn new(player: &Player, attack_cooldown_progress: f32) -> Self {
+    /// `combat_1_8` disables the sweep attack, which is part of the 1.9+ combat engine.
+    pub fn new(player: &Player, attack_cooldown_progress: f32, combat_1_8: bool) -> Self {
         let entity = &player.get_entity();
 
         let sprinting = entity.is_sprinting();
@@ -50,7 +56,7 @@ impl AttackType {
             return Self::Critical;
         }
 
-        if sword && is_strong && !is_bedrock {
+        if sword && is_strong && !is_bedrock && !combat_1_8 {
             return Self::Sweeping;
         }
 
@@ -756,6 +762,20 @@ impl CombatTracker {
     }
 }
 
+/// Renders the server-tracked attack cooldown as action-bar text for Bedrock
+/// clients, which have no client-side attack-cooldown bar.
+pub(super) fn attack_cooldown_bar_text(progress: f64) -> String {
+    const TOTAL_SEGMENTS: usize = 20;
+    let progress = progress.clamp(0.0, 1.0);
+    let filled = (progress * f64::from(TOTAL_SEGMENTS as u32)).round() as usize;
+    format!(
+        "Attack Cooldown [{}{}] {:.0}%",
+        "#".repeat(filled),
+        "-".repeat(TOTAL_SEGMENTS - filled),
+        progress * 100.0
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -782,5 +802,21 @@ mod tests {
         // Stacked armour modifiers can push resistance above 1.0; the result is
         // negative and callers guard on `strength > 0.0`.
         assert!(knockback_after_resistance(0.4, 1.2) < 0.0);
+    }
+
+    #[test]
+    fn cooldown_bar_covers_full_range() {
+        let empty = "Attack Cooldown [--------------------] 0%";
+        assert_eq!(attack_cooldown_bar_text(0.0), empty);
+        // Out-of-range inputs clamp.
+        assert_eq!(attack_cooldown_bar_text(-0.5), empty);
+        let full = "Attack Cooldown [####################] 100%";
+        assert_eq!(attack_cooldown_bar_text(1.0), full);
+        assert_eq!(attack_cooldown_bar_text(1.5), full);
+        // 20 segments over 0..=1 round half up.
+        assert_eq!(
+            attack_cooldown_bar_text(0.5),
+            "Attack Cooldown [##########----------] 50%"
+        );
     }
 }

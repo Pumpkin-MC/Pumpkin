@@ -16,6 +16,14 @@ pub struct PVPConfig {
     pub knockback: bool,
     /// Whether players swing their hand when attacking.
     pub swing: bool,
+    /// Whether to use legacy 1.8 combat instead of the modern 1.9+ attack cooldown.
+    ///
+    /// With 1.8 combat, Java players attack at full damage with no cooldown penalty
+    /// and no sweep attack, and Bedrock players keep their native spam-click.
+    /// With 1.9+ combat, Bedrock players get a server-tracked attack cooldown:
+    /// hits during the cooldown do scaled damage and the action bar shows the
+    /// cooldown progress until it has fully recharged.
+    pub combat_1_8: bool,
 }
 
 impl Default for PVPConfig {
@@ -26,6 +34,7 @@ impl Default for PVPConfig {
             protect_creative: true,
             knockback: true,
             swing: true,
+            combat_1_8: false,
         }
     }
 }
