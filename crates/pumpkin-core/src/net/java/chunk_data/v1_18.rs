@@ -1,4 +1,5 @@
 use super::util::write_compound_nbt;
+use crate::block::entities::block_entity_client_update_tag;
 use pumpkin_protocol::codec::bit_set::BitSet;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::ser::NetworkWriteExt;
@@ -200,7 +201,8 @@ pub fn write_chunk_data(
         });
         write.write_var_int(&VarInt(id as i32))?;
 
-        let mut client_nbt = nbt.clone();
+        let mut client_nbt =
+            block_entity_client_update_tag(u16::try_from(id).unwrap_or(u16::MAX), nbt.clone());
         client_nbt.child_tags.remove("id");
         client_nbt.child_tags.remove("x");
         client_nbt.child_tags.remove("y");

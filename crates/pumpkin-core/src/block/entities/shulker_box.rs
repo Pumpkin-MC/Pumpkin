@@ -147,6 +147,10 @@ impl BlockEntity for ShulkerBoxBlockEntity {
         Some(nbt)
     }
 
+    fn sends_saved_update_tag() -> bool {
+        false
+    }
+
     fn bedrock_block_actor_data(
         &self,
         state_id: pumpkin_data::BlockStateId,
