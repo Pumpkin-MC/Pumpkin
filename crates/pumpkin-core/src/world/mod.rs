@@ -2627,9 +2627,7 @@ impl World {
 
         let min = BlockPos::floored_v(bounding_box.min.add_raw(0.0, -0.50001, 0.0));
         let max = bounding_box.max_block_pos();
-        let pos_iter = BlockPos::iterate(min, max);
-
-        for pos in pos_iter {
+        for (pos, inside) in collision_scan(&bounding_box, min, max) {
             let state = self.get_block_state(&pos);
 
             if state.is_air() {
@@ -2637,9 +2635,19 @@ impl World {
             }
 
             let block = Block::from_state_id(state.id);
+            if block != &Block::MOVING_PISTON && !inside {
+                continue;
+            }
             let mut collided = false;
 
-            if block == &Block::POWDER_SNOW {
+            if block == &Block::MOVING_PISTON {
+                for shape in self.moving_piston_collisions(&pos) {
+                    if shape.intersects(&bounding_box) {
+                        collided = true;
+                        collisions.push(shape);
+                    }
+                }
+            } else if block == &Block::POWDER_SNOW {
                 if let Some(shape) =
                     crate::block::blocks::powder_snow::collision_shape_for_entity(entity, &pos)
                 {
@@ -2707,12 +2715,39 @@ impl World {
             })
     }
 
+    /// The collision boxes of the block a piston is moving through `pos`, in world
+    /// coordinates. The `moving_piston` state itself has no shape: vanilla asks its block
+    /// entity, which places the moved block where the animation currently has it.
+    pub fn moving_piston_collisions(&self, pos: &BlockPos) -> Vec<BoundingBox> {
+        self.get_block_entity(pos)
+            .and_then(|entity| {
+                entity
+                    .as_any()
+                    .downcast_ref::<crate::block::entities::piston::PistonBlockEntity>()
+                    .map(crate::block::entities::piston::PistonBlockEntity::collision_shapes)
+            })
+            .unwrap_or_default()
+    }
+
     pub fn is_space_empty(&self, bounding_box: BoundingBox) -> bool {
         let min = bounding_box.min_block_pos();
         let max = bounding_box.max_block_pos();
 
-        for pos in BlockPos::iterate(min, max) {
+        for (pos, inside) in collision_scan(&bounding_box, min, max) {
             let state = self.get_block_state(&pos);
+            if Block::from_state_id(state.id) == &Block::MOVING_PISTON {
+                if self
+                    .moving_piston_collisions(&pos)
+                    .iter()
+                    .any(|shape| shape.intersects(&bounding_box))
+                {
+                    return false;
+                }
+                continue;
+            }
+            if !inside {
+                continue;
+            }
             let collided = Self::check_collision(&bounding_box, pos, state, false, |_| ());
 
             if collided {
@@ -2729,10 +2764,18 @@ impl World {
             .min_block_pos()
             .offset(Vector3::new(-1, -1, -1));
         let max = bounding_box.max_block_pos().offset(Vector3::new(1, 1, 1));
-        BlockPos::iterate(min, max).all(|position| {
-            self.get_block_state(&position)
-                .get_block_collision_shapes_at(&position)
-                .all(|shape| !shape.at_pos(position).intersects(&bounding_box))
+        collision_scan(&bounding_box, min, max).all(|(position, inside)| {
+            let state = self.get_block_state(&position);
+            if Block::from_state_id(state.id) == &Block::MOVING_PISTON {
+                return self
+                    .moving_piston_collisions(&position)
+                    .iter()
+                    .all(|shape| !shape.intersects(&bounding_box));
+            }
+            !inside
+                || state
+                    .get_block_collision_shapes_at(&position)
+                    .all(|shape| !shape.at_pos(position).intersects(&bounding_box))
         })
     }
 
@@ -8642,6 +8685,100 @@ fn merge_entity_records(data: &mut Vec<NbtCompound>, live: bool, fresh: Vec<NbtC
         }
         data.push(record);
     }
+}
+
+/// The union of every block collision shape, relative to its block: how far a block's shape
+/// can reach past its own cube (fences and walls are 1.5 blocks tall).
+static COLLISION_SHAPE_EXTENT: std::sync::LazyLock<BoundingBox> = std::sync::LazyLock::new(|| {
+    pumpkin_data::block_properties::COLLISION_SHAPES
+        .iter()
+        .fold(
+            BoundingBox::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 1.0, 1.0)),
+            |extent, shape| {
+                BoundingBox::new(
+                    Vector3::new(
+                        extent.min.x.min(shape.min.x),
+                        extent.min.y.min(shape.min.y),
+                        extent.min.z.min(shape.min.z),
+                    ),
+                    Vector3::new(
+                        extent.max.x.max(shape.max.x),
+                        extent.max.y.max(shape.max.y),
+                        extent.max.z.max(shape.max.z),
+                    ),
+                )
+            },
+        )
+});
+
+/// On one axis, the block coordinates `p` (inclusive range) whose shape, spanning
+/// `p + shape_min..p + shape_max` and shifted by up to `reach` either way, overlaps
+/// `low..high`.
+fn overlapping_blocks(
+    low: f64,
+    high: f64,
+    shape_min: f64,
+    shape_max: f64,
+    reach: f64,
+) -> (i32, i32) {
+    (
+        (low - shape_max - reach).floor() as i32 + 1,
+        (high - shape_min + reach).ceil() as i32 - 1,
+    )
+}
+
+/// The blocks a collision query for `bounding_box` reads, with whether each lies in
+/// `min..=max`. Every block of that range is visited, and outside it the positions where a
+/// `moving_piston` could still touch the box: its moved shape is drawn up to a block away,
+/// along one axis (vanilla's `BlockCollisions` looks a block further out for them).
+fn collision_scan(
+    bounding_box: &BoundingBox,
+    min: BlockPos,
+    max: BlockPos,
+) -> impl Iterator<Item = (BlockPos, bool)> {
+    let extent = *COLLISION_SHAPE_EXTENT;
+    let axis = |low: f64, high: f64, shape_min: f64, shape_max: f64| {
+        (
+            overlapping_blocks(low, high, shape_min, shape_max, 0.0),
+            overlapping_blocks(low, high, shape_min, shape_max, 1.0),
+        )
+    };
+    let x = axis(
+        bounding_box.min.x,
+        bounding_box.max.x,
+        extent.min.x,
+        extent.max.x,
+    );
+    let y = axis(
+        bounding_box.min.y,
+        bounding_box.max.y,
+        extent.min.y,
+        extent.max.y,
+    );
+    let z = axis(
+        bounding_box.min.z,
+        bounding_box.max.z,
+        extent.min.z,
+        extent.max.z,
+    );
+    let within = |(low, high): (i32, i32), value: i32| (low..=high).contains(&value);
+    let from = BlockPos::new(min.0.x.min(x.1.0), min.0.y.min(y.1.0), min.0.z.min(z.1.0));
+    let to = BlockPos::new(max.0.x.max(x.1.1), max.0.y.max(y.1.1), max.0.z.max(z.1.1));
+    BlockPos::iterate(from, to).filter_map(move |pos| {
+        let inside = (min.0.x..=max.0.x).contains(&pos.0.x)
+            && (min.0.y..=max.0.y).contains(&pos.0.y)
+            && (min.0.z..=max.0.z).contains(&pos.0.z);
+        if inside {
+            return Some((pos, true));
+        }
+        // A moved shape is shifted along one axis only, so it must already reach the box
+        // unshifted on the other two.
+        let reaches = within(x.1, pos.0.x) && within(y.1, pos.0.y) && within(z.1, pos.0.z);
+        let unshifted = u8::from(within(x.0, pos.0.x))
+            + u8::from(within(y.0, pos.0.y))
+            + u8::from(within(z.0, pos.0.z));
+        (reaches && unshifted >= 2).then_some((pos, false))
+    })
 }
 
 fn block_entity_nbt(block_entity: &dyn BlockEntity) -> NbtCompound {

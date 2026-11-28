@@ -2,6 +2,9 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::block_properties::{
+    PistonHeadLikeProperties, StickyPistonLikeProperties as PistonProps,
+};
 use pumpkin_data::{Block, BlockDirection, BlockState};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
@@ -190,6 +193,48 @@ impl PistonBlockEntity {
         )
     }
 
+    /// Vanilla `PistonMovingBlockEntity.getCollisionShape`, in world coordinates: the moved
+    /// block (the piston head for the source) where the animation has it this tick, plus the
+    /// extended piston base while a source piston retracts. Without it a `moving_piston` has
+    /// no collision and entities fall into the block for the whole animation.
+    pub fn collision_shapes(&self) -> Vec<BoundingBox> {
+        let pos = self.position;
+        let mut shapes = Vec::new();
+        let pushed = Block::from_state_id(self.pushed_block_state.id);
+        if !self.extending
+            && self.source
+            && (pushed == &Block::PISTON || pushed == &Block::STICKY_PISTON)
+        {
+            let mut base = PistonProps::from_state_id(self.pushed_block_state.id);
+            base.extended = true;
+            let base = BlockState::from_id(base.to_state_id(pushed));
+            shapes.extend(
+                base.get_block_collision_shapes_at(&pos)
+                    .map(|s| s.at_pos(pos)),
+            );
+        }
+        let progress = self.current_progress.load();
+        let moved = if self.source {
+            let mut head = if pushed == &Block::PISTON_HEAD {
+                PistonHeadLikeProperties::from_state_id(self.pushed_block_state.id)
+            } else {
+                PistonHeadLikeProperties::default(&Block::PISTON_HEAD)
+            };
+            head.facing = self.facing.to_facing();
+            head.short = self.extending != (1.0 - progress < 0.25);
+            BlockState::from_id(head.to_state_id(&Block::PISTON_HEAD))
+        } else {
+            self.pushed_block_state
+        };
+        let offset = Self::dir_vec(self.facing, f64::from(self.amount_extended(progress)));
+        shapes.extend(
+            moved
+                .get_block_collision_shapes_at(&pos)
+                .map(|s| s.at_pos(pos).shift(offset)),
+        );
+        shapes
+    }
+
     pub fn finish(&self, world: &Arc<World>) {
         if self.last_progress.load() < 1.0 {
             let pos = self.position;
@@ -294,5 +339,237 @@ impl BlockEntity for PistonBlockEntity {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use pumpkin_data::{Block, BlockDirection, BlockState, entity::EntityType};
+    use pumpkin_util::math::{
+        boundingbox::BoundingBox, position::BlockPos, vector2::Vector2, vector3::Vector3,
+    };
+
+    use super::{PistonBlockEntity, PistonProps};
+    use crate::entity::{Entity, EntityBase, decoration::armor_stand::ArmorStandEntity};
+    use crate::world::{BlockFlags, World};
+
+    fn moving(
+        position: BlockPos,
+        pushed: &'static BlockState,
+        facing: BlockDirection,
+        extending: bool,
+        source: bool,
+    ) -> PistonBlockEntity {
+        PistonBlockEntity {
+            position,
+            pushed_block_state: pushed,
+            facing,
+            current_progress: 0.0.into(),
+            last_progress: 0.0.into(),
+            extending,
+            source,
+        }
+    }
+
+    fn top(shapes: &[BoundingBox]) -> f64 {
+        shapes
+            .iter()
+            .map(|s| s.max.y)
+            .fold(f64::NEG_INFINITY, f64::max)
+    }
+
+    #[test]
+    fn a_moved_block_collides_where_the_animation_draws_it() {
+        let pos = BlockPos::new(0, 64, 0);
+        // Pushed up into `pos`: it starts a block lower and rises with the progress.
+        let pushed = moving(
+            pos,
+            Block::STONE.default_state,
+            BlockDirection::Up,
+            true,
+            false,
+        );
+        assert_eq!(top(&pushed.collision_shapes()), 64.0);
+        pushed.current_progress.store(0.5);
+        assert_eq!(top(&pushed.collision_shapes()), 64.5);
+        // Pulled down into `pos`: it starts a block higher and sinks.
+        let pulled = moving(
+            pos,
+            Block::STONE.default_state,
+            BlockDirection::Up,
+            false,
+            false,
+        );
+        assert_eq!(top(&pulled.collision_shapes()), 66.0);
+        pulled.current_progress.store(0.5);
+        assert_eq!(top(&pulled.collision_shapes()), 65.5);
+        // A moved block with no collision stays without one.
+        let air = moving(
+            pos,
+            Block::AIR.default_state,
+            BlockDirection::Up,
+            false,
+            false,
+        );
+        assert!(air.collision_shapes().is_empty());
+    }
+
+    #[test]
+    fn a_retracting_piston_keeps_its_base_and_its_moving_head() {
+        let pos = BlockPos::new(0, 64, 0);
+        let mut props = PistonProps::default(&Block::STICKY_PISTON);
+        props.facing = BlockDirection::Up.to_facing();
+        let piston = BlockState::from_id(props.to_state_id(&Block::STICKY_PISTON));
+        let retracting = moving(pos, piston, BlockDirection::Up, false, true);
+        let shapes = retracting.collision_shapes();
+        // The 12-pixel extended base stays in place...
+        assert!(
+            shapes
+                .iter()
+                .any(|s| s.min.y == 64.0 && (s.max.y - 64.75).abs() < 1e-9 && s.max.x == 1.0)
+        );
+        // ...and the head starts where it was, a block above.
+        assert_eq!(top(&shapes), 66.0);
+        retracting.current_progress.store(0.5);
+        assert_eq!(top(&retracting.collision_shapes()), 65.5);
+    }
+
+    fn load_chunk(world: &Arc<World>) {
+        world.level.loaded_chunks.insert(
+            Vector2::new(0, 0),
+            pumpkin_world::chunk::ChunkData::empty_sync(0, 0),
+        );
+    }
+
+    fn fall(stand: &ArmorStandEntity) -> f64 {
+        stand
+            .get_entity()
+            .move_entity(stand, Vector3::new(0.0, -1.0, 0.0));
+        stand.get_entity().pos.load().y
+    }
+
+    /// A sticky piston pulls the stone an armor stand rests on down a block: the stand rides
+    /// it down instead of falling into the `moving_piston`, and ends on the stone.
+    #[tokio::test]
+    async fn an_entity_rides_a_block_pulled_down_instead_of_falling_into_it()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        load_chunk(&world);
+        // The stone was at y = 66 and is being pulled down to y = 65.
+        let target = BlockPos::new(0, 65, 0);
+        world.set_block_state(
+            &target,
+            Block::MOVING_PISTON.default_state.id,
+            BlockFlags::FORCE_STATE,
+        );
+        world.add_block_entity(Arc::new(moving(
+            target,
+            Block::STONE.default_state,
+            BlockDirection::Up,
+            false,
+            false,
+        )));
+        let stand = ArmorStandEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 67.0, 0.5),
+            &EntityType::ARMOR_STAND,
+        ));
+
+        // Its feet are two blocks above the `moving_piston`, out of the usual scan range.
+        assert_eq!(fall(&stand), 67.0, "the stone still starts at y = 66");
+        assert!(
+            !world.is_space_empty(
+                stand
+                    .get_entity()
+                    .bounding_box
+                    .load()
+                    .shift(Vector3::new(0.0, -0.25, 0.0))
+            )
+        );
+        let block_entity = world
+            .get_block_entity(&target)
+            .ok_or("no piston block entity")?;
+        block_entity.tick(&world);
+        assert_eq!(fall(&stand), 66.5, "half way down");
+        block_entity.tick(&world);
+        block_entity.tick(&world);
+        assert_eq!(world.get_block(&target), &Block::STONE);
+        assert_eq!(fall(&stand), 66.0, "on the stone at its new place");
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// A pulled fence is 1.5 blocks tall, so at the start of its move it reaches two blocks
+    /// above its `moving_piston`: every collision query must still find it.
+    #[tokio::test]
+    async fn a_tall_moving_shape_is_found_two_blocks_above_its_piston()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        load_chunk(&world);
+        let target = BlockPos::new(0, 64, 0);
+        world.set_block_state(
+            &target,
+            Block::MOVING_PISTON.default_state.id,
+            BlockFlags::FORCE_STATE,
+        );
+        world.add_block_entity(Arc::new(moving(
+            target,
+            Block::OAK_FENCE.default_state,
+            BlockDirection::Up,
+            false,
+            false,
+        )));
+        // The fence is drawn from y = 65 to 66.5; this box sits in its top half.
+        let query = BoundingBox::new(Vector3::new(0.4, 66.1, 0.4), Vector3::new(0.6, 66.3, 0.6));
+        assert!(!world.is_space_empty(query));
+        assert!(!world.no_block_collision(query));
+        let stand = ArmorStandEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 66.2, 0.5),
+            &EntityType::ARMOR_STAND,
+        ));
+        assert!(!world.get_block_collisions(query, &stand).0.is_empty());
+        // Beside the fence's post there is room.
+        let beside = BoundingBox::new(Vector3::new(0.8, 66.1, 0.8), Vector3::new(0.9, 66.3, 0.9));
+        assert!(world.is_space_empty(beside));
+        assert!(world.no_block_collision(beside));
+        world.level.shutdown().await;
+        Ok(())
+    }
+
+    /// An entity landing on a block pushed up into the air lands on it mid-animation instead of
+    /// falling through the `moving_piston` it still is.
+    #[tokio::test]
+    async fn an_entity_lands_on_a_block_still_moving() -> Result<(), Box<dyn std::error::Error>> {
+        let folder = tempfile::tempdir()?;
+        let world = crate::entity::ai::test_support::world(&folder);
+        load_chunk(&world);
+        let target = BlockPos::new(0, 65, 0);
+        world.set_block_state(
+            &target,
+            Block::MOVING_PISTON.default_state.id,
+            BlockFlags::FORCE_STATE,
+        );
+        let pushed = Arc::new(moving(
+            target,
+            Block::STONE.default_state,
+            BlockDirection::Up,
+            true,
+            false,
+        ));
+        pushed.current_progress.store(0.5);
+        world.add_block_entity(pushed);
+        let stand = ArmorStandEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(0.5, 66.2, 0.5),
+            &EntityType::ARMOR_STAND,
+        ));
+        assert_eq!(fall(&stand), 65.5);
+        world.level.shutdown().await;
+        Ok(())
     }
 }
