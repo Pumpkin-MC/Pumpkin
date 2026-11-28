@@ -185,9 +185,10 @@ impl ExplosionDamageCalculator for SimpleExplosionDamageCalculator {
 }
 
 #[derive(Clone, Copy)]
-struct RecordedKnockback {
-    impulse: Vector3<f64>,
-    own_motion_revision: u64,
+pub(crate) struct RecordedKnockback {
+    pub(crate) impulse: Vector3<f64>,
+    pub(crate) previous_velocity: Vector3<f64>,
+    pub(crate) own_motion_revision: u64,
 }
 
 pub struct Explosion<'a> {
@@ -300,14 +301,14 @@ impl<'a> Explosion<'a> {
             .map(|record| record.impulse)
     }
 
-    pub(crate) fn player_knockback_if_current(&self, player: &Player) -> Option<Vector3<f64>> {
+    pub(crate) fn player_knockback_if_current(&self, player: &Player) -> Option<RecordedKnockback> {
         let record = self
             .hit_players
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&player.entity_id())
             .copied()?;
-        (record.own_motion_revision == player.own_motion_revision()).then_some(record.impulse)
+        (record.own_motion_revision == player.own_motion_revision()).then_some(record)
     }
 
     #[must_use]
@@ -633,6 +634,7 @@ impl<'a> Explosion<'a> {
         was_hurt_marked: bool,
     ) {
         let entity = entity_base.get_entity();
+        let previous_velocity = entity.velocity.load();
         let player = entity_base.get_player();
         let own_motion_revision = player
             .as_ref()
@@ -650,7 +652,10 @@ impl<'a> Explosion<'a> {
             entity.add_velocity(knockback);
             return;
         };
-        if player.as_java().is_some() && own_motion_revision != player.own_motion_revision() {
+        if own_motion_revision != player.own_motion_revision() {
+            if !was_hurt_marked {
+                entity.sync_velocity.store(false, Ordering::SeqCst);
+            }
             // Absolute self-motion from the knockback listener supersedes the explosion impulse.
             return;
         }
@@ -671,7 +676,9 @@ impl<'a> Explosion<'a> {
                 let velocity_event_revision = player.own_motion_revision();
                 let Some(velocity) = player.fire_velocity_event(previous_velocity + knockback)
                 else {
-                    entity.velocity.store(entity.known_movement());
+                    if velocity_event_revision == player.own_motion_revision() {
+                        entity.velocity.store(previous_velocity);
+                    }
                     entity.velocity_dirty.store(true, Ordering::SeqCst);
                     return;
                 };
@@ -694,7 +701,8 @@ impl<'a> Explosion<'a> {
                 }
             }
         } else {
-            entity.add_velocity(knockback);
+            entity.velocity.store(previous_velocity + knockback);
+            player.send_explosion_hurt_velocity(previous_velocity, own_motion_revision);
             knockback
         };
         self.hit_players
@@ -704,6 +712,7 @@ impl<'a> Explosion<'a> {
                 entity.entity_id,
                 RecordedKnockback {
                     impulse: knockback,
+                    previous_velocity,
                     own_motion_revision,
                 },
             );
@@ -1015,6 +1024,7 @@ mod tests {
                 7,
                 RecordedKnockback {
                     impulse: Vector3::new(1.0, 2.0, 3.0),
+                    previous_velocity: Vector3::default(),
                     own_motion_revision: 0,
                 },
             );

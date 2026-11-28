@@ -3138,10 +3138,28 @@ impl Player {
 
     /// Vanilla `hurtMarked` send: `PlayerVelocityEvent`, then watchers and the own client.
     pub fn send_hurt_velocity(&self) {
+        self.send_hurt_velocity_inner(None);
+    }
+
+    pub(crate) fn send_explosion_hurt_velocity(
+        &self,
+        previous_velocity: Vector3<f64>,
+        own_motion_revision: u64,
+    ) {
+        self.send_hurt_velocity_inner(Some((previous_velocity, own_motion_revision)));
+    }
+
+    fn send_hurt_velocity_inner(&self, rollback: Option<(Vector3<f64>, u64)>) {
         let entity = self.get_entity();
         let Some(velocity) = self.fire_velocity_event(entity.velocity.load()) else {
-            // Cancelled -> back to the motion the client has, watchers get that instead
-            entity.velocity.store(entity.known_movement());
+            if let Some((previous_velocity, own_motion_revision)) = rollback {
+                if own_motion_revision == self.own_motion_revision() {
+                    entity.velocity.store(previous_velocity);
+                }
+            } else {
+                // Cancelled -> back to the motion the client has, watchers get that instead
+                entity.velocity.store(entity.known_movement());
+            }
             entity.velocity_dirty.store(true, Ordering::SeqCst);
             return;
         };

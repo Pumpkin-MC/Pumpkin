@@ -4480,22 +4480,30 @@ impl World {
             {
                 // Vanilla only sends CExplosion within 64 blocks; preserve hurt-motion
                 // delivery for hit Java players outside it unless a send is already pending.
-                if knockback.is_some()
+                if let Some(record) = knockback
                     && player.as_java().is_some()
                     && !player.get_entity().sync_velocity.load(Ordering::SeqCst)
                 {
-                    player.send_hurt_velocity();
+                    player.send_explosion_hurt_velocity(
+                        record.previous_velocity,
+                        record.own_motion_revision,
+                    );
                 }
                 continue;
             }
+            let impulse = knockback.map(|record| record.impulse);
             player.try_send_client_packet(&CExplosion::new(
                 position,
                 power,
                 block_count as i32,
-                knockback,
+                impulse,
                 VarInt(particle as i32),
                 sound.clone(),
             ));
+            if impulse.is_some() && explosion.player_knockback_if_current(player).is_none() {
+                // PacketSentEvent may have superseded the additive impulse after serialization.
+                player.send_own_velocity(player.get_entity().velocity.load());
+            }
         }
     }
 

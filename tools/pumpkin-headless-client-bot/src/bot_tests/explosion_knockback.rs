@@ -12,7 +12,7 @@ use pumpkin_core::{
         api::events::{
             block::block_explode::BlockExplodeEvent,
             entity::entity_knockback::EntityKnockbackEvent,
-            player::player_velocity::PlayerVelocityEvent,
+            player::player_velocity::PlayerVelocityEvent, server::packet::PacketSentEvent,
         },
     },
     server::Server,
@@ -20,8 +20,12 @@ use pumpkin_core::{
 };
 use pumpkin_data::{Block, damage::DamageType, entity::EntityType, packet::CURRENT_MC_VERSION};
 use pumpkin_protocol::{
+    ServerPacket,
     codec::{lp_vector_3d::LpVector3d, var_int::VarInt},
-    java::client::play::{CEntityVelocity, CExplosion},
+    java::{
+        client::play::{CEntityVelocity, CExplosion, CPlayerPosition},
+        server::play::SConfirmTeleport,
+    },
     packet::MultiVersionJavaPacket,
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
@@ -30,6 +34,9 @@ use crate::bot::HeadlessBot;
 
 const STANDING_KNOCKBACK: Vector3<f64> =
     Vector3::new(-0.48149676911700806, 0.7800247682655086, 0.0);
+const STANDING_MOTION: Vector3<f64> = Vector3::new(-0.4814746993835073, 0.7800158701092597, 0.0);
+const DISTANT_MOTION: Vector3<f64> =
+    Vector3::new(-0.015_137_642_678_386_132, 0.000_366_233_290_606_032_8, 0.0);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AbsoluteMotionTiming {
@@ -49,7 +56,22 @@ struct ZeroVelocityOnEntityKnockback {
     player_id: i32,
 }
 
-struct ZeroVelocityOnPlayerVelocity {
+#[derive(Clone, Copy)]
+enum VelocityAction {
+    Allow,
+    Zero,
+    ZeroAndCancel,
+    Cancel,
+}
+
+struct ScriptedPlayerVelocity {
+    actions: &'static [VelocityAction],
+    calls: Arc<AtomicUsize>,
+    enabled: Arc<AtomicBool>,
+    player_id: i32,
+}
+
+struct ZeroVelocityOnPacketSent {
     calls: Arc<AtomicUsize>,
     enabled: Arc<AtomicBool>,
     player_id: i32,
@@ -89,18 +111,49 @@ impl EventRwHandler<EntityKnockbackEvent> for ZeroVelocityOnEntityKnockback {
     }
 }
 
-impl EventRwHandler<PlayerVelocityEvent> for ZeroVelocityOnPlayerVelocity {
+impl EventRwHandler<PacketSentEvent> for ZeroVelocityOnPacketSent {
+    fn handle<'a>(
+        &'a self,
+        _server: &'a Arc<Server>,
+        event: &'a mut PacketSentEvent,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(async move {
+            if event.player.entity_id() == self.player_id
+                && event.packet_id == CExplosion::to_id(CURRENT_MC_VERSION)
+                && self.enabled.load(std::sync::atomic::Ordering::SeqCst)
+                && self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0
+            {
+                event.player.set_velocity(Vector3::default());
+            }
+        })
+    }
+}
+
+impl EventRwHandler<PlayerVelocityEvent> for ScriptedPlayerVelocity {
     fn handle<'a>(
         &'a self,
         _server: &'a Arc<Server>,
         event: &'a mut PlayerVelocityEvent,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            if event.player.entity_id() == self.player_id
-                && self.enabled.load(std::sync::atomic::Ordering::SeqCst)
-                && self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0
+            if event.player.entity_id() != self.player_id
+                || !self.enabled.load(std::sync::atomic::Ordering::SeqCst)
             {
-                event.player.set_velocity(Vector3::default());
+                return;
+            }
+            let action = self
+                .actions
+                .get(self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst))
+                .copied()
+                .unwrap_or(VelocityAction::Allow);
+            match action {
+                VelocityAction::Allow => {}
+                VelocityAction::Zero => event.player.set_velocity(Vector3::default()),
+                VelocityAction::ZeroAndCancel => {
+                    event.player.set_velocity(Vector3::default());
+                    event.cancelled = true;
+                }
+                VelocityAction::Cancel => event.cancelled = true,
             }
         })
     }
@@ -241,10 +294,9 @@ async fn check_distant_explosion_knockback(
     );
     let knockback = next_own_motion(bot, player.entity_id()).await?;
     // Feet give 1/66 power and the eye position gives its direction; the wire quantizes to this.
-    let expected = Vector3::new(-0.015_137_642_678_386_132, 0.000_366_233_290_606_032_8, 0.0);
-    if knockback != expected {
+    if knockback != DISTANT_MOTION {
         return Err(format!(
-            "Distant explosion knockback mismatch: expected {expected:?}, got {knockback:?}"
+            "Distant explosion knockback mismatch: expected {DISTANT_MOTION:?}, got {knockback:?}"
         ));
     }
 
@@ -265,6 +317,19 @@ async fn check_distant_explosion_knockback(
             .map_err(|error| format!("{timing:?} scenario: {error}"))?;
     }
 
+    check_second_explosion_cancellation(server, bot, world, center)
+        .await
+        .map_err(|error| format!("Second cancellation scenario: {error}"))?;
+    check_nested_cancellation(server, bot, world, center)
+        .await
+        .map_err(|error| format!("Nested cancellation scenario: {error}"))?;
+    check_distant_cancellation(server, bot, world, center)
+        .await
+        .map_err(|error| format!("Distant cancellation scenario: {error}"))?;
+    check_packet_sent_supersession(server, bot, world, center)
+        .await
+        .map_err(|error| format!("PacketSentEvent scenario: {error}"))?;
+
     bot.move_to(original_position, true).await?;
     server.tick();
     Ok(())
@@ -277,28 +342,16 @@ async fn check_absolute_motion_supersedes_knockback(
     center: Vector3<f64>,
     timing: AbsoluteMotionTiming,
 ) -> Result<(), String> {
-    bot.move_to(center.add_raw(-1.0, 0.0, 0.0), true).await?;
-    server.tick();
-
-    let marker_center = center.add_raw(0.0, 17.0, 0.0);
-    world.explode(marker_center, 1.0, ExplosionInteraction::None);
-    loop {
-        let (packet_center, _, _) = next_explosion_packet(bot).await?;
-        if packet_center == marker_center {
-            break;
-        }
-    }
-
-    let player = server
-        .get_player_by_name("TestBot2")
-        .ok_or("Missing TestBot2")?;
+    let player = prepare_absolute_motion_scenario(
+        server,
+        bot,
+        world,
+        center,
+        center.add_raw(-1.0, 0.0, 0.0),
+        true,
+    )
+    .await?;
     let entity = player.get_entity();
-    entity.velocity.store(Vector3::default());
-    entity.last_sent_velocity.store(Vector3::default());
-    entity
-        .sync_velocity
-        .store(false, std::sync::atomic::Ordering::SeqCst);
-
     let (calls, enabled, interaction) = register_zero_velocity_handler(server, &player, timing);
     world.explode(center, 6.0, interaction);
     enabled.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -311,11 +364,7 @@ async fn check_absolute_motion_supersedes_knockback(
     }
     if timing == AbsoluteMotionTiming::PlayerVelocity {
         let accepted = next_own_motion(bot, player.entity_id()).await?;
-        let tolerance = 1.0 / 16383.0;
-        if (accepted.x - STANDING_KNOCKBACK.x).abs() > tolerance
-            || (accepted.y - STANDING_KNOCKBACK.y).abs() > tolerance
-            || (accepted.z - STANDING_KNOCKBACK.z).abs() > tolerance
-        {
+        if accepted != STANDING_MOTION {
             return Err(format!(
                 "The accepted velocity was not sent after the nested zero: {accepted:?}"
             ));
@@ -349,7 +398,296 @@ async fn check_absolute_motion_supersedes_knockback(
             calls.load(std::sync::atomic::Ordering::SeqCst),
         ));
     }
+    if entity
+        .sync_velocity
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return Err("A superseded explosion left sync_velocity pending".into());
+    }
     Ok(())
+}
+
+async fn check_second_explosion_cancellation(
+    server: &Arc<Server>,
+    bot: &mut HeadlessBot,
+    world: &Arc<World>,
+    center: Vector3<f64>,
+) -> Result<(), String> {
+    let player = prepare_absolute_motion_scenario(
+        server,
+        bot,
+        world,
+        center,
+        center.add_raw(-1.0, 0.0, 0.0),
+        true,
+    )
+    .await?;
+    let entity = player.get_entity();
+    let (calls, enabled) = register_velocity_script(
+        server,
+        &player,
+        &[VelocityAction::Allow, VelocityAction::Cancel],
+    );
+    world.explode(center, 6.0, ExplosionInteraction::None);
+    world.explode(center, 6.0, ExplosionInteraction::None);
+    enabled.store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let (_, _, first) = next_explosion_packet(bot).await?;
+    if first != Some(STANDING_KNOCKBACK) {
+        return Err(format!("The first accepted impulse changed: {first:?}"));
+    }
+    let (_, _, second) = next_explosion_packet(bot).await?;
+    if second.is_some() {
+        return Err(format!("The cancelled explosion had knockback: {second:?}"));
+    }
+    if entity.velocity.load() != STANDING_KNOCKBACK
+        || calls.load(std::sync::atomic::Ordering::SeqCst) != 2
+        || entity
+            .sync_velocity
+            .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return Err("Cancelling the second explosion discarded the first impulse".into());
+    }
+    Ok(())
+}
+
+async fn check_nested_cancellation(
+    server: &Arc<Server>,
+    bot: &mut HeadlessBot,
+    world: &Arc<World>,
+    center: Vector3<f64>,
+) -> Result<(), String> {
+    let player = prepare_absolute_motion_scenario(
+        server,
+        bot,
+        world,
+        center,
+        center.add_raw(-1.0, 0.0, 0.0),
+        true,
+    )
+    .await?;
+    let entity = player.get_entity();
+    let (calls, enabled) = register_velocity_script(
+        server,
+        &player,
+        &[VelocityAction::ZeroAndCancel, VelocityAction::Allow],
+    );
+    world.explode(center, 6.0, ExplosionInteraction::None);
+    enabled.store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let motion = next_own_motion(bot, player.entity_id()).await?;
+    if motion != Vector3::default() {
+        return Err(format!("Nested motion was not zero: {motion:?}"));
+    }
+    let (_, _, knockback) = next_explosion_packet(bot).await?;
+    if knockback.is_some() {
+        return Err(format!(
+            "The cancelled outer event had knockback: {knockback:?}"
+        ));
+    }
+    if entity.velocity.load() != Vector3::default()
+        || calls.load(std::sync::atomic::Ordering::SeqCst) != 2
+        || entity
+            .sync_velocity
+            .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return Err("Outer cancellation overwrote the accepted nested zero".into());
+    }
+    Ok(())
+}
+
+async fn check_distant_cancellation(
+    server: &Arc<Server>,
+    bot: &mut HeadlessBot,
+    world: &Arc<World>,
+    center: Vector3<f64>,
+) -> Result<(), String> {
+    let player = prepare_absolute_motion_scenario(
+        server,
+        bot,
+        world,
+        center,
+        center.add_raw(0.0, 20.0, 0.0),
+        false,
+    )
+    .await
+    .map_err(|error| format!("Distant preparation: {error}"))?;
+    let entity = player.get_entity();
+    let (calls, enabled) = register_velocity_script(
+        server,
+        &player,
+        &[VelocityAction::Allow, VelocityAction::Cancel],
+    );
+    let explosion_center = center.add_raw(65.0, 20.0, 0.0);
+    world.explode(explosion_center, 33.0, ExplosionInteraction::None);
+    let accepted_velocity = entity.velocity.load();
+
+    let motion = next_own_motion(bot, player.entity_id())
+        .await
+        .map_err(|error| format!("First distant motion: {error}"))?;
+    if motion != DISTANT_MOTION {
+        return Err(format!("Unexpected first distant motion: {motion:?}"));
+    }
+
+    world.explode(explosion_center, 33.0, ExplosionInteraction::None);
+    enabled.store(false, std::sync::atomic::Ordering::SeqCst);
+    world.explode(
+        center.add_raw(0.0, 16.0, 0.0),
+        1.0,
+        ExplosionInteraction::None,
+    );
+    match next_own_motion(bot, player.entity_id()).await {
+        Err(error) if error == "Received CExplosion while waiting for absolute self-motion" => {}
+        Ok(motion) => {
+            return Err(format!(
+                "Cancelled distant explosion sent motion: {motion:?}"
+            ));
+        }
+        Err(error) => return Err(format!("Second distant motion: {error}")),
+    }
+    if entity.velocity.load() != accepted_velocity
+        || calls.load(std::sync::atomic::Ordering::SeqCst) != 2
+        || entity
+            .sync_velocity
+            .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return Err("Distant cancellation did not restore the accepted impulse".into());
+    }
+    Ok(())
+}
+
+async fn check_packet_sent_supersession(
+    server: &Arc<Server>,
+    bot: &mut HeadlessBot,
+    world: &Arc<World>,
+    center: Vector3<f64>,
+) -> Result<(), String> {
+    let player = prepare_absolute_motion_scenario(
+        server,
+        bot,
+        world,
+        center,
+        center.add_raw(-1.0, 0.0, 0.0),
+        true,
+    )
+    .await?;
+    let entity = player.get_entity();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let enabled = Arc::new(AtomicBool::new(true));
+    server.plugin_manager.register_blocking(
+        Arc::new(ZeroVelocityOnPacketSent {
+            calls: calls.clone(),
+            enabled: enabled.clone(),
+            player_id: player.entity_id(),
+        }),
+        EventPriority::Normal,
+        None,
+    );
+    world.explode(center, 6.0, ExplosionInteraction::None);
+    enabled.store(false, std::sync::atomic::Ordering::SeqCst);
+
+    let motion = next_own_motion(bot, player.entity_id()).await?;
+    if motion != Vector3::default() {
+        return Err(format!(
+            "PacketSentEvent did not send nested zero: {motion:?}"
+        ));
+    }
+    let (_, _, knockback) = next_explosion_packet(bot).await?;
+    if knockback != Some(STANDING_KNOCKBACK) {
+        return Err(format!(
+            "The serialized impulse changed unexpectedly: {knockback:?}"
+        ));
+    }
+
+    let marker_center = center.add_raw(0.0, 16.0, 0.0);
+    world.explode(marker_center, 1.0, ExplosionInteraction::None);
+    let correction = next_own_motion(bot, player.entity_id()).await?;
+    if correction != Vector3::default() {
+        return Err(format!(
+            "The post-packet correction was not zero: {correction:?}"
+        ));
+    }
+    let (packet_center, _, _) = next_explosion_packet(bot).await?;
+    if packet_center != marker_center {
+        return Err("Missing the marker after the post-packet correction".into());
+    }
+    if entity.velocity.load() != Vector3::default()
+        || calls.load(std::sync::atomic::Ordering::SeqCst) != 1
+        || entity
+            .sync_velocity
+            .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        return Err("PacketSentEvent left client and server motion out of sync".into());
+    }
+    Ok(())
+}
+
+async fn confirm_teleport(bot: &mut HeadlessBot, position: Vector3<f64>) -> Result<(), String> {
+    let position_id = CPlayerPosition::to_id(CURRENT_MC_VERSION);
+    loop {
+        let raw = bot.next_packet().await?;
+        if raw.id != position_id {
+            continue;
+        }
+        let mut payload = &raw.payload[..];
+        let packet = CPlayerPosition::read(&mut payload, &CURRENT_MC_VERSION)
+            .map_err(|error| format!("Failed to read teleport: {error}"))?;
+        bot.send_packet(&SConfirmTeleport {
+            teleport_id: packet.teleport_id,
+            position: packet.position,
+            yaw: packet.yaw,
+            pitch: packet.pitch,
+        })
+        .await?;
+        bot.position = packet.position;
+        bot.yaw = packet.yaw;
+        bot.pitch = packet.pitch;
+        if packet.position == position {
+            return Ok(());
+        }
+    }
+}
+
+async fn prepare_absolute_motion_scenario(
+    server: &Arc<Server>,
+    bot: &mut HeadlessBot,
+    world: &Arc<World>,
+    center: Vector3<f64>,
+    position: Vector3<f64>,
+    on_ground: bool,
+) -> Result<Arc<Player>, String> {
+    let player = server
+        .get_player_by_name("TestBot2")
+        .ok_or("Missing TestBot2")?;
+    player.teleport(position, None, None, world.clone());
+    confirm_teleport(bot, position).await?;
+    server.tick();
+    player
+        .get_entity()
+        .on_ground
+        .store(on_ground, std::sync::atomic::Ordering::Relaxed);
+
+    let marker_center = center.add_raw(0.0, 17.0, 0.0);
+    world.explode(marker_center, 1.0, ExplosionInteraction::None);
+    loop {
+        let (packet_center, _, _) = next_explosion_packet(bot).await?;
+        if packet_center == marker_center {
+            break;
+        }
+    }
+
+    let entity = player.get_entity();
+    entity.velocity.store(Vector3::default());
+    entity.last_sent_velocity.store(Vector3::default());
+    entity
+        .sync_velocity
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    player
+        .living_entity
+        .hurt_cooldown
+        .store(0, std::sync::atomic::Ordering::Relaxed);
+    player.living_entity.last_damage_taken.store(0.0);
+    Ok(player)
 }
 
 fn register_zero_velocity_handler(
@@ -385,7 +723,8 @@ fn register_zero_velocity_handler(
         }
         AbsoluteMotionTiming::PlayerVelocity => {
             server.plugin_manager.register_blocking(
-                Arc::new(ZeroVelocityOnPlayerVelocity {
+                Arc::new(ScriptedPlayerVelocity {
+                    actions: &[VelocityAction::Zero, VelocityAction::Allow],
                     calls: calls.clone(),
                     enabled: enabled.clone(),
                     player_id: player.entity_id(),
@@ -397,6 +736,26 @@ fn register_zero_velocity_handler(
         }
     };
     (calls, enabled, interaction)
+}
+
+fn register_velocity_script(
+    server: &Arc<Server>,
+    player: &Player,
+    actions: &'static [VelocityAction],
+) -> (Arc<AtomicUsize>, Arc<AtomicBool>) {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let enabled = Arc::new(AtomicBool::new(true));
+    server.plugin_manager.register_blocking(
+        Arc::new(ScriptedPlayerVelocity {
+            actions,
+            calls: calls.clone(),
+            enabled: enabled.clone(),
+            player_id: player.entity_id(),
+        }),
+        EventPriority::Normal,
+        None,
+    );
+    (calls, enabled)
 }
 
 async fn detonate_crystal(
