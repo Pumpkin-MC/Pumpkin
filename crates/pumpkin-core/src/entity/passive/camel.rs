@@ -427,6 +427,10 @@ impl Animal for CamelEntity {
 impl Mob for CamelEntity {
     crate::abstract_horse_mob_hooks!(always_tamed);
 
+    fn mob_max_passengers(&self) -> usize {
+        MAX_PASSENGERS
+    }
+
     fn charge_speed_modifier(&self) -> f32 {
         if self.get_entity().entity_type == &EntityType::CAMEL_HUSK {
             4.0

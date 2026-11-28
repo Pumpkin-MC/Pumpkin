@@ -43,6 +43,19 @@ impl FollowTemptation {
             look_in_the_eyes: false,
         }
     }
+
+    #[must_use]
+    pub const fn new_with_eyes(
+        speed_modifier: fn(&dyn Mob) -> f32,
+        close_enough_distance: fn(&dyn Mob) -> f64,
+        look_in_the_eyes: bool,
+    ) -> Self {
+        Self {
+            speed_modifier,
+            close_enough_distance,
+            look_in_the_eyes,
+        }
+    }
 }
 
 impl Behavior for FollowTemptation {

@@ -109,11 +109,11 @@ impl JavaClient {
                             let before = stack.clone();
                             let native_interaction =
                                 event.target.interact_with_hand(player, &mut stack, hand);
-                            let interacted = native_interaction
+                            let mut interacted = native_interaction
                                 .unwrap_or_else(|| event.target.interact(player, &mut stack));
                             let item_id = before.item.id;
                             if !interacted {
-                                server
+                                interacted = server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, event.target.clone());
                             }

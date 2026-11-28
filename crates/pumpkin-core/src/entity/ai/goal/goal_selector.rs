@@ -416,6 +416,11 @@ impl GoalSelector {
             .any(|entry| entry.type_id == type_id && entry.running.load(Relaxed))
     }
 
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        Self::lock(self).goals.is_empty()
+    }
+
     pub fn disable_control(&self, control: Controls) {
         self.set_control_enabled(control, false);
     }

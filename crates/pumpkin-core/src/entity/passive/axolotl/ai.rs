@@ -120,6 +120,7 @@ fn init_core_activity() -> ActivityData {
     )
 }
 
+#[allow(clippy::too_many_lines)]
 fn init_idle_activity() -> ActivityData {
     ActivityData::with_pairs(
         Activity::Idle,
@@ -155,6 +156,8 @@ fn init_idle_activity() -> ActivityData {
                             ADULT_FOLLOW_RANGE.0,
                             ADULT_FOLLOW_RANGE.1,
                             speed_modifier_following_adult,
+                            baby_follow_adult::TargetMemory::Adult,
+                            false,
                         )),
                         1,
                     ),

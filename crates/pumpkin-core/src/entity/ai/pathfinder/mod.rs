@@ -1442,6 +1442,7 @@ impl PathNavigationTrait for GroundPathNavigation {
 
 pub struct FlyingPathNavigation {
     pub inner: PathNavigation,
+    pub blocked_by_fluids: bool,
 }
 
 impl Default for FlyingPathNavigation {
@@ -1455,7 +1456,18 @@ impl FlyingPathNavigation {
     pub fn new() -> Self {
         Self {
             inner: PathNavigation::new(EvaluatorKind::Fly(FlyNodeEvaluator::default())),
+            blocked_by_fluids: true,
         }
+    }
+
+    #[must_use]
+    pub fn baby_flying() -> Self {
+        let mut nav = Self::new();
+        nav.blocked_by_fluids = false;
+        nav.set_can_float(true);
+        nav.set_can_open_doors(false);
+        nav.set_required_path_length(48.0);
+        nav
     }
 }
 
@@ -1552,7 +1564,7 @@ impl PathNavigationTrait for FlyingPathNavigation {
                                         mob_pos,
                                         target,
                                         entity.entity.height(),
-                                        true,
+                                        self.blocked_by_fluids,
                                     )
                                 })
                             },
@@ -2649,6 +2661,11 @@ impl Navigator {
     #[must_use]
     pub fn flying() -> Self {
         Self::new(FlyingPathNavigation::new())
+    }
+
+    #[must_use]
+    pub fn baby_flying() -> Self {
+        Self::new(FlyingPathNavigation::baby_flying())
     }
 
     #[must_use]

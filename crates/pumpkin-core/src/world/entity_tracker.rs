@@ -253,7 +253,8 @@ impl TrackedEntity {
 
         match delta {
             Some(delta)
-                if teleport_delay <= 400
+                if !entity.requires_precise_position.load(Relaxed)
+                    && teleport_delay <= 400
                     && !self.was_riding.load(Relaxed)
                     && self.was_on_ground.load(Relaxed) == on_ground =>
             {

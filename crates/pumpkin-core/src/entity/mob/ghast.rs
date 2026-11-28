@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Weak};
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
@@ -8,9 +8,10 @@ use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use rand::RngExt;
 
 use crate::entity::ai::behavior::hunting::{self, Hunt};
+use crate::entity::ai::control::ghast_move_control::GhastMoveControl;
+use crate::entity::ai::goal::random_float_around::RandomFloatAroundGoal;
 use crate::entity::ai::target_match::TargetMatch;
 use crate::entity::projectile::fireball::FireballEntity;
 use crate::entity::{
@@ -27,7 +28,6 @@ pub struct GhastEntity {
     pub mob_entity: MobEntity,
     pub is_charging: AtomicBool,
     pub explosion_power: AtomicU8,
-    pub wanted_fly_target: Mutex<Option<Vector3<f64>>>,
 }
 
 impl GhastEntity {
@@ -41,19 +41,22 @@ impl GhastEntity {
             mob_entity,
             is_charging: AtomicBool::new(false),
             explosion_power: AtomicU8::new(Self::DEFAULT_EXPLOSION_POWER),
-            wanted_fly_target: Mutex::new(None),
         };
 
         let mob_arc = Arc::new(ghast);
+
+        *mob_arc
+            .mob_entity
+            .move_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Box::new(GhastMoveControl::new(false, None));
 
         {
             let goal_selector = &mob_arc.mob_entity.goals_selector;
 
             // Priority 5: Random floating around
-            goal_selector.add_goal(
-                5,
-                Box::new(RandomFloatAroundGoal::new(Arc::downgrade(&mob_arc))),
-            );
+            goal_selector.add_goal(5, Box::new(RandomFloatAroundGoal::new()));
 
             // Priority 7: Face target / movement direction
             goal_selector.add_goal(7, Box::new(GhastLookGoal::new()));
@@ -341,117 +344,5 @@ impl Goal for GhastShootFireballGoal {
 
     fn controls(&self) -> Controls {
         Controls::empty()
-    }
-}
-
-pub struct RandomFloatAroundGoal {
-    ghast: Weak<GhastEntity>,
-    float_duration: i32,
-}
-
-impl RandomFloatAroundGoal {
-    #[must_use]
-    pub const fn new(ghast: Weak<GhastEntity>) -> Self {
-        Self {
-            ghast,
-            float_duration: 0,
-        }
-    }
-}
-
-impl Goal for RandomFloatAroundGoal {
-    fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        let Some(ghast) = self.ghast.upgrade() else {
-            return false;
-        };
-        let wanted = *ghast
-            .wanted_fly_target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        wanted.is_none_or(|target| {
-            let pos = ghast.mob_entity.living_entity.entity.pos.load();
-            let dist_sq = pos.squared_distance_to_vec(&target);
-            !dist_sq.is_nan() && !(1.0..=3600.0).contains(&dist_sq)
-        })
-    }
-
-    fn start(&mut self, _mob: &dyn Mob) {
-        let Some(ghast) = self.ghast.upgrade() else {
-            return;
-        };
-        let pos = ghast.mob_entity.living_entity.entity.pos.load();
-        let new_target = {
-            let mut rng = rand::rng();
-            let target_x = pos.x + (rng.random::<f64>() * 2.0 - 1.0) * 16.0;
-            let target_y = pos.y + (rng.random::<f64>() * 2.0 - 1.0) * 16.0;
-            let target_z = pos.z + (rng.random::<f64>() * 2.0 - 1.0) * 16.0;
-            Vector3::new(target_x, target_y, target_z)
-        };
-        *ghast
-            .wanted_fly_target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(new_target);
-    }
-
-    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
-        let Some(ghast) = self.ghast.upgrade() else {
-            return false;
-        };
-        let wanted = *ghast
-            .wanted_fly_target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        wanted.is_some_and(|target| {
-            let pos = ghast.mob_entity.living_entity.entity.pos.load();
-            let dist_sq = pos.squared_distance_to_vec(&target);
-            (1.0..=3600.0).contains(&dist_sq)
-        })
-    }
-
-    fn should_run_every_tick(&self) -> bool {
-        true
-    }
-
-    fn tick(&mut self, _mob: &dyn Mob) {
-        let Some(ghast) = self.ghast.upgrade() else {
-            return;
-        };
-
-        let wanted = *ghast
-            .wanted_fly_target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(target) = wanted else {
-            return;
-        };
-
-        let entity = &ghast.mob_entity.living_entity.entity;
-        let pos = entity.pos.load();
-        self.float_duration -= 1;
-
-        if self.float_duration <= 0 {
-            self.float_duration = rand::random_range(2..=6);
-            let travel = Vector3::new(target.x - pos.x, target.y - pos.y, target.z - pos.z);
-            let dist = travel.length();
-            if dist > 0.001 {
-                let move_scale = GhastEntity::FLYING_SPEED * 5.0 / 3.0; // 0.1
-                let norm = travel.normalize();
-                let delta = Vector3::new(
-                    norm.x * move_scale,
-                    norm.y * move_scale,
-                    norm.z * move_scale,
-                );
-                let current_vel = entity.velocity.load();
-                entity.velocity.store(Vector3::new(
-                    current_vel.x + delta.x,
-                    current_vel.y + delta.y,
-                    current_vel.z + delta.z,
-                ));
-            }
-        }
-    }
-
-    fn controls(&self) -> Controls {
-        Controls::MOVE
     }
 }

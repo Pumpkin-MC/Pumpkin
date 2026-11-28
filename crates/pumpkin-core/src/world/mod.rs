@@ -85,7 +85,6 @@ use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::FluidState;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::noise_settings::NoiseSettings;
-use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{
     Block, BlockStateId,
     entity::{EntityStatus, EntityType},
@@ -2786,9 +2785,8 @@ impl World {
         !self.get_all_at_box(&area).iter().any(|entity| {
             let other = entity.get_entity();
             !entity.is_spectator()
-                && (other.entity_type == &EntityType::SHULKER
-                    || other.entity_type == &EntityType::HAPPY_GHAST
-                    || other.entity_type.has_tag(&tag::EntityType::C_BOATS))
+                && source.is_none_or(|source| other.entity_id != source.get_entity().entity_id)
+                && entity.is_collidable(source)
                 && source
                     .is_none_or(|source| !source.get_entity().is_passenger_of_same_vehicle(other))
         })
@@ -3199,6 +3197,16 @@ impl World {
                 .get_biome(pos)
                 .weather
                 .is_rain_at(pos.0.x, pos.0.y, pos.0.z, self.sea_level)
+    }
+
+    pub fn has_precipitation_at(&self, pos: &BlockPos) -> bool {
+        if !self.is_raining() {
+            return false;
+        }
+        if self.get_heightmap_height(MotionBlocking, pos.0.x, pos.0.z) + 1 > pos.0.y {
+            return false;
+        }
+        self.can_see_sky(pos) && self.get_biome(pos).weather.has_precipitation()
     }
 
     pub fn set_raining(&self, raining: bool) {

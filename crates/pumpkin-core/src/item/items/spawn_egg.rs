@@ -387,13 +387,18 @@ impl ItemBehaviour for SpawnEggItem {
         }
     }
 
-    fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+    fn use_on_entity(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
+        entity: Arc<dyn EntityBase>,
+    ) -> bool {
         if let Some(entity_type) = entity_type_from_spawn_egg_stack(item)
             && entity.get_entity().entity_type.id == entity_type.id
         {
             let world = player.world();
             if is_disallowed_in_peaceful(entity_type, &world) {
-                return;
+                return false;
             }
             let pos = entity.get_entity().pos.load();
             let mob = from_type(entity_type, pos, &world, Uuid::new_v4());
@@ -402,7 +407,7 @@ impl ItemBehaviour for SpawnEggItem {
                 .get_mob()
                 .is_some_and(crate::entity::mob::Mob::spawn_as_baby)
             {
-                return;
+                return false;
             }
             mob.get_entity()
                 .set_rotation(rand::random::<f32>() * 360.0, 0.0);
@@ -417,8 +422,10 @@ impl ItemBehaviour for SpawnEggItem {
                 if let (Some(parent), Some(offspring)) = (entity.get_mob(), mob.get_mob()) {
                     parent.on_offspring_spawned_from_egg(player, offspring);
                 }
+                return true;
             }
         }
+        false
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

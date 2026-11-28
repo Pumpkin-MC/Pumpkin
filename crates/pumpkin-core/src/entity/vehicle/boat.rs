@@ -220,8 +220,12 @@ impl EntityBase for BoatEntity {
         self.vehicle.entity.is_alive()
     }
 
-    fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
+    fn is_collidable(&self, _entity: Option<&dyn EntityBase>) -> bool {
         true
+    }
+
+    fn max_passengers(&self) -> usize {
+        self.max_passengers()
     }
 
     fn damage_with_context(

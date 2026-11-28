@@ -47,6 +47,7 @@ pub enum SensorType {
     FrogAttackables,
     IsInWater,
     NearestAdult,
+    NearestAdultAnyType,
     NearestBed,
     VillagerBabies,
     VillagerHostiles,
@@ -70,6 +71,7 @@ impl SensorType {
             Self::FrogAttackables => "minecraft:frog_attackables",
             Self::IsInWater => "minecraft:is_in_water",
             Self::NearestAdult => "minecraft:nearest_adult",
+            Self::NearestAdultAnyType => "minecraft:nearest_adult_any_type",
             Self::NearestBed => "minecraft:nearest_bed",
             Self::VillagerBabies => "minecraft:villager_babies",
             Self::VillagerHostiles => "minecraft:villager_hostiles",
@@ -93,6 +95,7 @@ impl SensorType {
             | Self::FrogAttackables
             | Self::IsInWater
             | Self::NearestAdult
+            | Self::NearestAdultAnyType
             | Self::NearestBed
             | Self::VillagerBabies
             | Self::VillagerHostiles
@@ -115,6 +118,7 @@ impl SensorType {
             Self::FrogAttackables => Box::new(frog_attackables::FrogAttackablesSensor),
             Self::IsInWater => Box::new(is_in_water::IsInWaterSensor),
             Self::NearestAdult => Box::new(adult::AdultSensor),
+            Self::NearestAdultAnyType => Box::new(adult::AdultSensorAnyType),
             Self::NearestBed => Box::<nearest_bed::NearestBedSensor>::default(),
             Self::VillagerBabies => Box::new(villager_babies::VillagerBabiesSensor),
             Self::VillagerHostiles => Box::new(villager_hostiles::VillagerHostilesSensor),

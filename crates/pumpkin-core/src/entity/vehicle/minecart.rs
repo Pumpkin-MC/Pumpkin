@@ -705,7 +705,7 @@ impl EntityBase for MinecartEntity {
         }
     }
 
-    fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
+    fn is_collidable(&self, _entity: Option<&dyn EntityBase>) -> bool {
         true
     }
 

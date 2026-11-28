@@ -400,8 +400,13 @@ impl MobEntity {
         if position_target_range == -1 {
             true
         } else {
-            self.position_target.load().squared_distance(block_pos)
-                < position_target_range * position_target_range
+            let target = self.position_target.load();
+            let dx = i64::from(target.0.x) - i64::from(block_pos.0.x);
+            let dy = i64::from(target.0.y) - i64::from(block_pos.0.y);
+            let dz = i64::from(target.0.z) - i64::from(block_pos.0.z);
+            let dist_sq = dx * dx + dy * dy + dz * dz;
+            let range = i64::from(position_target_range);
+            dist_sq < range * range
         }
     }
 
@@ -1664,6 +1669,24 @@ pub trait Mob: EntityBase + Send + Sync {
     fn mob_support_quad_leash_as_holder(&self) -> bool {
         false
     }
+
+    fn mob_can_add_passenger(&self, passenger: &dyn EntityBase) -> bool {
+        let passengers = self
+            .get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        passengers.len() < self.mob_max_passengers()
+            && !passengers
+                .iter()
+                .any(|p| p.get_entity().entity_id == passenger.get_entity().entity_id)
+    }
+
+    fn mob_on_passenger_added(&self, _passenger: &dyn EntityBase, _is_first_passenger: bool) {}
+
+    fn mob_on_passenger_removed(&self, _passenger: &dyn EntityBase, _is_last_passenger: bool) {}
+
+    fn mob_notify_leash_holder(&self, _leashed: &dyn EntityBase) {}
 
     fn mob_leash_snap_distance(&self) -> f64 {
         Entity::LEASH_SNAP_DISTANCE
@@ -2943,6 +2966,21 @@ pub trait Mob: EntityBase + Send + Sync {
             .can_be_pushed(Mob::on_climbable(self))
     }
 
+    fn mob_is_collidable(&self, _entity: Option<&dyn EntityBase>) -> bool {
+        false
+    }
+
+    fn mob_max_passengers(&self) -> usize {
+        1
+    }
+
+    fn mob_get_dismount_location_for_passenger(
+        &self,
+        _passenger: &dyn EntityBase,
+    ) -> Option<Vector3<f64>> {
+        None
+    }
+
     fn can_push_entity(&self, _other: &dyn EntityBase) -> bool {
         true
     }
@@ -3010,6 +3048,21 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         self.mob_is_pushable()
     }
 
+    fn is_collidable(&self, entity: Option<&dyn EntityBase>) -> bool {
+        self.mob_is_collidable(entity)
+    }
+
+    fn max_passengers(&self) -> usize {
+        self.mob_max_passengers()
+    }
+
+    fn get_dismount_location_for_passenger(
+        &self,
+        passenger: &dyn EntityBase,
+    ) -> Option<Vector3<f64>> {
+        self.mob_get_dismount_location_for_passenger(passenger)
+    }
+
     fn on_climbable(&self) -> bool {
         Mob::on_climbable(self)
     }
@@ -3020,6 +3073,22 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn support_quad_leash_as_holder(&self) -> bool {
         self.mob_support_quad_leash_as_holder()
+    }
+
+    fn can_add_passenger(&self, passenger: &dyn EntityBase) -> bool {
+        self.mob_can_add_passenger(passenger)
+    }
+
+    fn on_passenger_added(&self, passenger: &dyn EntityBase, is_first_passenger: bool) {
+        self.mob_on_passenger_added(passenger, is_first_passenger);
+    }
+
+    fn on_passenger_removed(&self, passenger: &dyn EntityBase, is_last_passenger: bool) {
+        self.mob_on_passenger_removed(passenger, is_last_passenger);
+    }
+
+    fn notify_leash_holder(&self, leashed: &dyn EntityBase) {
+        self.mob_notify_leash_holder(leashed);
     }
 
     fn leash_snap_distance(&self) -> f64 {

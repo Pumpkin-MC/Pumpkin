@@ -12,6 +12,8 @@ use pumpkin_data::item::Item;
 use pumpkin_data::tag::{Tag, Taggable};
 use pumpkin_util::math::vector3::Vector3;
 
+use rand::RngExt;
+
 const DEFAULT_STOP_DISTANCE: f64 = 2.5;
 /// Following stops once the player moves further than this while being watched.
 const SCARE_RANGE_SQ: f64 = 36.0;
@@ -27,6 +29,7 @@ enum TemptItems {
 pub enum TemptNavigation {
     Path,
     CubeMob(Weak<dyn CubeMob>),
+    MoveControl,
 }
 
 pub struct TemptGoal {
@@ -108,6 +111,32 @@ impl TemptGoal {
     }
 
     #[must_use]
+    pub fn with_predicate_and_stop_distance(
+        speed: f64,
+        predicate: fn(&dyn Mob, &pumpkin_data::item_stack::ItemStack) -> bool,
+        can_scare: bool,
+        stop_distance: f64,
+    ) -> Self {
+        Self {
+            tempt_items: TemptItems::Predicate(predicate),
+            ..Self::with_stop_distance(speed, &[], can_scare, stop_distance)
+        }
+    }
+
+    #[must_use]
+    pub fn for_non_pathfinders(
+        speed: f64,
+        predicate: fn(&dyn Mob, &pumpkin_data::item_stack::ItemStack) -> bool,
+        can_scare: bool,
+        stop_distance: f64,
+    ) -> Self {
+        Self {
+            navigation: TemptNavigation::MoveControl,
+            ..Self::with_predicate_and_stop_distance(speed, predicate, can_scare, stop_distance)
+        }
+    }
+
+    #[must_use]
     pub const fn is_running(&self) -> bool {
         self.running
     }
@@ -172,6 +201,13 @@ impl TemptGoal {
                     cube.cube_data().speed_modifier.store(Some(0.0));
                 }
             }
+            TemptNavigation::MoveControl => {
+                mob.get_mob_entity()
+                    .move_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .set_wait();
+            }
         }
     }
 
@@ -192,6 +228,17 @@ impl TemptGoal {
                     data.target_yaw.store(cube.get_entity().yaw.load());
                     data.is_aggressive.store(true, Ordering::Relaxed);
                 }
+            }
+            TemptNavigation::MoveControl => {
+                let mob_pos = mob.get_entity().pos.load();
+                let player_eye = player.eye_position();
+                let factor = mob.get_random().random::<f64>();
+                let target = mob_pos + (player_eye - mob_pos) * factor;
+                mob.get_mob_entity()
+                    .move_control
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .set_wanted_position(target.x, target.y, target.z, self.speed);
             }
         }
     }
