@@ -3,8 +3,10 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use pumpkin_data::Block;
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
@@ -13,16 +15,22 @@ use rand::RngExt;
 use crate::entity::{
     Entity, EntityBase,
     ai::behavior::{
-        feline,
+        feline::{self, TEMPT_SPEED},
         fleeing::{self, Flee},
         hunting::{self, Hunt},
     },
-    ai::goal::swim::SwimGoal,
+    ai::goal::{Controls, Goal, GoalReach, swim::SwimGoal, tempt::TemptGoal},
     ai::target_match::TargetMatch,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
 };
+use crate::world::World;
+
+const AMBIENT_SOUND_INTERVAL: i32 = 900;
+/// How far away a player can be and still feed it.
+const FEED_DISTANCE_SQ: f64 = 9.0;
+const DESPAWN_MIN_AGE_TICKS: i32 = 2400;
 
 const OCELOT_FLEES: &[Flee] = &[feline::flee_players(4, is_wary)];
 
@@ -55,6 +63,7 @@ impl OcelotEntity {
             is_trusting: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(ocelot);
+        let ocelot_weak = Arc::downgrade(&mob_arc);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
@@ -63,20 +72,14 @@ impl OcelotEntity {
         {
             let goal_selector = &mob_arc.mob_entity.goals_selector;
 
-            // Goal 1: FloatGoal (SwimGoal)
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            // Goal 3: OcelotTemptGoal
-            goal_selector.add_goal(3, feline::tempt_goal());
-            // Goal 4: OcelotAvoidEntityGoal (when not trusting)
+            goal_selector.add_goal(3, Box::new(OcelotTemptGoal::new(ocelot_weak)));
             fleeing::apply(goal_selector, OCELOT_FLEES);
-            // Goal 7-11: LeapAtTarget, OcelotAttack, Breed, Stroll, LookAtPlayer
             feline::apply_tail(goal_selector, mob_weak, 7);
         };
 
         {
             let target_selector = &mob_arc.mob_entity.target_selector;
-
-            // Target Goal 1: NearestAttackableTargetGoal for Chicken and Turtle (baby on land)
             hunting::apply(target_selector, &mob_arc.mob_entity, OCELOT_HUNTS);
         };
 
@@ -147,19 +150,58 @@ impl Mob for OcelotEntity {
         );
     }
 
+    fn get_ambient_sound(&self) -> Option<Sound> {
+        self.get_entity().entity_type.ambient_sound
+    }
+
+    fn get_ambient_sound_interval(&self) -> i32 {
+        AMBIENT_SOUND_INTERVAL
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
+        feline::update_pose_from_speed(self);
+    }
+
+    fn mob_is_stepping_carefully(&self) -> bool {
+        feline::is_stepping_carefully(self)
+    }
+
+    fn check_spawn_obstruction(&self, world: &World) -> bool {
+        let entity = self.get_entity();
+        if !world.is_unobstructed(entity) || world.contains_any_liquid(entity.bounding_box.load()) {
+            return false;
+        }
+        let pos = entity.block_pos.load();
+        if pos.0.y < world.sea_level {
+            return false;
+        }
+        let below = world.get_block(&pos.down());
+        below == &Block::GRASS_BLOCK || below.has_tag(&tag::Block::MINECRAFT_LEAVES)
+    }
+
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        !self.is_trusting()
+            && self.get_entity().tick_count.load(Ordering::Relaxed) > DESPAWN_MIN_AGE_TICKS
+    }
+
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        let is_food = self.is_food(item_stack);
-        let dist_sqr = self
-            .get_entity()
-            .pos
-            .load()
-            .squared_distance_to_vec(&player.get_entity().pos.load());
+        // Only an ocelot that is following the food can be fed.
+        if self
+            .mob_entity
+            .goals_selector
+            .is_running::<OcelotTemptGoal>()
+            && !self.is_trusting()
+            && self.is_food(item_stack)
+            && player
+                .get_entity()
+                .pos
+                .load()
+                .squared_distance_to_vec(&self.get_entity().pos.load())
+                < FEED_DISTANCE_SQ
+        {
+            self.use_player_item(player, item_stack);
 
-        if !self.is_trusting() && is_food && dist_sqr < 9.0 {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-
-            let mut rng = rand::rng();
-            if rng.random_range(0..3) == 0 {
+            if self.get_random().random_range(0..3) == 0 {
                 self.set_trusting(true);
                 self.get_entity().world.load().send_entity_status(
                     self.get_entity(),
@@ -178,5 +220,55 @@ impl Mob for OcelotEntity {
         }
 
         self.animal_interact(player, item_stack)
+    }
+}
+
+/// Tempted by fish, but only a wary ocelot is scared off by a player moving too fast.
+struct OcelotTemptGoal {
+    ocelot: Weak<OcelotEntity>,
+    tempt_goal: TemptGoal,
+}
+
+impl OcelotTemptGoal {
+    fn new(ocelot: Weak<OcelotEntity>) -> Self {
+        Self {
+            ocelot,
+            tempt_goal: TemptGoal::with_tag(TEMPT_SPEED, &tag::Item::MINECRAFT_OCELOT_FOOD, true),
+        }
+    }
+}
+
+impl Goal for OcelotTemptGoal {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        self.tempt_goal.can_start(mob)
+    }
+
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        let trusting = self
+            .ocelot
+            .upgrade()
+            .is_some_and(|ocelot| ocelot.is_trusting());
+        self.tempt_goal.set_can_scare(!trusting);
+        self.tempt_goal.should_continue(mob)
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        self.tempt_goal.start(mob);
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.tempt_goal.stop(mob);
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.tempt_goal.tick(mob);
+    }
+
+    fn tick_reach(&self, mob: &dyn Mob, running: bool) -> Option<GoalReach> {
+        self.tempt_goal.tick_reach(mob, running)
+    }
+
+    fn controls(&self) -> Controls {
+        self.tempt_goal.controls()
     }
 }

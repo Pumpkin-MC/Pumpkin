@@ -24,6 +24,7 @@ use crate::entity::{
         },
     },
 };
+use crate::world::World;
 
 const RAVAGER_HUNTS: &[Hunt] = &[
     Hunt::new(3, TargetMatch::Type(&EntityType::PLAYER), true),
@@ -81,6 +82,10 @@ impl RavagerEntity {
 }
 
 impl Mob for RavagerEntity {
+    fn check_spawn_obstruction(&self, world: &World) -> bool {
+        !world.contains_any_liquid(self.get_entity().bounding_box.load())
+    }
+
     fn mob_play_step_sound(&self, _pos: &BlockPos, _state: &BlockState) {
         self.play_entity_sound(Sound::EntityRavagerStep, 0.15, 1.0);
     }

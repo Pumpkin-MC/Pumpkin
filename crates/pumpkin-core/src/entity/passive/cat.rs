@@ -8,7 +8,7 @@ use pumpkin_data::cat_sound_variant::CatSoundVariant;
 use pumpkin_data::cat_variant::{CatSpawnCondition, CatVariant};
 use pumpkin_data::data_component_impl::DyeImpl;
 use pumpkin_data::dye_color::DyeColor;
-use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::environment_attribute::EnvironmentAttribute;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -27,7 +27,7 @@ use crate::entity::{
     Entity, EntityBase,
     ageable::{AgeableData, AgeableMob},
     ai::behavior::{
-        feline::{self, SPRINT_SPEED, TEMPT_SPEED},
+        feline::{self, TEMPT_SPEED},
         fleeing::{self, Flee},
         hunting::{self, Hunt},
     },
@@ -435,27 +435,7 @@ impl Mob for CatEntity {
     }
 
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
-        let (pose, sprinting) = {
-            let steered = self.mob_entity.steered();
-            let move_control = steered.move_control();
-            if move_control.has_wanted() {
-                let speed = move_control.get_speed_modifier();
-                if speed == TEMPT_SPEED {
-                    (EntityPose::Crouching, false)
-                } else if speed == SPRINT_SPEED {
-                    (EntityPose::Standing, true)
-                } else {
-                    (EntityPose::Standing, false)
-                }
-            } else {
-                (EntityPose::Standing, false)
-            }
-        };
-        let entity = self.get_entity();
-        entity.set_pose(pose);
-        if entity.is_sprinting() != sprinting {
-            entity.set_sprinting(sprinting);
-        }
+        feline::update_pose_from_speed(self);
     }
 
     fn mob_metadata(&self) -> Option<crate::entity::mob::MobMetadata> {
@@ -660,8 +640,7 @@ impl Mob for CatEntity {
     }
 
     fn mob_is_stepping_carefully(&self) -> bool {
-        let entity = self.get_entity();
-        entity.pose.load() == EntityPose::Crouching || entity.is_sneaking()
+        feline::is_stepping_carefully(self)
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {

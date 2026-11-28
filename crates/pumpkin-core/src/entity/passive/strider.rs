@@ -24,6 +24,7 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
+use crate::world::World;
 
 pub struct StriderEntity {
     pub mob_entity: MobEntity,
@@ -107,6 +108,10 @@ impl Animal for StriderEntity {
 }
 
 impl Mob for StriderEntity {
+    fn check_spawn_obstruction(&self, world: &World) -> bool {
+        world.is_unobstructed(self.get_entity())
+    }
+
     fn can_dispenser_equip_into_slot(&self, slot: &EquipmentSlot) -> bool {
         *slot == EquipmentSlot::SADDLE || self.mob_entity.can_pick_up_loot()
     }

@@ -17,6 +17,7 @@ use crate::entity::{
     },
     mob::{Mob, MobEntity},
 };
+use crate::world::World;
 
 const EFFECT_INTERVAL: i32 = 1200;
 
@@ -56,6 +57,10 @@ impl ElderGuardianEntity {
 impl Mob for ElderGuardianEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn check_spawn_obstruction(&self, world: &World) -> bool {
+        world.is_unobstructed(self.get_entity())
     }
 
     fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
